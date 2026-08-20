@@ -1,0 +1,1222 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Student Report Card</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <style>
+      @page {
+        size: 13in 8.5in;
+        margin: 0;
+      }
+
+      :root {
+        --font-xs: 8px;
+        --font-sm: 10pt;
+        --font-md: 12pt;
+      }
+
+      body {
+        padding: 0;
+        margin: 0;
+        font-family: "Times New Roman", Times, serif;
+      }
+
+      .text-xs {
+        font-size: var(--font-xs);
+      }
+
+      .text-sm {
+        font-size: var(--font-sm);
+      }
+
+      .text-md {
+        font-size: var(--font-md);
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: var(--font-sm);
+      }
+
+      td,
+      th {
+        padding: 0 5px;
+        border: 1.5px solid black;
+      }
+
+      .p-md {
+        padding: 5px 10px;
+      }
+
+      .attendance-table {
+        width: 100%;
+        table-layout: fixed;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <!-- FRONT CARD -->
+      <section class="grid gap-2 grid-cols-2">
+        <!-- Right  Side -->
+        <div class="px-5">
+          <div class="text-center">
+            <h1 class="text-2xl font-bold">HOMEROOM GUIDANCE</h1>
+          </div>
+          <!--  -->
+          <div>
+            <table>
+              <thead>
+                <tr>
+                  <th colspan="7" class="font-semibold text-start">
+                    To the class adviser: Check the box to indecate your
+                    assessment guided by the scale below
+                  </th>
+                </tr>
+              </thead>
+
+              <!-- TBODY -->
+              <tbody>
+                <!--  -->
+                <tr>
+                  <td>
+                    <div class="flex flex-wrap gap-x-4">
+                      <span class="text-sm">0 - No chance to observe</span>
+                      <span class="text-sm">1 - Needs Improvements</span>
+                      <span class="text-sm">2 - Developing</span>
+                      <span class="text-sm">3 - Sufficient Develop</span>
+                      <span class="text-sm">4 - Developed and Commendable</span>
+                    </div>
+                  </td>
+                  <td rowspan="3" class="text-center">4</td>
+                  <td rowspan="3" class="text-center">3</td>
+                  <td rowspan="3" class="text-center">2</td>
+                  <td rowspan="3" class="text-center">1</td>
+                  <td rowspan="3" class="text-center">0</td>
+                  <td rowspan="3" class="text-center">
+                    <div class="rotate-[-90deg]">Remarks</div>
+                  </td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="font-bold text-center">Competency</td>
+                </tr>
+
+                <tr>
+                  <td class="bg-green-600 font-semibold">1ST QUARTER</td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td>
+                    Identify the methods of effectives study habbits toward
+                    lifelong learning
+                  </td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td>
+                    Share the knowledge, skills, and positive attitude helpfull
+                    in lifelong learning
+                  </td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td>Value oneself</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td>Respect individual difference</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td>Gain understanding of oneself and others</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 2nd  Qaurter  -->
+                <tr>
+                  <td colspan="7" class="bg-green-600 font-bold">
+                    2ND QUARTER
+                  </td>
+                </tr>
+
+                <!-- 1 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 2 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 3 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 4 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 5 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 6 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 7 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 8  -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 3RD QUARTER -->
+                <tr>
+                  <td colspan="7" class="bg-green-600 font-bold">
+                    3RD QUARTER
+                  </td>
+                </tr>
+
+                <!-- 1 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 2 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 3 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 4 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 5 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 6 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <tr>
+                  <td colspan="7" class="bg-green-600 font-bold">
+                    4TH QUARTER
+                  </td>
+                </tr>
+
+                <!-- 1 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 2 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 3 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 4 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 5 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 6 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 7 -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!-- 8  -->
+                <tr>
+                  <td>Identify the factors related to life and problem</td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                  <td class="text-center"></td>
+                </tr>
+
+                <!--  -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Left Side -->
+
+        <div class="px-10 py-2">
+          <!--  -->
+          <div class="card_header flex items-center justify-around">
+            <div
+              class="school_logo-container flex flex-col items-center justify-center"
+            >
+              <span class="text-sm italic">DepEd Form 138</span>
+              <div class="h-20 w-20 overflow-hidden">
+                <img
+                  src="https://tse2.mm.bing.net/th/id/OIP.QfGo5bgCklncx1VtRBsEcAHaHa?r=0&rs=1&pid=ImgDetMain&o=7&rm=3"
+                  alt=""
+                  class="school_logo w-full h-full object-contain"
+                />
+              </div>
+            </div>
+
+            <div class="flex flex-col items-center justify-center">
+              <span class="text-md">Republic of the Philippines</span>
+              <span class="text-md">Department of Education</span>
+              <span class="text-md"><%= schoolInfo.region %></span>
+              <h1 class="text-md font-semibold">
+                <%= schoolInfo.division %>
+              </h1>
+            </div>
+
+            <div class="school_logo-container w-20 h-20">
+              <img
+                src="https://logodix.com/logo/1355314.png"
+                alt=""
+                class="object-contain w-full h-full"
+              />
+            </div>
+          </div>
+
+          <!--  -->
+          <div class="mt-2">
+            <!--  -->
+            <div class="flex flex-col items-center justify-center">
+              <h1 class="text-2xl text-green-600 font-semibold">
+                <%= schoolInfo.name %>
+              </h1>
+              <span class="text-md font-semibold">School ID No. <%= schoolInfo.schoolId %></span>
+            </div>
+
+            <!--  -->
+            <div class="text-center">
+              <span class="text-sm italic"
+                ><%= schoolInfo.address %></span
+              >
+              <h3 class="text-md font-semibold text-green-600">
+                Junior High School
+              </h3>
+
+              <h1 class="text-lg font-semibold">
+                ENHANCED BASIC EDUCATIONAL PROGRAM
+              </h1>
+              <h2 class="text-sm font-semibold">LRN: <%= student.studentLrn %></h2>
+            </div>
+          </div>
+
+          <!--Student Personal Info Section  -->
+          <div>
+            <article class="flex gap-4">
+              <span class="text-sm">Name: </span>
+              <span class="inline-block w-full border-b font-semibold text-sm"
+                ><%= student.studentFullName %></span
+              >
+            </article>
+
+            <!--  -->
+            <article class="grid grid-cols-2 gap-2">
+              <div class="flex gap-4">
+                <span class="text-sm">Age: </span>
+                <span
+                  class="inline-block w-full border-b font-semibold text-sm text-center"
+                  ><%= student.studentAge %></span
+                >
+              </div>
+
+              <!--  -->
+              <div class="flex gap-4">
+                <span class="text-sm">Sex: </span>
+                <span
+                  class="inline-block w-full border-b font-semibold text-sm text-center"
+                  ><%= student.studentSex %></span
+                >
+              </div>
+            </article>
+
+            <!--  -->
+            <article class="grid grid-cols-2 gap-2">
+              <div class="flex gap-4 items-center">
+                <span class="text-sm">Grade: </span>
+                <span
+                  class="inline-block w-full border-b font-semibold text-center text-sm"
+                  ><%= student.classGradeLevel %></span
+                >
+              </div>
+
+              <!--  -->
+              <div class="flex gap-4 items-center">
+                <span class="text-sm">Section: </span>
+                <span
+                  class="inline-block w-full border-b font-semibold text-center text-sm"
+                  ><%= student.classSection %></span
+                >
+              </div>
+            </article>
+
+            <article class="flex gap-5 items-center">
+              <span class="text-sm">School Year: </span>
+              <span
+                class="text-sm font-semibold inline-block min-w-30 border-b text-center"
+                ><%= student.schoolYear %></span
+              >
+            </article>
+          </div>
+
+          <!-- Greetings -->
+          <div class="text-sm flex flex-col mt-4">
+            <h3 class="font-semibold">Dear Parents:</h3>
+            <span class="ml-10">
+              This report card above the ability and progress your child has
+              made in the defferent learning
+            </span>
+            <span> areas as well as his/her core values </span>
+            <span class="ml-10">
+              The school welcomes you schould you desire to know more about your
+              child's progress
+            </span>
+          </div>
+
+          <!-- Signature -->
+          <div class="mt-5">
+            <article class="grid">
+              <div class="w-full">
+                <div class="float-right flex flex-col items-center">
+                  <span class="inline-block font-semibold text-sm border-b px-4"
+                    ><%= student.classAdviser %></span
+                  >
+                  <span class="text-sm">Class Adviser</span>
+                </div>
+              </div>
+
+              <div class="w-full">
+                <div class="flex flex-col items-center float-left">
+                  <span
+                    class="text-sm font-semibold border-b inline-block px-5 text-center"
+                  >
+                    <%= schoolInfo.principal.toUpperCase() %>
+                  </span>
+                  <span class="text-sm">School Head</span>
+                </div>
+              </div>
+
+              <div>
+                <div class="text-center">
+                  <h3 class="text-md font-semibold">CERTIFICATE OF TRANSFER</h3>
+                </div>
+
+                <article class="flex flex-col">
+                  <div class="grid grid-cols-2 gap-2">
+                    <div class="flex gap-4 items-center">
+                      <span class="text-sm">Admitted to Grade: </span>
+                      <span
+                        class="inline-block min-w-[50%] border-b font-semibold text-center text-sm"
+                      >
+                        <%= student.classGradeLevel %>
+                      </span>
+                    </div>
+
+                    <!--  -->
+                    <div class="flex gap-4 items-center">
+                      <span class="text-sm">Section: </span>
+                      <span
+                        class="inline-block w-full border-b font-semibold text-center text-sm"
+                        ><%= student.classSection %></span
+                      >
+                    </div>
+                  </div>
+
+                  <!--  -->
+                  <div class="grid grid-cols-2 gap-4 items-center">
+                    <span class="text-sm"
+                      >Eligibility for submmition to Grade:
+                    </span>
+                    <span
+                      class="inline-block w-full border-b font-semibold text-center text-sm"
+                      >11</span
+                    >
+                  </div>
+
+                  <!--  -->
+                  <span class="text-sm">Approved: </span>
+                </article>
+              </div>
+
+              <div class="w-full mt-5">
+                <div class="float-left flex flex-col items-center">
+                  <span class="inline-block font-semibold text-sm border-b px-4"
+                    ><%= schoolInfo.principal.toUpperCase() %></span
+                  >
+                  <span class="text-sm">School Head</span>
+                </div>
+              </div>
+
+              <div class="w-full">
+                <div class="float-right flex flex-col items-center">
+                  <span class="inline-block font-semibold text-sm border-b px-4"
+                    ><%= student.classAdviser %></span
+                  >
+                  <span class="text-sm">Class Adviser</span>
+                </div>
+              </div>
+
+              <div class="text-center">
+                <span class="font-semibold text-md"
+                  >CANCELLATION OF ELIGIBLITY TO TRANSFER</span
+                >
+              </div>
+
+              <div class="grid">
+                <div class="flex">
+                  <span class="text-sm">Admited to:</span>
+                  <span
+                    class="text-sm font-semibold inline-block border-b min-w-50"
+                  ></span>
+                </div>
+
+                <div class="grid grid-cols-2">
+                  <div class="flex items-center">
+                    <span class="text-sm">Date:</span>
+                    <span
+                      class="text-sm font-semibold inline-block border-b min-w-50 pb-2"
+                    ></span>
+                  </div>
+
+                  <div class="flex flex-col items-center">
+                    <span
+                      class="text-sm font-semibold inline-block border-b min-w-40 text-center"
+                      ><%= schoolInfo.principal.toUpperCase() %></span
+                    >
+                    <span class="text-sm"> School Head</span>
+                  </div>
+                </div>
+              </div>
+              <!--  -->
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- BACK CARD -->
+
+      <section class="new-pages grid grid-cols-2">
+        <!-- RIGHT -->
+        <article class="px-5 py-2">
+          <div class="text-center">
+            <span class="text-md font-bold">
+              REPORT ON LEARNERS PROGRESS AND ACHIEVEMENT
+            </span>
+          </div>
+
+          <div class="mt-5">
+            <table class="new_pages-table">
+              <thead>
+                <tr>
+                  <th rowspan="2" class="text-center p-md bg-green-600 w-30">
+                    Subjects
+                  </th>
+                  <th colspan="4" class="text-center p-md bg-green-600 w-50">
+                    Quarter
+                  </th>
+                  <th rowspan="2" class="text-center p-md bg-green-600">
+                    Final Grade
+                  </th>
+                  <th rowspan="2" class="text-center p-md bg-green-600">
+                    Remarks
+                  </th>
+                </tr>
+
+                <tr>
+                  <th class="text-center p-md bg-green-600">1</th>
+                  <th class="text-center p-md bg-green-600">2</th>
+                  <th class="text-center p-md bg-green-600">3</th>
+                  <th class="text-center p-md bg-green-600">4</th>
+                </tr>
+              </thead>
+
+              <!-- Table Body -->
+
+              <tbody>
+                <!-- Subjects  -->
+                <tr>
+                  <td class="p-md">Filipino</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="p-md">English</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="p-md">Mathematics</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="p-md">Science</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="p-md">Araling Panlipunan</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="p-md">Edukasyon sa Pagpapakatao</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="p-md">Technology and Livelihood Program</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="p-md">MAPEH</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="text-end p-md">Music</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="text-end p-md">Art</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="text-end p-md">P.E</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="text-end p-md">Health</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <tr>
+                  <td class="p-md">ALIVE</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!--  -->
+                <tr>
+                  <td class="font-bold p-md">General Average</td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="mt-5 grid grid-cols-3">
+            <!-- Description -->
+            <div class="flex flex-col">
+              <span class="text-sm font-bold">Description</span>
+              <span class="text-sm mt-2">Outstanding</span>
+              <span class="text-sm">Very Satusfactory</span>
+              <span class="text-sm">Satisfactory</span>
+              <span class="text-sm">Fair Satisfactory</span>
+              <span class="text-sm">didnot Meet Expectation</span>
+            </div>
+
+            <!-- Grading Scale -->
+             <div class="flex flex-col items-center justify-center">
+                <span class="text-sm font-bold">Grading Scale</span>
+                <span class="text-sm mt-2">90-100</span>
+                <span class="text-sm">85-89</span>
+                <span class="text-sm">80-84</span>
+                <span class="text-sm">75-79</span>
+                <span class="text-sm">Below 74</span>
+             </div>
+
+             <!-- Remarks -->
+             <div class="flex flex-col">
+                <span class="text-sm font-bold">Remarks</span>
+                <span class="text-sm mt-2">Passed</span>
+                <span class="text-sm">Passed</span>
+                <span class="text-sm">Passed</span>
+                <span class="text-sm">Passed</span>
+                <span class="text-sm">Failed</span>
+             </div>
+
+          </div>
+          <!-- Table End -->
+        </article>
+
+        <!-- LEFT  -->
+        <article class="px-5 py-2">
+          <div class="text-center">
+            <span class="text-md font-bold">
+              REPORT ON LEARNER'S OBSERVE VALUES
+            </span>
+          </div>
+
+          <div class="mt-5">
+            <table>
+              <thead>
+                <tr>
+                  <th class="text-center font-bold w-20" rowspan="2">
+                    Core Values
+                  </th>
+                  <th class="text-center font-bold" rowspan="2">
+                    Behaviour Statement
+                  </th>
+                  <th class="text-center w-25" colspan="4">Quarter</th>
+                </tr>
+
+                <tr>
+                  <th class="text-center">1</th>
+                  <th class="text-center">2</th>
+                  <th class="text-center">3</th>
+                  <th class="text-center">4</th>
+                </tr>
+              </thead>
+
+              <!-- Table Body -->
+              <tbody>
+                <tr>
+                  <td class="text-center p-md" rowspan="2">1. Maka-Diyos</td>
+                  <td class="p-md">
+                    Express one spiritual belief while respecting the spiritual
+                    belief of others.
+                  </td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <tr>
+                  <td class="p-md">
+                    Show adherence to ethical principles by upholding the truth
+                    in all understanding
+                  </td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!-- 2 -->
+                <tr>
+                  <td class="text-center p-md" rowspan="2">2.Makatao</td>
+                  <td class="p-md">
+                    Is sensitive to individual, social and cultural difference;
+                    resists stereotyping people
+                  </td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <tr>
+                  <td class="p-md">
+                    Demonstrate contributions toward solidarity
+                  </td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+
+                <!-- 3 -->
+                <tr>
+                  <td class="text-center p-md">3. Maka kalikasan</td>
+                  <td class="p-md">
+                    Cares for environment and utilize resources wisely,
+                    judiciously, and econamically
+                  </td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td></td>
+                </tr>
+
+                <tr>
+                  <td class="text-center p-md" rowspan="2">4. Maka bansa</td>
+                  <td class="p-md">
+                    Demonstrate pride in being a Filipino; exercises the rights
+                    and responsibilities if Filipino citizen
+                  </td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+                <tr>
+                  <td class="p-md">
+                    Demonstrate appropriate behaviour in carrying out activities
+                    in the school, community, and country.
+                  </td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"></td>
+                </tr>
+              </tbody>
+            </table>
+            <div class="grid grid-cols-2">
+              <div class="flex gap-5">
+                <div
+                  class="flex flex-col font-bold items-center justify-center"
+                >
+                  <span class="text-sm">Marking</span>
+                  <span class="text-sm mt-2">AO</span>
+                  <span class="text-sm">SO</span>
+                </div>
+                <div class="flex flex-col items-center justify-center">
+                  <span class="text-sm text-center font-bold">
+                    Non-numerical Rating</span
+                  >
+                  <span class="text-sm text-center mt-2"> Always Observe</span>
+                  <span class="text-sm text-center"> Sometimes Observe</span>
+                </div>
+              </div>
+
+              <div class="flex gap-5">
+                <div
+                  class="flex flex-col items-center justify-center font-bold"
+                >
+                  <span class="text-sm">Marking</span>
+                  <span class="text-sm mt-2">RO</span>
+                  <span class="text-sm">NO</span>
+                </div>
+                <div class="flex flex-col items-center justify-center">
+                  <span class="text-sm font-bold"> Non-numerical Rating</span>
+                  <span class="text-sm mt-2"> Rarely Observe</span>
+                  <span class="text-sm"> Not Observe</span>
+                </div>
+              </div>
+            </div>
+
+            
+          </div>
+          <!-- table end -->
+
+          <!-- REPORT ON ATTENDANCE -->
+          <div>
+            <div class="text-center">
+              <span class="text-sm font-bold"> REPORT ON ATTENDANCE </span>
+            </div>
+
+            <table class="attendance-table">
+              <thead>
+                <tr>
+                  <th class="text-center font-bold p-md w-25">Month</th>
+
+                  <th class="h-20 w-8">
+                      <span class="inline-block rotate-[-90deg] ">
+                          June
+                      </span>
+                  </th>
+
+                  <th class="h-20">
+                      <span class="inline-block rotate-[-90deg] ">
+                          July
+                      </span>
+                  </th>
+
+                  <th class="h-20">
+                      <span class="inline-block rotate-[-90deg] ">
+                          August
+                      </span>
+                  </th>
+
+                  <th class="h-20">
+                      <span class="inline-block rotate-[-90deg] ">
+                          September
+                      </span>
+                  </th>
+
+                  <th class="h-20">
+                      <span class="inline-block rotate-[-90deg] ">
+                          October
+                      </span>
+                  </th>
+
+                  <th class="h-20">
+                      <span class="inline-block rotate-[-90deg] ">
+                          November
+                      </span>
+                  </th>
+
+                  <th class="h-20">
+                      <span class="inline-block rotate-[-90deg] ">
+                          December
+                      </span>
+                  </th>
+
+                  <th class="h-20">
+                      <span class="inline-block rotate-[-90deg] ">
+                          January
+                      </span>
+                  </th>
+
+                  <th class="h-20">
+                      <span class="inline-block rotate-[-90deg] ">
+                          February
+                      </span>
+                  </th>
+
+                  <th class="h-20">
+                      <span class="inline-block rotate-[-90deg] ">
+                          March
+                      </span>
+                  </th>
+
+                  <th class="h-20">
+                      <span class="inline-block rotate-[-90deg] ">
+                          April
+                      </span>
+                  </th>
+              </tr>
+              </thead>
+
+              <tbody>
+                <tr>
+                  <td class="text-center">No. of school days</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                </tr>
+                <tr>
+                  <td class="text-center">No. of present days</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                </tr>
+
+                <!-- No. of Absent days -->
+                <tr>
+                  <td class="text-center">No. of Absent days</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                  <td class="text-center">12</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </article>
+      </section>
+
+      <!-- End -->
+    </main>
+  </body>
+</html>

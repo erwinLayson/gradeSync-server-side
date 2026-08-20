@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Permanent Record</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+</head>
+<style>
+    :root {
+        --text-xx: 11.5px;
+    }
+
+    body {
+        font-family: 'Times New Roman', Times, serif;
+        font-size: 12pt;
+        padding: 0;
+        margin: 0;
+    }
+
+    .page-break {
+        page-break-before: always;
+        margin-top: 2rem;
+    }
+
+    .text-xxs {
+        font-size: var(--text-xx);
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: var(--text-xx);
+    }
+    td, th {
+        border: 1px solid black;
+        padding: 0 10px ;
+    }
+
+    .remedial-classes-tr td {
+        padding: 10px 0;
+    }
+</style>
+<body>
+    <main class="p-2">
+        <div class="flex items-center justify-evenly mb-2">
+            <div class="w-20 h-20">
+                <img src="https://logodix.com/logo/1355314.png" alt="DepEd Logo 1" class="w-full h-full object-contain">
+            </div>
+
+            <div class="grid">
+                <div class="flex flex-col items-center justify-center">
+                    <span class="text-xxs">Republic of the Philippines</span>
+                    <span class="text-xxs">Department of Education</span>
+                </div>
+                    
+                <div class="flex flex-col items-center justify-center">
+                    <h1 class="font-bold text-md">Learner Permanent Record for Junior High School (SF10-JHS)</h1>
+                    <span class="text-[10px]">(Formerly Form 137)</span>
+                </div>
+            </div>
+            <div class="w-20 h-20">
+                <img src="https://depedph.com/wp-content/uploads/2024/01/deped-logo-philippines.png" alt="DepEd Logo 1" class="w-full h-full object-contain">
+            </div>
+        </div>
+
+        <section class="border-1">
+            <div class="inline-block w-full bg-gray-200 text-center font-semibold">
+                LEARNER'S INFORMATION
+            </div>
+
+            <!-- Personal Information -->
+            <div class="grid grid-cols-4 gap-5 text-[10px] px-2">
+                <div class="flex gap-2">
+                    <span>LAST NAME:</span>
+                    <span class="inline-block min-w-20 border-b font-semibold text-center"><%= student.lastname %></span>
+                </div>
+                <div class="flex gap-2">
+                    <span>FIRST NAME:</span>
+                    <span class="border-b min-w-20 inline-block text-center font-semibold"><%= student.firstname %></span>
+                </div>
+                <div class="flex items-end justify-center gap-2">
+                    <span>EXTN (Jr, I, II)</span>
+                    <span class="border-b min-w-20 inline-block text-center font-semibold"><%= student.suffix ?? "N/A" %></span>
+                </div>
+                <div class="flex gap-2">
+                    <span>MIDDLE NAME:</span>
+                    <span class="border-b min-w-20 inline-block text-center font-semibold"><%= student.middlename %></span>
+                </div>
+            </div>
+
+
+            <!-- Personal Info 2 -->
+             <div class="flex border-b gap-5 px-2">
+                <div class="flex-1 flex items-center justify-start gap-5">
+                    <span class="text-[10px]">Learner Referrence Number (LRN):</span>
+                    <span class="font-semibold text-xxs">1234567890</span>
+                </div>
+
+                <div class="flex-1 items-center justify-start gap-5">
+                    <span class="text-[10px]">Birthdate (mm/dd/yyyy):</span>
+                    <span class="font-semibold text-xxs">05-23-2003</span>
+                </div>
+
+                <div class="flex items-center justify-start gap-5 pr-10">
+                    <span class="text-[10px]">Sex:</span>
+                    <span class="font-semibold text-xxs">Male</span>
+                </div>
+             </div>
+             <!-- New Block -->
+             <div class="inline-block w-full bg-gray-200 text-center">
+                <span class="font-semibold text-sm">ELEGIBILITY FOR JHS ENROLLMENT</span>
+             </div>
+
+             <!-- New Block Eligibility  1-->
+              <div class="grid grid-cols-3 px-2">
+                <!--  1 -->
+                <div class="flex gap-4">
+                    <input type="checkbox">
+                    <div class="flex flex-col">
+                        <span class="text-xxs">Elementary School completer</span>
+                        <span class="text-xxs">Name of School:</span>
+                    </div>
+                </div>
+
+                <!--  2 -->
+
+                <div class="flex gap-4 items-center">
+                    <span class="text-xxs">General Average </span>
+                    <span class="inline-block border-b text-xxs font-semibold px-5">99.9%</span>
+                </div>
+
+                <!-- 3 -->
+                 <div class="flex gap-4 items-center">
+                    <span class="text-xxs">Citations (If any) </span>
+                    <span class="inline-block border-b text-xxs font-semibold px-5 py-2"></span>
+                </div>
+              </div>
+
+              <!-- New Block Eligibility  2 -->
+
+              <div class="flex gap-5 border-b pb-1">
+                <!-- 1 -->
+                <div class="ml-10">
+                    <span class="font-semibold text-xxs">NEW LAGAO ELEMENTARY SCHOOL</span>
+                </div>
+                <!-- 2 -->
+                <div class="flex items-center">
+                    <span class="text-xxs">School ID: </span>
+                    <span class="text-xxs font-seibold inline-block px-5 border-b font-semibold">123456</span>
+                </div>
+                <!-- 3 -->
+                <div class="flex items-center">
+                    <span class="text-xxs">Address of School</span>
+                    <span class="text-xxs font-seibold inline-block font-semibold px-5 border-b">Tinaungan Elementary School</span>
+                </div>
+              </div>
+
+              <!-- New Block -->
+               <div class="px-2">
+                    <span class="text-xxs">Other credential Presented</span>
+                    <div class="flex gap-10 items-center ml-10">
+                        <span class="text-xxs">PEPT Passer</span>
+                        <div class="flex gap-2 items-center">
+                            <span class="text-xxs">Rating</span>
+                            <span class="text-xxs min-w-[50px] px-5 py-2 inline-block border-b"></span>
+                            <span class="text-xxs">ASA & E Passer</span>
+                        </div>
+
+                        <!--  -->
+                        <div class="text-xxs flex items-center gap-4">
+                            <article class="flex items-center gap-2">
+                                <span>Rating</span>
+                                <span class="inline-block min-w-[100px] px-5 py-2 border-b"></span>
+                            </article>
+                            <article class="flex-items-center gap-2">
+                                <span>Others (pls. Specify):</span>
+                                <span class="inline-block min-w-[100px] px-5 py-2 border-b"></span>
+                            </article>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2">
+                        <!--  -->
+                        <article class="ml-10">
+                            <span class="text-[8px]">Date of Examination (mm/dd/yyyy)</span>
+                            <span class="text-[8px]"></span>
+                        </article>
+
+                        <!--  -->
+                        <article>
+                            <span class="text-[8px]">Name and address of testing center:</span>
+                            <span class="text-[8px]"></span>
+                        </article>
+                    </div>
+               </div>
+        </section>
+        <!--  -->
+        <div class="bg-gray-200 text-center mt-1">
+            <span class="text-sm font-semibold">SCHOLASTIC RECORD</span>
+        </div>
+
+        <!-- Grade table -->
+        <div>
+            <% if(scholastic.semester1.length > 0) { %>
+                <% scholastic.semester1.forEach((record, index) => { %>
+                    <div class="flex text-xxs gap-5 border px-2 <%= index === 1 ? 'mt-2' : '' %>">
+                        <div class="flex gap-2">
+                            <span>School: </span>
+                            <span class="font-semibold"><%= schoolInfo.name %></span>
+                        </div>
+
+                        <!--  -->
+                        <div class="flex gap-2">
+                            <span>School ID: </span>
+                            <span class="font-semibold"><%= schoolInfo.schoolId %></span>
+                        </div>
+
+                        <!--  -->
+                        <div class="flex gap-2">
+                            <span>District: </span>
+                            <span class="font-semibold"> <%= schoolInfo.district %> </span>
+                        </div>
+
+                        <!--  -->
+                        <div class="flex gap-2">
+                            <span>Division: </span>
+                            <span class="font-semibold"><%= schoolInfo.schoolId %></span>
+                        </div>
+
+                        <!--  -->
+                        <div class="flex gap-2">
+                            <span>Region: </span>
+                            <span class="font-semibold"><%= schoolInfo.region %></span>
+                        </div>
+                    </div>
+
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>
+                                    <div class="grid">
+                                        <span class="text-[8px]">Classified as Grade:</span>
+                                        <span class="font-semibold"><%= record.classGradeLevel %></span>
+                                    </div>
+                                </th>
+                                <th>
+                                    <div class="grid">
+                                        <span class="text-[8px]">Section:</span>
+                                        <span class="font-semibold"><%= record.classSection %></span>
+                                    </div>
+                                </th>
+                                <th colspan="2">
+                                    <div class="grid">
+                                        <span class="text-[8px]">School Year:</span>
+                                        <span class="font-semibold"><%= record.schoolYear %></span>
+                                    </div>
+                                </th>
+                                <th colspan="3">
+                                    <div class="grid">
+                                        <span class="text-[8px]">Name of Adviser/Teacher:</span>
+                                        <span class="font-semibold"><%= record.adviserName %></span>
+                                    </div>
+                                </th>
+                                <th>
+                                    <div class="grid">
+                                        <span class="text-[8px]">Signature</span>
+                                        <span class="font-semibold py-2"></span>
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+
+                        <!-- Tbody -->
+
+                        <tbody>
+                            <tr>
+                                <td colspan="2" rowspan="2" class="text-center font-semibold">
+                                    LEARNNG AREAS
+                                </td>
+                                <td colspan="4" class="text-center">
+                                    Quarter Rating
+                                </td>
+                                <td class="text-center" rowspan="2">
+                                    Final Rating
+                                </td>
+                                <td class="text-center" rowspan="2">
+                                    Remarks
+                                </td>
+                            </tr>
+
+                            <tr>
+                                <td class="text-center">1</td>
+                                <td class="text-center">2</td>
+                                <td class="text-center">3</td>
+                                <td class="text-center">4</td>
+                            </tr>
+
+
+                            <!-- Subject data -->
+                            <% record.subjects.forEach(sub => { %>
+                                <tr>
+                                    <td colspan="2"><%= sub.subjectName %></td>
+                                    <td class="text-center"><%= sub.q1 %></td>
+                                    <td class="text-center"><%= sub.q2 %></td>
+                                    <td class="text-center"><%= sub.q3%></td>
+                                    <td class="text-center"><%= sub.q4%> </td>
+                                    <td class="text-center"><%= sub.finalRating %></td>
+                                    <td class="text-center"><%= sub.remarks %></td>
+                                </tr>
+                            <% }) %>
+
+                            <!-- End of subject details -->
+                            <tr class="remedial-classes-tr">
+                                <td class="bg-gray-300" colspan="8"></td>
+                            </tr>
+                            <tr>
+                                <td class="text-center">
+                                    Remedial Classess
+                                </td>
+                                <td colspan="7">
+                                    <div class="grid grid-cols-2">
+                                        <span>Conducted from (mm/dd/yyyy)</span>
+                                        <span>to (mm/dd/yyyy)</span>
+                                    </div>
+                                </td>
+                            </tr>
+
+                            <!--  -->
+                            <tr>
+                                <td class="text-center">
+                                    Learning Area
+                                </td>
+
+                                <td class="text-center">
+                                    Final Rating
+                                </td>
+
+                                <td colspan="2" class="text-center">
+                                    Remedial Class Mark
+                                </td>
+                                
+                                <td colspan="2" class="text-center">
+                                    Recomputed Final Rating
+                                </td>
+                                <td colspan="2" class="text-center">
+                                    Remarks
+                                </td>
+                            </tr>
+
+                            <tr class="remedial-classes-tr">
+                                <td class="text-center"></td>
+                                <td class="text-center"></td>
+                                <td class="text-center" colspan="2"></td>
+                                <td class="text-center" colspan="2"></td>
+                                <td class="text-center" colspan="2"></td>
+                            </tr>
+                            <tr class="remedial-classes-tr">
+                                <td class="text-center"></td>
+                                <td class="text-center"></td>
+                                <td class="text-center" colspan="2"></td>
+                                <td class="text-center" colspan="2"></td>
+                                <td class="text-center" colspan="2"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                <% })%>
+            <!-- End of If Condations -->
+            <% } %>
+            <!-- End of table -->
+            <div class="mt-1">
+                <h1 class="text-center text-xs font-semibold">CERTIFICATION</h1>
+                <div class="flex gap-5 mt-2">
+                    <div class="ml-10 flex gap-2">
+                        <span class="text-xxs">I CERTIFY that this is the true record of </span>
+                        <span class="inline-block px-5 min-w-[100px] font-semibold text-xxs text-center border-b">
+                            <%= certification.studentName %>
+                        </span>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <span class="text-xxs">with LRN: </span>
+                        <span class="inline-block px-5 min-w-[100px] font-semibold text-xxs text-center border-b">
+                            <%= certification.studentLrn %>
+                        </span>
+                        <span class="text-xxs">and that he/she is eligible for</span>
+                    </div>
+                </div>
+            </div>
+
+            <div>
+                <div class="flex items-center gap-2">
+                    <span class="text-xxs">admission to Grade</span>
+                    <span class="text-xxs inline-block px-5 font-semibold min-w-20 border-b text-center"><%= certification.admission_to %></span>
+                    <span class="text-xxs">Name of School</span>
+                    <span class="text-xxs font-bold min-w-40 inline-block border-b text-center"><%= certification.schoolName %></span>
+                    <span class="text-xxs">School ID</span>
+                    <span class="text-xxs font-bold min-w-40 inline-block border-b text-center"><%= certification.schoolId %></span>
+                </div>
+                <span class="text-xxs">Last School Year Attended</span>
+                <span class="text-xxs font-semibold text-center inline-block min-w-30 border-b"><%= certification.lastSchoolYear %></span>
+
+                <div class="mt-2 flex gap-20">
+                    <div class="flex flex-col items-start justify-center">
+                        <span class="text-center border-b inline-block min-w-30 text-xxs font-semibold">
+                            <%= certification.date %>
+                        </span>
+                        <span class="text-xxs text-center min-w-30">Date</span>
+                    </div>
+
+                    <div class="grid">
+                        <span class="text-center inline-block min-w-30 text-xxs font-semibold">
+                           <%= certification.schoolPrincipal %>
+                        </span>
+                        <span class="text-xxs text-center min-w-30 border-t">Name of Principal/School Head over printed Name</span>
+                    </div>
+                </div>
+            </div>
+         </div>
+
+         <!--  Page 2 -->
+         <% if(scholastic.semester2 && scholastic.semester2.length > 0) { %>
+            <div class="page-break">
+                <% if(scholastic.semester2.length > 0) { %>
+                    <% scholastic.semester2.forEach((record, index) => { %>
+                        <div class="text-xxs flex gap-5 border px-2 <%= index === 1 ? 'mt-2' : '' %>">
+                            <div class="flex gap-2">
+                                <span>School: </span>
+                                <span class="font-semibold"><%= schoolInfo.name %></span>
+                            </div>
+
+                            <!--  -->
+                            <div class="flex gap-2">
+                                <span>School ID: </span>
+                                <span class="font-semibold"><%= schoolInfo.schoolId %></span>
+                            </div>
+
+                            <!--  -->
+                            <div class="flex gap-2">
+                                <span>District: </span>
+                                <span class="font-semibold"> <%= schoolInfo.district %> </span>
+                            </div>
+
+                            <!--  -->
+                            <div class="flex gap-2">
+                                <span>Division: </span>
+                                <span class="font-semibold"><%= schoolInfo.schoolId %></span>
+                            </div>
+
+                            <!--  -->
+                            <div class="flex gap-2">
+                                <span>Region: </span>
+                                <span class="font-semibold"><%= schoolInfo.region %></span>
+                            </div>
+                        </div>
+
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>
+                                        <div class="grid">
+                                            <span class="text-[8px]">Classified as Grade:</span>
+                                            <span class="font-semibold"><%= record.classGradeLevel %></span>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        <div class="grid">
+                                            <span class="text-[8px]">Section:</span>
+                                            <span class="font-semibold"><%= record.classSection %></span>
+                                        </div>
+                                    </th>
+                                    <th colspan="2">
+                                        <div class="grid">
+                                            <span class="text-[8px]">School Year:</span>
+                                            <span class="font-semibold"><%= record.schoolYear %></span>
+                                        </div>
+                                    </th>
+                                    <th colspan="3">
+                                        <div class="grid">
+                                            <span class="text-[8px]">Name of Adviser/Teacher:</span>
+                                            <span class="font-semibold"><%= record.adviserName %></span>
+                                        </div>
+                                    </th>
+                                    <th>
+                                        <div class="grid">
+                                            <span class="text-[8px]">Signature</span>
+                                            <span class="font-semibold py-2"></span>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+
+                            <!-- Tbody -->
+
+                            <tbody>
+                                <tr>
+                                    <td colspan="2" rowspan="2" class="text-center font-semibold">
+                                        LEARNNG AREAS
+                                    </td>
+                                    <td colspan="4" class="text-center">
+                                        Quarter Rating
+                                    </td>
+                                    <td class="text-center" rowspan="2">
+                                        Final Rating
+                                    </td>
+                                    <td class="text-center" rowspan="2">
+                                        Remarks
+                                    </td>
+                                </tr>
+
+                                <tr>
+                                    <td class="text-center">1</td>
+                                    <td class="text-center">2</td>
+                                    <td class="text-center">3</td>
+                                    <td class="text-center">4</td>
+                                </tr>
+
+
+                                <!-- Subject data -->
+                                <% record.subjects.forEach(sub => { %>
+                                    <tr>
+                                        <td colspan="2"><%= sub.subjectName %></td>
+                                        <td class="text-center"><%= sub.q1 %></td>
+                                        <td class="text-center"><%= sub.q2 %></td>
+                                        <td class="text-center"><%= sub.q3%></td>
+                                        <td class="text-center"><%= sub.q4%> </td>
+                                        <td class="text-center"><%= sub.finalRating %></td>
+                                        <td class="text-center"><%= sub.remarks %></td>
+                                    </tr>
+                                <% }) %>
+
+                                <!-- End of subject details -->
+                                <tr class="remedial-classes-tr">
+                                    <td class="bg-gray-300" colspan="8"></td>
+                                </tr>
+                                <tr>
+                                    <td class="text-center">
+                                        Remedial Classess
+                                    </td>
+                                    <td colspan="7">
+                                        <div class="grid grid-cols-2">
+                                            <span>Conducted from (mm/dd/yyyy)</span>
+                                            <span>to (mm/dd/yyyy)</span>
+                                        </div>
+                                    </td>
+                                </tr>
+
+                                <!--  -->
+                                <tr>
+                                    <td class="text-center">
+                                        Learning Area
+                                    </td>
+
+                                    <td class="text-center">
+                                        Final Rating
+                                    </td>
+
+                                    <td colspan="2" class="text-center">
+                                        Remedial Class Mark
+                                    </td>
+                                    
+                                    <td colspan="2" class="text-center">
+                                        Recomputed Final Rating
+                                    </td>
+                                    <td colspan="2" class="text-center">
+                                        Remarks
+                                    </td>
+                                </tr>
+
+                                <tr class="remedial-classes-tr">
+                                    <td class="text-center"></td>
+                                    <td class="text-center"></td>
+                                    <td class="text-center" colspan="2"></td>
+                                    <td class="text-center" colspan="2"></td>
+                                    <td class="text-center" colspan="2"></td>
+                                </tr>
+                                <tr class="remedial-classes-tr">
+                                    <td class="text-center"></td>
+                                    <td class="text-center"></td>
+                                    <td class="text-center" colspan="2"></td>
+                                    <td class="text-center" colspan="2"></td>
+                                    <td class="text-center" colspan="2"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    <% })%>
+                <!-- End of If Condations -->
+
+                    <!-- End of table -->
+                    <div class="mt-1">
+                        <h1 class="text-center text-xs font-semibold">CERTIFICATION</h1>
+                        <div class="flex gap-5 mt-2">
+                            <div class="ml-10 flex gap-2">
+                                <span class="text-xxs">I CERTIFY that this is the true record of </span>
+                                <span class="inline-block px-5 min-w-[100px] font-semibold text-xxs text-center border-b">
+                                    <%= certification.studentName %>
+                                </span>
+                            </div>
+
+                            <div class="flex gap-2">
+                                <span class="text-xxs">with LRN: </span>
+                                <span class="inline-block px-5 min-w-[100px] font-semibold text-xxs text-center border-b">
+                                    <%= certification.studentLrn %>
+                                </span>
+                                <span class="text-xxs">and that he/she is eligible for</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xxs">admission to Grade</span>
+                            <span class="text-xxs inline-block px-5 font-semibold min-w-20 border-b text-center"><%= certification.admission_to %></span>
+                            <span class="text-xxs">Name of School</span>
+                            <span class="text-xxs font-bold min-w-40 inline-block border-b text-center"><%= certification.schoolName %></span>
+                            <span class="text-xxs">School ID</span>
+                            <span class="text-xxs font-bold min-w-40 inline-block border-b text-center"><%= certification.schoolId %></span>
+                        </div>
+                        <span class="text-xxs">Last School Year Attended</span>
+                        <span class="text-xxs font-semibold text-center inline-block min-w-30 border-b"><%= certification.lastSchoolYear %></span>
+
+                        <div class="mt-2 flex gap-20">
+                            <div class="flex flex-col items-start justify-center">
+                                <span class="text-center border-b inline-block min-w-30 text-xxs font-semibold">
+                                    <%= certification.date %>
+                                </span>
+                                <span class="text-xxs text-center min-w-30">Date</span>
+                            </div>
+
+                            <div class="grid">
+                                <span class="text-center inline-block min-w-30 text-xxs font-semibold">
+                                <%= certification.schoolPrincipal ?? "Erwin B. Layson" %>
+                                </span>
+                                <span class="text-xxs text-center min-w-30 border-t">Name of Principal/School Head over printed Name</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            <% } %>
+        <% }%>
+        </div>
+         <!-- end -->
+    </main>
+</body>
+</html>
