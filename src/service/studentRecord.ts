@@ -4,6 +4,7 @@ import ejs from "ejs"
 
 import StudentRecordModel from "../model/studentRecord.js";
 import ClassroomModel from "../model/classrooms.js";
+import AcademicSettingsModel from "../model/academicSettings.js";
 
 // Reuse existing services
 import { getStudentByClassroomIdService, getStudentByIdService } from "./students.js";
@@ -51,14 +52,14 @@ async function assertAdviserOfClass(connection: PoolConnection, classId: number,
 }
 
 // The class a teacher advises (for GET /student-records/my-class).
-export async function getAdvisedClassIdService(teacherId: number): Promise<number> {
+export async function getAdvisedClassIdService(teacherId: number): Promise<number | null> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
         const classroomModel = new ClassroomModel(connection);
         const classId = await classroomModel.getClassIdByAdviser(teacherId);
         if (classId === null) {
-            throw new NotFoundError("You are not assigned as a class adviser", 404);
+            return null
         }
         return classId;
     } finally {
@@ -185,6 +186,17 @@ async function resolveSubmitter(classId: number, teacherId: number | null): Prom
     }
     const adviser = await getClassAdviserService(classId);
     return { submittedBy: adviser.adviserId, adviserName: adviser.adviserFullname ?? "" };
+}
+
+// ==================== submissions-lock guard ====================
+
+// Throws ForbiddenError when the admin has locked grade submissions.
+async function assertSubmissionsNotLocked(connection: PoolConnection): Promise<void> {
+    const model = new AcademicSettingsModel(connection);
+    const settings = await model.getSettings();
+    if (settings?.submissionsLocked) {
+        throw new ForbiddenError("Grade submissions are currently locked by the administrator");
+    }
 }
 
 // ==================== class records view ====================
@@ -314,6 +326,7 @@ export async function submitStudentRecordService(
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
+        await assertSubmissionsNotLocked(connection);
         await assertAdviserOfClass(connection, classId, teacherId);
 
         const classroom = await getClassroomByIdService(classId, connection);
@@ -360,6 +373,7 @@ export async function submitAllStudentRecordsService(classId: number, quarter: n
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
+        await assertSubmissionsNotLocked(connection);
         await assertAdviserOfClass(connection, classId, teacherId);
 
         const classroom = await getClassroomByIdService(classId, connection);

@@ -9,9 +9,9 @@ export default class StudentAttendance {
   // Per-student attendance summary for ONE SUBJECT (class_subjects row). Used
   // by the gradebook so each subject's attendance % is independent — a student
   // can be present in Science and absent in Math on the same day.
-  async getAttendanceByClassSubjectId(classSubjectId: number): Promise<StudentAttendanceProps[]> {
+  async getAttendanceByClassSubjectId(classSubjectId: number, quarter?: number): Promise<StudentAttendanceProps[]> {
     try {
-      const query = `
+      let query = `
         SELECT 
             sa.enrollmentId,
             COUNT(*) AS totalDays,
@@ -20,10 +20,14 @@ export default class StudentAttendance {
             student_attendance sa
         WHERE 
             sa.classSubjectId = ?
-        GROUP BY 
-            sa.enrollmentId
       `;
-      const [rows] = await this.connection.execute<RowDataPacket[]>(query, [classSubjectId]);
+      const params: (string | number)[] = [classSubjectId];
+      if (quarter !== undefined) {
+        query += " AND sa.quarter = ?";
+        params.push(quarter);
+      }
+      query += " GROUP BY sa.enrollmentId";
+      const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
 
       return rows as StudentAttendanceProps[];
     } catch (err) {

@@ -140,12 +140,12 @@ export async function getStudentByClassroomIdService(id: number, existingConnect
 }
 
 // Get all not enrolled students service
-export async function getAllNotEnrolledStudentsService(searchQuery: string) {
+export async function getAllNotEnrolledStudentsService(searchQuery: string, schoolYearId?: number) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
         const studentModel = new StudentModel(connection);
-        const students = await studentModel.getAllNotEnrolledStudents(searchQuery);
+        const students = await studentModel.getAllNotEnrolledStudents(searchQuery, schoolYearId);
         return students.map(s => ({
             ...s,
             birthdate: formatDate(s.birthdate),

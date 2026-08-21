@@ -199,4 +199,79 @@ export default class Enrollments {
             throw new InternalServerError("Failed to delete student attendance", 500, err);
         }
     }
+
+    // Get all active enrollment IDs for a classroom
+    async getActiveEnrollmentIdsByClassId(classId: number): Promise<number[]> {
+        try {
+            const query = "SELECT id FROM enrollments WHERE classId = ? AND status = 'enrolled'";
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [classId]);
+            return rows.map((row) => row.id);
+        } catch (err) {
+            throw new InternalServerError("Failed to get active enrollment IDs", 500, err);
+        }
+    }
+
+    // Get the student_academic_records ID for an enrollment
+    async getRecordIdByEnrollmentId(enrollmentId: number): Promise<number | null> {
+        try {
+            const query = "SELECT id FROM student_academic_records WHERE enrollmentId = ? LIMIT 1";
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [enrollmentId]);
+            return rows[0]?.id ?? null;
+        } catch (err) {
+            throw new InternalServerError("Failed to get record ID", 500, err);
+        }
+    }
+
+    // Delete student_academic_record_quarters by recordId
+    async deleteRecordQuartersByRecordId(recordId: number): Promise<void> {
+        try {
+            const query = "DELETE FROM student_academic_record_quarters WHERE recordId = ?";
+            await this.connection.execute(query, [recordId]);
+        } catch (err) {
+            throw new InternalServerError("Failed to delete record quarters", 500, err);
+        }
+    }
+
+    // Get all class_subject IDs for a classroom
+    async getClassSubjectIdsByClassId(classId: number): Promise<number[]> {
+        try {
+            const query = "SELECT id FROM class_subjects WHERE classId = ?";
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [classId]);
+            return rows.map((row) => row.id);
+        } catch (err) {
+            throw new InternalServerError("Failed to get class subject IDs", 500, err);
+        }
+    }
+
+    // Delete all assessments for a class_subject
+    async deleteAssessmentsByClassSubjectId(classSubjectId: number): Promise<void> {
+        try {
+            const query = "DELETE FROM assessments WHERE classSubjectId = ?";
+            await this.connection.execute(query, [classSubjectId]);
+        } catch (err) {
+            throw new InternalServerError("Failed to delete assessments", 500, err);
+        }
+    }
+
+    // Count active enrollments across all active classrooms for a school year
+    async countActiveEnrollments(schoolYearId: number): Promise<number> {
+        try {
+            const query = "SELECT COUNT(*) AS cnt FROM enrollments WHERE schoolYearId = ? AND status = 'enrolled'";
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId]);
+            return Number(rows[0]?.cnt ?? 0);
+        } catch (err) {
+            throw new InternalServerError("Failed to count active enrollments", 500, err);
+        }
+    }
+
+    // Get all active classroom IDs for a school year
+    async getActiveClassIdsBySchoolYear(schoolYearId: number): Promise<number[]> {
+        try {
+            const query = "SELECT DISTINCT classId FROM enrollments WHERE schoolYearId = ? AND status = 'enrolled'";
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId]);
+            return rows.map((row) => row.classId);
+        } catch (err) {
+            throw new InternalServerError("Failed to get active class IDs", 500, err);
+        }
+    }
 }

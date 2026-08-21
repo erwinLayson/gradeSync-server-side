@@ -3,7 +3,7 @@ import { NotFoundError } from "../middleware/errors.js";
 
 import AcademicSettingsModel from "../model/academicSettings.js";
 
-// Hard enforcement: advancing the quarter requires every student record for the
+// Enforcement: advancing the quarter requires every student record for the
 // completed quarter to be submitted first (see docs/student-record-submission.md).
 import { assertQuarterCompleteService } from "./studentRecord.js";
 

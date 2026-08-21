@@ -1,15 +1,18 @@
-// Single-row system settings: the current quarter and whether enrollment is open.
+// Single-row system settings: the current quarter, enrollment status, and
+// whether teachers are blocked from submitting quarterly student records.
 export interface AcademicSettingsProps {
     id: number;
     currentQuarter: number;
     enrollmentOpen: boolean;
+    submissionsLocked: boolean;
 }
 
 // Fields an admin is allowed to edit on the academic settings record.
-export const AllowedAcademicSettingFields = ["currentQuarter", "enrollmentOpen"] as const;
+export const AllowedAcademicSettingFields = ["currentQuarter", "enrollmentOpen", "submissionsLocked"] as const;
 
 // Payload accepted by PATCH /api/academic-settings.
 export type AcademicSettingsUpdateProps = Partial<{
     currentQuarter: number;
     enrollmentOpen: number;
+    submissionsLocked: number;
 }>;

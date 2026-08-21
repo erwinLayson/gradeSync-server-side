@@ -1,7 +1,10 @@
 import type { Response, Request, NextFunction } from "express";
+import type { RowDataPacket } from "mysql2/promise";
 import type { EnrollmentCreateProps } from "../constant/enrollments.js";
 
-import { createEnrollmentService, removeStudentFromClassService, bulkRemoveStudentsFromClassService } from "../service/enrollments.js";
+import { createEnrollmentService, removeStudentFromClassService, bulkRemoveStudentsFromClassService, clearAllFromClassService, clearAllClassroomsService } from "../service/enrollments.js";
+import Enrollments from "../model/enrollments.js";
+import { getDBPoolConnection } from "../config/database.js";
 
 // Helpers
 import { SuccessResponse } from "../helper/response.js";
@@ -62,6 +65,83 @@ export async function bulkRemoveEnrollmentsController(
             SuccessResponse({
                 message: `${removedIds.length} student(s) removed from classroom`,
                 data: { removedIds }
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// Count active enrollments in the active school year
+export async function countActiveEnrollmentsController(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const pool = getDBPoolConnection();
+        const connection = await pool.getConnection();
+        try {
+            const [yearRows] = await connection.execute<RowDataPacket[]>(
+                "SELECT id FROM schoolyear WHERE isActive = 1 LIMIT 1"
+            );
+            const schoolYearId = yearRows[0]?.id;
+            if (!schoolYearId) {
+                return res.status(200).json(
+                    SuccessResponse({ message: "No active school year", data: { count: 0 } })
+                );
+            }
+            const enrollmentModel = new Enrollments(connection);
+            const count = await enrollmentModel.countActiveEnrollments(schoolYearId);
+            return res.status(200).json(
+                SuccessResponse({ message: "Retrieved", data: { count } })
+            );
+        } finally {
+            connection.release();
+        }
+    } catch (err) {
+        next(err);
+    }
+}
+
+// Clear all students from a single classroom
+export async function clearAllFromClassController(
+    req: Request<{ classId: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const classId = Number(req.params.classId);
+        if (!Number.isInteger(classId) || classId <= 0) {
+            return res.status(400).json(SuccessResponse({ message: "Invalid class ID" }));
+        }
+
+        const cleared = await clearAllFromClassService(classId);
+
+        return res.status(200).json(
+            SuccessResponse({
+                message: `${cleared} student(s) cleared from classroom`,
+                data: { cleared }
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// Clear all students from ALL active classrooms
+export async function clearAllClassroomsController(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const result = await clearAllClassroomsService();
+
+        return res.status(200).json(
+            SuccessResponse({
+                message: `${result.totalCleared} student(s) cleared from ${result.classroomsCleared} classroom(s)`,
+                data: result
             })
         );
     } catch (err) {

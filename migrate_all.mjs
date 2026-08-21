@@ -778,6 +778,18 @@ try {
     }
   });
 
+  // ---- 15. Add submissionsLocked to academic_settings -----------------------
+  await step("15/15 — add `submissionsLocked` column to academic_settings", async () => {
+    if (!(await columnExists("academic_settings", "submissionsLocked"))) {
+      await conn.query(
+        "ALTER TABLE `academic_settings` ADD COLUMN `submissionsLocked` tinyint(1) NOT NULL DEFAULT 0 AFTER `enrollmentOpen`"
+      );
+      console.log("  Added academic_settings.submissionsLocked.");
+    } else {
+      console.log("  academic_settings.submissionsLocked already exists — skipping.");
+    }
+  });
+
   // ---- 14. Add 'completed' to enrollment status enum --------------------------
   await step("14/14 — add 'completed' to enrollment status enum", async () => {
     const [statusCol] = await conn.query(

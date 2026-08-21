@@ -43,7 +43,7 @@ export async function getGradeBookDetailsByClassSubjectIdService(classSubjectId:
         // NOTE: attendance is PER SUBJECT (keyed by classSubjectId), so each
         // subject in a class has its own attendance records — a student can be
         // present in one subject and absent in another on the same day.
-        const attendanceByEnrollmentId = await getAttendanceByEnrollmentId(classSubjectDetails.classSubjectId, connection)
+        const attendanceByEnrollmentId = await getAttendanceByEnrollmentId(classSubjectDetails.classSubjectId, connection, quarter)
 
         const student = buildStudent(studentRoaster, assessment, gradingWeights, rowStudentScore, attendanceByEnrollmentId)
 
@@ -63,8 +63,8 @@ export async function getGradeBookDetailsByClassSubjectIdService(classSubjectId:
 }
 
 
-async function getAttendanceByEnrollmentId(classSubjectId: number, connection: PoolConnection) {
-    const attendanceRows: StudentAttendanceProps[] = await getStudentAttendanceByClassSubjectIdService(classSubjectId, connection);
+async function getAttendanceByEnrollmentId(classSubjectId: number, connection: PoolConnection, quarter?: number) {
+    const attendanceRows: StudentAttendanceProps[] = await getStudentAttendanceByClassSubjectIdService(classSubjectId, connection, quarter);
 
     const attendanceByEnrollmentId = new Map<number, { presentDays: number; totalDays: number }>();
     for(const row of attendanceRows) {

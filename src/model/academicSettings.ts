@@ -12,7 +12,7 @@ export default class AcademicSettings {
 
     async getSettings(): Promise<AcademicSettingsProps | null> {
         try {
-            const query = "SELECT id, currentQuarter, enrollmentOpen FROM academic_settings LIMIT 1";
+            const query = "SELECT id, currentQuarter, enrollmentOpen, submissionsLocked FROM academic_settings LIMIT 1";
             const [rows] = await this.connection.execute<RowDataPacket[]>(query);
             return rows.length > 0 ? (rows[0] as AcademicSettingsProps) : null;
         } catch (err) {

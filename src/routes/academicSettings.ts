@@ -10,9 +10,12 @@ import { ROLES } from "../constant/users.js";
 const router: Router = Router();
 
 const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
+const adminTeacher: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.TEACHER])];
+
+// ==================== ADMIN + TEACHER (read-only) ====================
+router.get("/academic-settings", adminTeacher, getAcademicSettingsController);
 
 // ==================== ADMIN ONLY ====================
-router.get("/academic-settings", adminOnly, getAcademicSettingsController);
 router.patch("/academic-settings", adminOnly, updateAcademicSettingsController);
 
 export default router;

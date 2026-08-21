@@ -61,6 +61,7 @@ function toDateOnly(value: string | Date | undefined | null): string {
 export async function getStudentAttendanceByClassSubjectIdService(
   classSubjectId: number,
   conn?: PoolConnection,
+  quarter?: number,
 ) {
   const pool = getDBPoolConnection();
   const connection = conn ?? await pool.getConnection();
@@ -68,7 +69,7 @@ export async function getStudentAttendanceByClassSubjectIdService(
   try {
     const studentAttendanceModel = new StudentAttendanceModel(connection);
 
-    const attendanceRows = await studentAttendanceModel.getAttendanceByClassSubjectId(classSubjectId);
+    const attendanceRows = await studentAttendanceModel.getAttendanceByClassSubjectId(classSubjectId, quarter);
 
     // COUNT()/SUM() over the attendance table come back from the driver as strings;
     // normalize so callers always receive real numbers.

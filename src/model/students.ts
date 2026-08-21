@@ -131,9 +131,11 @@ export default class Students {
     }
 
     // get all student who are not enrolled
-    async getAllNotEnrolledStudents(searchQuery: string):Promise<StudentResponseProps[]> {
+    // schoolYearId: when provided, also excludes students with 'completed'
+    // enrollments in that school year (they cannot be re-enrolled in the same year).
+    async getAllNotEnrolledStudents(searchQuery: string, schoolYearId?: number):Promise<StudentResponseProps[]> {
         try {
-            const query = `
+            let query = `
                 SELECT 
                 id, 
                 lrn,
@@ -148,8 +150,14 @@ export default class Students {
                 WHERE status = "active" AND (lrn LIKE ? OR email LIKE ?)
                 AND id NOT IN (SELECT studentId FROM enrollments WHERE status = 'enrolled')
             `;
+            const params: (string | number)[] = [`%${searchQuery}%`, `%${searchQuery}%`];
 
-            const [result] = await this.connection.execute<RowDataPacket[]>(query, [`%${searchQuery}%`, `%${searchQuery}%`]);
+            if (schoolYearId) {
+                query += ` AND id NOT IN (SELECT studentId FROM enrollments WHERE schoolYearId = ? AND status = 'completed')`;
+                params.push(schoolYearId);
+            }
+
+            const [result] = await this.connection.execute<RowDataPacket[]>(query, params);
 
             return result as StudentResponseProps[];
         }catch(err) {

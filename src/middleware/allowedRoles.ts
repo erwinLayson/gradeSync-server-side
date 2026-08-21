@@ -5,6 +5,7 @@ export default function allowedRoles(roles: string[]) {
     return (req: Request<any>, res: Response, next: NextFunction) => {
         const userRole = req?.user?.role;
 
+
         if(!userRole) {
             return res.status(401).json({ message: "Unauthorized" });
         }

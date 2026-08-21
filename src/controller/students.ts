@@ -153,6 +153,7 @@ export async function deleteStudentController(req: Request<{id: string}>, res: R
 // Get all not enrolled students controller
 export async function getAllNotEnrolledStudentsController(req: Request, res: Response, next: NextFunction) {
     const searchQuery = req.query.search as string | undefined;
+    const schoolYearId = req.query.schoolYearId ? Number(req.query.schoolYearId) : undefined;
 
     if(searchQuery === null || searchQuery === undefined) {
         return res.status(400).json({
@@ -161,7 +162,7 @@ export async function getAllNotEnrolledStudentsController(req: Request, res: Res
     }
 
     try { 
-        const result = await getAllNotEnrolledStudentsService(searchQuery);
+        const result = await getAllNotEnrolledStudentsService(searchQuery, schoolYearId && !isNaN(schoolYearId) ? schoolYearId : undefined);
         return res.status(200).json(
             SuccessResponse({
                 message: `Get not enrolled students successfull`,

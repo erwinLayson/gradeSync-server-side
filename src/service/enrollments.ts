@@ -1,6 +1,6 @@
 import Enrollments from "../model/enrollments.js";
 import { getDBPoolConnection } from "../config/database.js";
-import type { PoolConnection } from "mysql2/promise";
+import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import type { EnrollmentCreateProps } from "../constant/enrollments.js";
 
 import { ConflictError, ForbiddenError, NotFoundError, BadRequestError } from "../middleware/errors.js";
@@ -34,9 +34,13 @@ export async function createEnrollmentService(enrollment: EnrollmentCreateProps)
         );
 
         if (existingEnrollment) {
-            // Student has an existing enrollment — check if it's active or unenrolled
+            // Student has an existing enrollment — check status
             if (existingEnrollment.status === "enrolled") {
                 throw new ConflictError("Student is already enrolled in this school year");
+            }
+
+            if (existingEnrollment.status === "completed") {
+                throw new ConflictError("Student has a completed enrollment in this school year and cannot be re-enrolled.");
             }
 
             // Student was unenrolled — check if current quarter is finished
@@ -205,6 +209,99 @@ export async function bulkRemoveStudentsFromClassService(classId: number, enroll
     }
 }
 
+
+// Clear all students from a single classroom
+// Deletes scores, attendance, enrollment details, class links, and submission records.
+// Marks enrollment as 'completed'.
+export async function clearAllFromClassService(classId: number): Promise<number> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const enrollmentModel = new Enrollments(connection);
+        const enrollmentIds = await enrollmentModel.getActiveEnrollmentIdsByClassId(classId);
+
+        if (enrollmentIds.length === 0) {
+            return 0;
+        }
+
+        await connection.beginTransaction();
+        try {
+            for (const enrollmentId of enrollmentIds) {
+                // 1. Delete student scores
+                await enrollmentModel.deleteStudentScoresByEnrollmentId(enrollmentId);
+
+                // 2. Delete student attendance
+                await enrollmentModel.deleteStudentAttendanceByEnrollmentId(enrollmentId);
+
+                // 3. Delete enrollment details (subject links)
+                await enrollmentModel.deleteEnrollmentDetailsByEnrollmentId(enrollmentId);
+
+                // 4. Delete class_students (class-enrollment link)
+                await enrollmentModel.deleteClassStudentByEnrollmentId(enrollmentId);
+
+                // 5. Delete student_academic_record_quarters (submission status)
+                const recordId = await enrollmentModel.getRecordIdByEnrollmentId(enrollmentId);
+                if (recordId) {
+                    await enrollmentModel.deleteRecordQuartersByRecordId(recordId);
+                }
+
+                // 6. Mark enrollment as completed
+                await enrollmentModel.updateEnrollmentStatus(enrollmentId, "completed");
+            }
+
+            // 7. Clear assessments for all class subjects in this classroom
+            const classSubjectIds = await enrollmentModel.getClassSubjectIdsByClassId(classId);
+            for (const csId of classSubjectIds) {
+                await enrollmentModel.deleteAssessmentsByClassSubjectId(csId);
+            }
+
+            await connection.commit();
+        } catch (err) {
+            await connection.rollback();
+            throw err;
+        }
+
+        return enrollmentIds.length;
+    } finally {
+        connection.release();
+    }
+}
+
+// Clear all students from ALL active classrooms in the active school year.
+export async function clearAllClassroomsService(): Promise<{ totalCleared: number; classroomsCleared: number }> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const enrollmentModel = new Enrollments(connection);
+
+        // Get the active school year
+        const [yearRows] = await connection.execute<RowDataPacket[]>(
+            "SELECT id FROM schoolyear WHERE isActive = 1 LIMIT 1"
+        );
+        const schoolYearId = yearRows[0]?.id;
+        if (!schoolYearId) {
+            return { totalCleared: 0, classroomsCleared: 0 };
+        }
+
+        // Get all active classroom IDs for this school year
+        const classIds = await enrollmentModel.getActiveClassIdsBySchoolYear(schoolYearId);
+
+        let totalCleared = 0;
+        let classroomsCleared = 0;
+
+        for (const classId of classIds) {
+            const cleared = await clearAllFromClassService(classId);
+            if (cleared > 0) {
+                totalCleared += cleared;
+                classroomsCleared++;
+            }
+        }
+
+        return { totalCleared, classroomsCleared };
+    } finally {
+        connection.release();
+    }
+}
 
 export async function getAllEnrollmentRecordByStudentId(studentId: number, existingConnection?: PoolConnection) {
         const pool = getDBPoolConnection();

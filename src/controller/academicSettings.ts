@@ -44,6 +44,14 @@ export async function updateAcademicSettingsController(req: Request<{}, {}, Acad
             updates.enrollmentOpen = open;
         }
 
+        if (updates.submissionsLocked !== undefined) {
+            const locked = Number(updates.submissionsLocked);
+            if (locked !== 0 && locked !== 1) {
+                throw new BadRequestError("submissionsLocked must be 0 or 1");
+            }
+            updates.submissionsLocked = locked;
+        }
+
         const updated = await updateAcademicSettingsService(updates);
         res.status(200).json(
             SuccessResponse({

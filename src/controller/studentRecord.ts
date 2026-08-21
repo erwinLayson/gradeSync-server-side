@@ -57,13 +57,22 @@ export async function getMyClassRecordsController(req: Request, res: Response, n
         const quarter = parseQuarterParam(req.query.quarter ?? 1);
         const teacherId = await resolveActorTeacherId(req);
         const classId = await getAdvisedClassIdService(teacherId!);
-        const result = await getClassRecordsService(classId, quarter, teacherId);
-        return res.status(200).json(
+
+        if(classId) {
+            const result = await getClassRecordsService(classId, quarter, teacherId);
+            return res.status(200).json(
+                SuccessResponse({
+                    message: "Retrieved successfully",
+                    data: result
+                })
+            );
+        }
+
+        res.json(
             SuccessResponse({
                 message: "Retrieved successfully",
-                data: result
             })
-        );
+        )
     } catch (err) {
         next(err);
     }
