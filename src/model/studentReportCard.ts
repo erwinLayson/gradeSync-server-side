@@ -2,7 +2,29 @@ import { PoolConnection, type RowDataPacket } from "mysql2/promise";
 import { InternalServerError } from "../middleware/errors.js";
 
 
-import type{ReportCard} from "../constant/report-card.js";
+import type{ReportCard, Subjects, StudentQaurterlyGrades} from "../constant/report-card.js";
+
+
+
+function calculateFinalGrade(quarter: {
+    q1: string | null,
+    q2: string | null,
+    q3: string | null,
+    q4: string | null
+}):number | null {
+    const grades = [
+        quarter.q1,
+        quarter.q2,
+        quarter.q3,
+        quarter.q4
+    ].filter((grade): grade is string => grade !== null).map(Number);
+
+    const total = grades.reduce((sum, grade) => (sum + grade), 0);
+
+    const finalGrade = Number((total / grades.length).toFixed());
+
+    return finalGrade
+}
 
 export default class StudentReportCard {
     constructor(private connection: PoolConnection){}
@@ -34,13 +56,39 @@ export default class StudentReportCard {
                 WHERE e.id = ?
 
             `;
-
             const [row] = await this.connection.execute<RowDataPacket[]>(query, [enrollmentId]);
-
+            
             const student = row[0] as ReportCard;
             return row.length > 0 ? student : null
         }catch(err) {
             throw new InternalServerError("Internal Server Error ", 500, err);
+        }
+    }
+
+    async getStudentQuarterlyGrades(enrollmentId: number):Promise<StudentQaurterlyGrades[]> {
+        try {
+            const query = `
+                SELECT
+                    sars.subjectName as subjectName,
+                    sars.q1,
+                    sars.q2,
+                    sars.q3,
+                    sars.q4
+                FROM 
+                    student_academic_records sar
+                JOIN 
+                    student_academic_record_subjects sars ON sars.recordId = sar.id
+                WHERE 
+                    sar.enrollmentId = ?
+            `;
+
+            const values = [enrollmentId]
+
+            const [row] = await this.connection.execute<RowDataPacket[]>(query, values);
+
+            return row as StudentQaurterlyGrades[];
+        }catch(err) {
+            throw new InternalServerError("Internal Server Error", 500, err);
         }
     }
 

@@ -745,137 +745,18 @@
 
               <tbody>
                 <!-- Subjects  -->
-                <tr>
-                  <td class="p-md">Filipino</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
+                <% subjects.forEach(subject => { %>
+                  <tr>
+                    <td class="p-md"><%= subject.name%></td>
+                    <td class="text-center p-md"><%= subject.quarters.q1%></td>
+                    <td class="text-center p-md"><%= subject.quarters.q2%></td>
+                    <td class="text-center p-md"><%= subject.quarters.q3%></td>
+                    <td class="text-center p-md"><%= subject.quarters.q4%></td>
+                    <td class="text-center p-md"><%= subject.finalGrades %></td>
+                    <td class="text-center p-md"><%= subject.remarks(subject.finalGrades) %></td>
+                  </tr>
 
-                <!--  -->
-                <tr>
-                  <td class="p-md">English</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
-                <!--  -->
-                <tr>
-                  <td class="p-md">Mathematics</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
-                <!--  -->
-                <tr>
-                  <td class="p-md">Science</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
-                <!--  -->
-                <tr>
-                  <td class="p-md">Araling Panlipunan</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
-                <!--  -->
-                <tr>
-                  <td class="p-md">Edukasyon sa Pagpapakatao</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
-                <!--  -->
-                <tr>
-                  <td class="p-md">Technology and Livelihood Program</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
-                <!--  -->
-                <tr>
-                  <td class="p-md">MAPEH</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
-                <!--  -->
-                <tr>
-                  <td class="text-end p-md">Music</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
-                <!--  -->
-                <tr>
-                  <td class="text-end p-md">Art</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
-                <!--  -->
-                <tr>
-                  <td class="text-end p-md">P.E</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
-                <!--  -->
-                <tr>
-                  <td class="text-end p-md">Health</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                </tr>
-
+                <% })%>
                 <tr>
                   <td class="p-md">ALIVE</td>
                   <td class="text-center p-md"></td>
@@ -893,8 +774,8 @@
                   <td class="text-center p-md"></td>
                   <td class="text-center p-md"></td>
                   <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
+                  <td class="text-center p-md"><%= generalAverages.score%></td>
+                  <td class="text-center p-md"><%= generalAverages.remarks(generalAverages.score)%></td>
                 </tr>
               </tbody>
             </table>
