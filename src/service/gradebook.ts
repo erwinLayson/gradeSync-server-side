@@ -8,12 +8,14 @@ import {getStudentByClassroomIdService} from "./students.js"
 import {getStudentScoreService} from "./studentScore.js";
 import { getGradingWeightsService } from "./gradingWeight.js";
 import { getStudentAttendanceByClassSubjectIdService } from "./studentAttendance.js";
+import { getSubjectComponentsWithConnection } from "./subjectComponents.js";
 
 // =============== types =================
 import type { PoolConnection } from "mysql2/promise";
 import type {GradeWeights, StudentScoreProps, StudentAttendanceProps} from "../constant/grade.js"
 import type { AssessmentType, AssessmentProps } from "../constant/assessment.js";
 import type {StudentWithClassroom} from "../constant/students.js";
+import type { SubjectComponent, ComponentGrade } from "../constant/subjectComponents.js";
 
 // ==================== middleware ============
 import { NotFoundError } from "../middleware/errors.js";
@@ -45,11 +47,24 @@ export async function getGradeBookDetailsByClassSubjectIdService(classSubjectId:
         // present in one subject and absent in another on the same day.
         const attendanceByEnrollmentId = await getAttendanceByEnrollmentId(classSubjectDetails.classSubjectId, connection, quarter)
 
-        const student = buildStudent(studentRoaster, assessment, gradingWeights, rowStudentScore, attendanceByEnrollmentId)
+        // Check if this subject has components (e.g., MAPEH)
+        const components = classSubjectDetails.hasComponents
+            ? await getSubjectComponentsWithConnection(classSubjectDetails.subjectId, connection)
+            : [];
+
+        const student = buildStudent(
+            studentRoaster,
+            assessment,
+            gradingWeights,
+            rowStudentScore,
+            attendanceByEnrollmentId,
+            components
+        )
 
         return {
             ...classSubjectDetails,
             quarter,
+            components,
             assessment: assessment.map(ass => ({
                 ...ass,
                 created_at: formatDate(ass.created_at)
@@ -88,7 +103,8 @@ function buildStudent(
     assessment: AssessmentProps[],
     gradingWeights: GradeWeights,
     rowStudentScore: StudentScoreProps[],
-    attendanceByEnrollmentId: Map<number, { presentDays: number; totalDays: number }>
+    attendanceByEnrollmentId: Map<number, { presentDays: number; totalDays: number }>,
+    components: SubjectComponent[] = []
 ) {
     // Scores are keyed by enrollmentId because student_scores now references the
     // enrollments table; the roster provides each student's enrollmentId.
@@ -98,6 +114,15 @@ function buildStudent(
         const studentScoresByAssessmentId = scoresByEnrollmentId.get(scoreRow.enrollmentId) ?? {}
         studentScoresByAssessmentId[scoreRow.assessmentId] = Number(scoreRow.score);
         scoresByEnrollmentId.set(scoreRow.enrollmentId, studentScoresByAssessmentId);
+    }
+
+    // Group assessments by componentId for composite subjects
+    const assessmentsByComponentId = new Map<number | null, AssessmentProps[]>();
+    for (const ass of assessment) {
+        const key = ass.componentId ?? null;
+        const list = assessmentsByComponentId.get(key) ?? [];
+        list.push(ass);
+        assessmentsByComponentId.set(key, list);
     }
 
     const roaster = studentRoaster.map((sr) => {
@@ -115,7 +140,23 @@ function buildStudent(
             }
             : null;
 
-        const quarterGrade = computeQuarterGrade(assessment, studentScoreAssessmentById, gradingWeights, attendance)
+        let quarterGrade: number | null;
+        let componentGrades: ComponentGrade[] | undefined;
+
+        if (components.length > 0) {
+            // Composite subject: compute grade per component, then aggregate
+            const result = computeCompositeQuarterGrade(
+                components,
+                assessmentsByComponentId,
+                studentScoreAssessmentById,
+                gradingWeights
+            );
+            quarterGrade = result.quarterGrade;
+            componentGrades = result.componentGrades;
+        } else {
+            // Flat subject: existing logic
+            quarterGrade = computeQuarterGrade(assessment, studentScoreAssessmentById, gradingWeights, attendance);
+        }
 
         // Only count assessments the student has actually been graded on, so the
         // totals stay consistent with the graded-only quarterGrade computation.
@@ -133,7 +174,7 @@ function buildStudent(
             0
         );
 
-            return {
+        const result: any = {
             enrollmentId: sr.enrollmentId,
             studentId: sr.studentId,
             studentLrn: sr.studentLrn,
@@ -145,9 +186,58 @@ function buildStudent(
             quarterGrade,
             remarks: getRemarksForQuarterGrade(quarterGrade)
         };
+
+        // Add component grades for composite subjects
+        if (componentGrades) {
+            result.componentGrades = componentGrades;
+        }
+
+        return result;
     })
 
     return roaster;
+}
+
+// Compute quarter grade for composite subjects (e.g., MAPEH)
+// Returns the aggregated grade and individual component grades
+export function computeCompositeQuarterGrade(
+    components: SubjectComponent[],
+    assessmentsByComponentId: Map<number | null, AssessmentProps[]>,
+    studentScoresByAssessmentId: Record<number, number>,
+    gradeWeights: GradeWeights
+): { quarterGrade: number | null; componentGrades: ComponentGrade[] } {
+    const componentGrades: ComponentGrade[] = [];
+
+    for (const component of components) {
+        // Get assessments for this component
+        const componentAssessments = assessmentsByComponentId.get(component.id) ?? [];
+
+        // Compute grade for this component (no attendance for individual components)
+        const grade = computeQuarterGrade(componentAssessments, studentScoresByAssessmentId, gradeWeights, null);
+
+        componentGrades.push({
+            componentId: component.id,
+            componentName: component.name,
+            componentCode: component.code,
+            weight: component.weight,
+            grade
+        });
+    }
+
+    // Aggregate component grades by weight
+    let weightedSum = 0;
+    let totalWeight = 0;
+
+    for (const cg of componentGrades) {
+        if (cg.grade !== null) {
+            weightedSum += cg.grade * cg.weight;
+            totalWeight += cg.weight;
+        }
+    }
+
+    const quarterGrade = totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) / 100 : null;
+
+    return { quarterGrade, componentGrades };
 }
 
 export function computeQuarterGrade(

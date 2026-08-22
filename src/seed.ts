@@ -35,6 +35,8 @@ async function seed() {
     await connection.execute("DELETE FROM student_attendance");
     await connection.execute("DELETE FROM assessments");
     await connection.execute("DELETE FROM grading_weights");
+    await connection.execute("DELETE FROM student_academic_record_components");
+    await connection.execute("DELETE FROM subject_components");
     await connection.execute("DELETE FROM class_subjects");
     await connection.execute("DELETE FROM enrollment_details");
     await connection.execute("DELETE FROM class_students");
@@ -159,26 +161,46 @@ async function seed() {
     // ──────────────────────────────────────────────────────
     console.log("Seeding subjects...");
     const subjectData = [
-      { name: "Mathematics", code: "MATH101", unit: 3 },
-      { name: "English", code: "ENG101", unit: 3 },
-      { name: "Science", code: "SCI101", unit: 3 },
-      { name: "Filipino", code: "FIL101", unit: 3 },
-      { name: "Araling Panlipunan", code: "AP101", unit: 2 },
-      { name: "Values Education", code: "VAL101", unit: 2 },
-      { name: "MAPEH", code: "MAPEH101", unit: 2 },
-      { name: "Technology and Livelihood Education", code: "TLE101", unit: 2 },
-      { name: "Computer Science", code: "CS101", unit: 3 },
-      { name: "Science 2 - Chemistry", code: "SCI201", unit: 3 },
-      { name: "Mathematics 2 - Algebra", code: "MATH201", unit: 3 },
-      { name: "English 2 - Literature", code: "ENG201", unit: 3 },
+      { name: "Mathematics", code: "MATH101", unit: 3, hasComponents: false },
+      { name: "English", code: "ENG101", unit: 3, hasComponents: false },
+      { name: "Science", code: "SCI101", unit: 3, hasComponents: false },
+      { name: "Filipino", code: "FIL101", unit: 3, hasComponents: false },
+      { name: "Araling Panlipunan", code: "AP101", unit: 2, hasComponents: false },
+      { name: "Values Education", code: "VAL101", unit: 2, hasComponents: false },
+      { name: "MAPEH", code: "MAPEH101", unit: 2, hasComponents: true },
+      { name: "Technology and Livelihood Education", code: "TLE101", unit: 2, hasComponents: false },
+      { name: "Computer Science", code: "CS101", unit: 3, hasComponents: false },
+      { name: "Science 2 - Chemistry", code: "SCI201", unit: 3, hasComponents: false },
+      { name: "Mathematics 2 - Algebra", code: "MATH201", unit: 3, hasComponents: false },
+      { name: "English 2 - Literature", code: "ENG201", unit: 3, hasComponents: false },
     ];
     const subjectIds: number[] = [];
     for (const subj of subjectData) {
       const [result] = await connection.execute<ResultSetHeader>(
-        "INSERT INTO subjects(name, code, unit) VALUES(?,?,?)",
-        sql(subj.name, subj.code, subj.unit)
+        "INSERT INTO subjects(name, code, unit, hasComponents) VALUES(?,?,?,?)",
+        sql(subj.name, subj.code, subj.unit, subj.hasComponents ? 1 : 0)
       );
       subjectIds.push(result.insertId);
+    }
+
+    // ──────────────────────────────────────────────────────
+    // 5b. Seed MAPEH components (Music, Arts, PE, Health)
+    // ──────────────────────────────────────────────────────
+    console.log("Seeding MAPEH components...");
+    const mapehSubjectId = subjectIds[6]!; // MAPEH is at index 6
+    const mapehComponents = [
+      { name: "Music", code: "MAPEH-M", weight: 25 },
+      { name: "Arts", code: "MAPEH-A", weight: 25 },
+      { name: "Physical Education", code: "MAPEH-PE", weight: 25 },
+      { name: "Health", code: "MAPEH-H", weight: 25 },
+    ];
+    const mapehComponentIds: number[] = [];
+    for (const comp of mapehComponents) {
+      const [result] = await connection.execute<ResultSetHeader>(
+        "INSERT INTO subject_components(parentSubjectId, name, code, weight) VALUES(?,?,?,?)",
+        sql(mapehSubjectId, comp.name, comp.code, comp.weight)
+      );
+      mapehComponentIds.push(result.insertId);
     }
 
     // ──────────────────────────────────────────────────────

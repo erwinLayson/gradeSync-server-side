@@ -1,25 +1,43 @@
 import SubjectModel from "../model/subjects.js";
+import SubjectComponentsModel from "../model/subjectComponents.js";
 
 // Configure the database connection
 import { getDBPoolConnection } from "../config/database.js";
 
 import type {Subject} from "../constant/subjects.js";
+import type { ComponentCreateProps } from "../constant/subjectComponents.js";
 import { ConflictError, NotFoundError } from "../middleware/errors.js";
 
 // Services for subjects
 import {getTeachersBySubjectIdService} from "./teachers.js";
 import type { PoolConnection } from "mysql2/promise";
 
-// create a new subject service
-export async function createSubjectService(subject: Omit<Subject, "id">){
+// create a new subject service (with optional components)
+export async function createSubjectService(
+    subject: Omit<Subject, "id">,
+    components?: ComponentCreateProps[]
+){
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
 
     try {
+        await connection.beginTransaction();
+
         const subjectModel = new SubjectModel(connection);
         const subjectId = await subjectModel.createSubject(subject);
+
+        // Create components if provided
+        if (components && components.length > 0) {
+            const componentModel = new SubjectComponentsModel(connection);
+            await componentModel.createComponentsBatch(subjectId, components);
+        }
+
+        await connection.commit();
         return subjectId;
-    }finally {
+    } catch (error) {
+        await connection.rollback();
+        throw error;
+    } finally {
         connection.release();
     }
 }
@@ -125,7 +143,7 @@ export async function deleteSubjectService(id: number) {
     }
 }
 
-// Get subject by ID with teachers service
+// Get subject by ID with teachers and components service
 export async function getSubjectByIdWithTeachersService(subjectId: number) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
@@ -140,14 +158,20 @@ export async function getSubjectByIdWithTeachersService(subjectId: number) {
         // Fetch teachers associated with the subject
         const teachers = await getTeachersBySubjectIdService(subjectId, connection);
 
-        // Combine subject and teachers into a single object.
-        // The teacher id is included so the client can target a removal.
-        const subjectWithTeachers = {
+        // Fetch components if subject has them
+        const componentModel = new SubjectComponentsModel(connection);
+        const components = subject.hasComponents 
+            ? await componentModel.getSubjectComponents(subjectId)
+            : [];
+
+        // Combine subject, teachers, and components into a single object.
+        const subjectWithDetails = {
             ...subject,
-            teachers: teachers.map(teacher => ({ id: teacher.id, name: teacher.fullname }))
+            teachers: teachers.map(teacher => ({ id: teacher.id, name: teacher.fullname })),
+            components
         };
 
-        return subjectWithTeachers; 
+        return subjectWithDetails; 
        
     } finally {
         connection.release();

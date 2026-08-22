@@ -9,7 +9,8 @@ import { getAssessmentService } from "./assessment.js";
 import { getStudentScoreService } from "./studentScore.js";
 import { getGradingWeightsService } from "./gradingWeight.js";
 import { getAttendanceHistoryService } from "./studentAttendance.js";
-import { computeQuarterGrade, getRemarksForQuarterGrade } from "./gradebook.js";
+import { computeQuarterGrade, computeCompositeQuarterGrade, getRemarksForQuarterGrade } from "./gradebook.js";
+import { getSubjectComponentsWithConnection } from "./subjectComponents.js";
 
 // Error handling
 import { NotFoundError } from "../middleware/errors.js";
@@ -17,6 +18,7 @@ import { formatDate } from "../helper/formatDate.js";
 
 import type { GradeWeights } from "../constant/grade.js";
 import type { StudentScoreProps } from "../constant/grade.js";
+import type { SubjectComponent, ComponentGrade } from "../constant/subjectComponents.js";
 
 function formatStudentRow(row: any) {
     return {
@@ -167,7 +169,12 @@ export async function getStudentAcademicHistoryService(studentId: number) {
                     };
                 });
 
+                // Check if this subject has components (e.g., MAPEH)
+                const components = await getSubjectComponentsWithConnection(subjectRow.subjectId, connection);
+                const isCompositeSubject = components.length > 0;
+
                 const quarters: (number | null)[] = [];
+                const componentGradesByQuarter: ComponentGrade[][] = []; // Track component grades per quarter
                 const assessments: {
                     id: number;
                     quarter: number;
@@ -206,7 +213,28 @@ export async function getStudentAcademicHistoryService(studentId: number) {
                         }
                     }
 
-                    quarters.push(computeQuarterGrade(assessmentRows, scoresByAssessmentId, weights, quarterAttendance));
+                    if (isCompositeSubject) {
+                        // Composite subject: compute grade per component, then aggregate
+                        const assessmentsByComponentId = new Map<number | null, typeof assessmentRows>();
+                        for (const ass of assessmentRows) {
+                            const key = ass.componentId ?? null;
+                            const list = assessmentsByComponentId.get(key) ?? [];
+                            list.push(ass);
+                            assessmentsByComponentId.set(key, list);
+                        }
+                        const result = computeCompositeQuarterGrade(
+                            components,
+                            assessmentsByComponentId,
+                            scoresByAssessmentId,
+                            weights
+                        );
+                        quarters.push(result.quarterGrade);
+                        componentGradesByQuarter.push(result.componentGrades);
+                    } else {
+                        // Flat subject: existing logic
+                        quarters.push(computeQuarterGrade(assessmentRows, scoresByAssessmentId, weights, quarterAttendance));
+                        componentGradesByQuarter.push([]);
+                    }
 
                     for (const assessment of assessmentRows) {
                         const dateGiven = assessment.dateGiven;
@@ -228,6 +256,17 @@ export async function getStudentAcademicHistoryService(studentId: number) {
                         ? Math.round((gradedQuarters.reduce((sum, g) => sum + g, 0) / gradedQuarters.length) * 100) / 100
                         : null;
 
+                // Build component grades breakdown for composite subjects
+                const componentBreakdown = isCompositeSubject && componentGradesByQuarter.length > 0
+                    ? components.map((comp) => ({
+                        componentId: comp.id,
+                        name: comp.name,
+                        code: comp.code,
+                        weight: comp.weight,
+                        grades: componentGradesByQuarter.map((cg) => cg.find(c => c.componentId === comp.id)?.grade ?? null)
+                    }))
+                    : undefined;
+
                 subjects.push({
                     classSubjectId: subjectRow.classSubjectId,
                     subjectId: subjectRow.subjectId,
@@ -239,7 +278,8 @@ export async function getStudentAcademicHistoryService(studentId: number) {
                     final,
                     remarks: getRemarksForQuarterGrade(final),
                     assessments,
-                    attendance: attendanceByQuarter
+                    attendance: attendanceByQuarter,
+                    componentBreakdown
                 });
             }
 

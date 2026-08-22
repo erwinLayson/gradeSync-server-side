@@ -16,7 +16,8 @@ export default class GradeBook {
                     c.section AS classSection,
                     c.gradeLevel AS classLevel,
                     s.name AS subjectName,
-                    s.code AS subjectCode
+                    s.code AS subjectCode,
+                    COALESCE(s.hasComponents, FALSE) AS hasComponents
                 FROM 
                     class_subjects cs 
                 JOIN

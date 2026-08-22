@@ -7,19 +7,29 @@ import type{AssessmentProps, AssessmentCreateProps, AssessmentUpdateProps} from 
 export default class Assessment {
     constructor(private connection: PoolConnection) {};
 
-    async getAssessment(classSubjectId: number, quarter?: number):Promise<AssessmentProps[] | null> {
+    async getAssessment(classSubjectId: number, quarter?: number, componentId?: number | null):Promise<AssessmentProps[] | null> {
         try {
-            const query = `
+            let query = `
                 SELECT 
                 * 
                 FROM assessments a 
-                WHERE a.classSubjectId = ? ${quarter !== undefined ? "AND a.quarter = ?" : ""}
+                WHERE a.classSubjectId = ?
             `;
-
-            const values: (string | number)[] = [classSubjectId]
+            const values: (string | number | null)[] = [classSubjectId]
 
             if(quarter !== undefined) {
+                query += ` AND a.quarter = ?`;
                 values.push(quarter)
+            }
+
+            // Filter by componentId if provided
+            if(componentId !== undefined) {
+                if(componentId === null) {
+                    query += ` AND a.componentId IS NULL`;
+                } else {
+                    query += ` AND a.componentId = ?`;
+                    values.push(componentId)
+                }
             }
 
             const [result] = await this.connection.execute<RowDataPacket[]>(query, values)
@@ -33,13 +43,13 @@ export default class Assessment {
     // Create a new assessment for a class subject within a specific quarter.
     // Returns the auto-generated id of the new assessment.
     async createAssessment(assessmentData: AssessmentCreateProps): Promise<number> {
-        const { classSubjectId, quarter, type, title, maxScore, dateGiven } = assessmentData;
+        const { classSubjectId, componentId, quarter, type, title, maxScore, dateGiven } = assessmentData;
         try {
             const query = `
-                INSERT INTO assessments (classSubjectId, quarter, type, title, maxScore, dateGiven)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO assessments (classSubjectId, componentId, quarter, type, title, maxScore, dateGiven)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
             `;
-            const values = [classSubjectId, quarter, type, title, maxScore, dateGiven ?? null];
+            const values = [classSubjectId, componentId ?? null, quarter, type, title, maxScore, dateGiven ?? null];
             const [result] = await this.connection.execute<ResultSetHeader>(query, values);
             return result.insertId;
         } catch (err) {

@@ -2,7 +2,8 @@ export interface Subject {
     id: number;
     name: string;
     code : string;
-    unit: number 
+    unit: number;
+    hasComponents?: boolean;
 }
 
 export interface AssignTeacherProps {

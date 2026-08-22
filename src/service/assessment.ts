@@ -12,8 +12,8 @@ import type {
 } from "../constant/assessment.js";
 
 // ============= this function was exported and use in the gradebook service ==================
-export async function getAssessmentService(details: {classSubjectId: number, quarter?: number}, conn?: PoolConnection) {
-    const {classSubjectId, quarter} = details;
+export async function getAssessmentService(details: {classSubjectId: number, quarter?: number, componentId?: number | null}, conn?: PoolConnection) {
+    const {classSubjectId, quarter, componentId} = details;
 
     const pool = getDBPoolConnection();
     const connection = conn ?? await pool.getConnection();
@@ -22,7 +22,7 @@ export async function getAssessmentService(details: {classSubjectId: number, qua
     try {
         
         const assessmentModel = new AssessmentModel(connection);
-        const assessments = await assessmentModel.getAssessment(classSubjectId, quarter);
+        const assessments = await assessmentModel.getAssessment(classSubjectId, quarter, componentId);
         const formatedAssessment = (assessments ?? []).map((assessment) => ({
             ...assessment,
             dateGiven: assessment.dateGiven ? formatDate(assessment.dateGiven) : null

@@ -10,14 +10,14 @@ export default class Subjects {
 
     // Create a new subject
     async createSubject(subject: Omit<Subject, "id">): Promise<number> {
-        const {name, code, unit} = subject;
+        const {name, code, unit, hasComponents} = subject;
         try {
             const query = `
-                INSERT INTO subjects (name, code, unit)
-                VALUES (?, ?, ?)
+                INSERT INTO subjects (name, code, unit, hasComponents)
+                VALUES (?, ?, ?, ?)
             `;
 
-            const values = [name, code, unit];
+            const values = [name, code, unit, hasComponents ? 1 : 0];
 
             const [result] = await this.connection.execute<ResultSetHeader>(query, values);
             

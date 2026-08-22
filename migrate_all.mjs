@@ -810,6 +810,134 @@ try {
     console.log("  Added 'completed' to enrollments.status enum.");
   });
 
+  // ---- 16. subject sub-components (MAPEH) -----------------------------------
+  await step("16/16 — subject sub-components: create subject_components, alter subjects & assessments", async () => {
+    // 16a. subject_components table
+    const [compTable] = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+      ["subject_components"]
+    );
+    if (Number(compTable[0].cnt) === 0) {
+      await conn.query(`
+        CREATE TABLE \`subject_components\` (
+          \`id\` bigint(20) NOT NULL AUTO_INCREMENT,
+          \`parentSubjectId\` int(11) NOT NULL,
+          \`name\` varchar(50) NOT NULL,
+          \`code\` varchar(20) NOT NULL,
+          \`weight\` decimal(5,2) NOT NULL DEFAULT 25.00,
+          \`createdAt\` timestamp NOT NULL DEFAULT current_timestamp(),
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`uq_component_code\` (\`parentSubjectId\`, \`code\`),
+          CONSTRAINT \`fk_component_parent\` FOREIGN KEY (\`parentSubjectId\`)
+            REFERENCES \`subjects\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+      `);
+      console.log("  Created subject_components table.");
+    } else {
+      console.log("  subject_components already exists — skipping.");
+    }
+
+    // 16b. subjects.hasComponents column
+    if (!(await columnExists("subjects", "hasComponents"))) {
+      await conn.query(
+        "ALTER TABLE `subjects` ADD COLUMN `hasComponents` BOOLEAN NOT NULL DEFAULT FALSE"
+      );
+      console.log("  Added subjects.hasComponents (default FALSE).");
+    } else {
+      console.log("  subjects.hasComponents already exists — skipping.");
+    }
+
+    // 16c. assessments.componentId column
+    if (!(await columnExists("assessments", "componentId"))) {
+      await conn.query(
+        "ALTER TABLE `assessments` ADD COLUMN `componentId` bigint(20) DEFAULT NULL"
+      );
+      await conn.query(
+        "ALTER TABLE `assessments` ADD KEY `fk_assessments_component` (`componentId`)"
+      );
+      await conn.query(`
+        ALTER TABLE \`assessments\`
+          ADD CONSTRAINT \`fk_assessments_component\` FOREIGN KEY (\`componentId\`)
+          REFERENCES \`subject_components\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE
+      `);
+      console.log("  Added assessments.componentId with FK -> subject_components.");
+    } else {
+      console.log("  assessments.componentId already exists — skipping.");
+    }
+
+    // 16d. student_academic_record_components table
+    const [recCompTable] = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+      ["student_academic_record_components"]
+    );
+    if (Number(recCompTable[0].cnt) === 0) {
+      await conn.query(`
+        CREATE TABLE \`student_academic_record_components\` (
+          \`id\` bigint(20) NOT NULL AUTO_INCREMENT,
+          \`subjectRowId\` bigint(20) NOT NULL,
+          \`componentId\` bigint(20) NOT NULL,
+          \`componentName\` varchar(50) NOT NULL,
+          \`componentCode\` varchar(20) NOT NULL,
+          \`q1\` decimal(10,2) DEFAULT NULL,
+          \`q2\` decimal(10,2) DEFAULT NULL,
+          \`q3\` decimal(10,2) DEFAULT NULL,
+          \`q4\` decimal(10,2) DEFAULT NULL,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`uq_record_component\` (\`subjectRowId\`, \`componentId\`),
+          CONSTRAINT \`fk_component_subjectRow\` FOREIGN KEY (\`subjectRowId\`)
+            REFERENCES \`student_academic_record_subjects\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE,
+          CONSTRAINT \`fk_component_componentId\` FOREIGN KEY (\`componentId\`)
+            REFERENCES \`subject_components\` (\`id\`) ON DELETE CASCADE ON UPDATE CASCADE
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci
+      `);
+      console.log("  Created student_academic_record_components table.");
+    } else {
+      console.log("  student_academic_record_components already exists — skipping.");
+    }
+
+    // 16e. Seed MAPEH components (if MAPEH exists and has no components yet)
+    const [mapehRows] = await conn.query(
+      "SELECT id FROM subjects WHERE code = 'MAPEH101' LIMIT 1"
+    );
+    if (mapehRows.length > 0) {
+      const mapehId = Number(mapehRows[0].id);
+
+      // Mark MAPEH as having components
+      await conn.query(
+        "UPDATE subjects SET hasComponents = TRUE WHERE id = ?",
+        [mapehId]
+      );
+
+      // Check if components already exist
+      const [existingComps] = await conn.query(
+        "SELECT COUNT(*) AS cnt FROM subject_components WHERE parentSubjectId = ?",
+        [mapehId]
+      );
+
+      if (Number(existingComps[0].cnt) === 0) {
+        const mapehComponents = [
+          { name: "Music", code: "MAPEH-M", weight: 25.00 },
+          { name: "Arts", code: "MAPEH-A", weight: 25.00 },
+          { name: "Physical Education", code: "MAPEH-PE", weight: 25.00 },
+          { name: "Health", code: "MAPEH-H", weight: 25.00 },
+        ];
+        for (const comp of mapehComponents) {
+          await conn.query(
+            "INSERT INTO subject_components (parentSubjectId, name, code, weight) VALUES (?, ?, ?, ?)",
+            [mapehId, comp.name, comp.code, comp.weight]
+          );
+        }
+        console.log(`  Seeded ${mapehComponents.length} MAPEH components (Music, Arts, PE, Health).`);
+      } else {
+        console.log("  MAPEH components already seeded — skipping.");
+      }
+    } else {
+      console.log("  MAPEH subject not found — skipping component seed.");
+    }
+  });
+
   // ---- Final verification ---------------------------------------------------
   await step("Final verification", async () => {
     const [attCols] = await conn.query("SHOW COLUMNS FROM `student_attendance`");
