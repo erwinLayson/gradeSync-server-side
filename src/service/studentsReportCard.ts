@@ -19,13 +19,31 @@ export async function getStudentsController(enrollmentId: number) {
         const students = await reportCardModel.getStudentsReportCard(enrollmentId)
         const schoolInfo = await getSchoolInfoService(connection);
         const quarterlyGrades = await reportCardModel.getStudentQuarterlyGrades(enrollmentId);
+        const studentAttendanceRecord = await reportCardModel.getStudentAttendance(enrollmentId);
 
-        // ================== Instanstiate subjects ===================
+        console.log(studentAttendanceRecord);
+
+        if(!students) {
+            throw new NotFoundError("Student Not Found", 404);
+        }
+
+        // if(quarterlyGrades.length === 0) {
+        //     throw new NotFoundError("Student has no record in Report Card(Form-138)", 404);
+        // }
+
+        // ================== Instantiate subjects ===================
         const studentSubjects = new Map<string, Subjects>()
-        const subjects = []
+        const subjects: Subjects[] = []
 
         // ==================== Calculate final Grade =======================
         for(const quarterlyGrade of quarterlyGrades) {
+            const finalGrade = calculateFinalGrade({
+                q1: quarterlyGrade.q1 ? String(quarterlyGrade.q1) : null,
+                q2: quarterlyGrade.q2 ? String(quarterlyGrade.q2) : null,
+                q3: quarterlyGrade.q3 ? String(quarterlyGrade.q3) : null,
+                q4: quarterlyGrade.q4 ? String(quarterlyGrade.q4) : null,
+            })
+
             studentSubjects.set(quarterlyGrade.subjectName, {
                 name: quarterlyGrade.subjectName,
                 quarters: {
@@ -34,29 +52,25 @@ export async function getStudentsController(enrollmentId: number) {
                     q3: quarterlyGrade.q3,
                     q4: quarterlyGrade.q4
                 },
-                finalGrades: calculateFinalGrade({
-                    q1: quarterlyGrade.q1 ? String(quarterlyGrade.q1) : null,
-                    q2: quarterlyGrade.q2 ? String(quarterlyGrade.q2) : null,
-                    q3: quarterlyGrade.q3 ? String(quarterlyGrade.q3) : null,
-                    q4: quarterlyGrade.q4 ? String(quarterlyGrade.q4) : null,
-                })
+                finalGrades: finalGrade,
+                remarks: finalGrade !== null ? getRemarks(finalGrade) : "N/A"
             })
         }
 
-
         // ========================== Add Remarks ===================
         for(const subject of Array.from(studentSubjects.values())) {
-            subjects.push({...subject, remarks: getRemarks})
+            subjects.push(subject)
         }
 
         // ================= GENERAL AVERAGE ==================
-        const average = {
-            score: Number((subjects.filter(sub => sub.finalGrades !== null).map(sub => Number(sub.finalGrades)).reduce((sum, grade) => (sum + grade), 0) / subjects.length).toFixed(2)),
-            remarks: getRemarks
-        }
+        const gradedSubjects = subjects.filter(sub => sub.finalGrades !== null)
+        const averageScore = gradedSubjects.length > 0
+            ? Number((gradedSubjects.reduce((sum, sub) => sum + sub.finalGrades!, 0) / gradedSubjects.length).toFixed(2))
+            : 0
 
-        if(!students) {
-            throw new NotFoundError("Student Not Found", 404);
+        const average = {
+            score: averageScore,
+            remarks: averageScore > 0 ? getRemarks(averageScore) : "N/A"
         }
 
         return {
@@ -65,7 +79,7 @@ export async function getStudentsController(enrollmentId: number) {
             subjects: subjects,
             generalAverages: average
         };
-    }catch(err) {
-        throw err
+    } finally {
+        connection.release();
     }
 }

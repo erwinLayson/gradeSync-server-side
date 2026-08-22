@@ -149,12 +149,6 @@ export async function getStudentAcademicHistoryService(studentId: number) {
                     undefined,
                     connection
                 );
-                const attendance = attendanceHistory.totalDays > 0
-                    ? {
-                        presentDays: attendanceHistory.presentDays,
-                        totalDays: attendanceHistory.totalDays
-                    }
-                    : null;
 
                 // Attendance summary + records grouped per quarter (1-4).
                 const attendanceByQuarter = [1, 2, 3, 4].map((quarter) => {
@@ -184,6 +178,16 @@ export async function getStudentAcademicHistoryService(studentId: number) {
                     score: number | null;
                 }[] = [];
                 for (let quarter = 1; quarter <= 4; quarter++) {
+                    // Filter attendance to THIS quarter only — the gradebook
+                    // must not bleed attendance from other quarters into this one.
+                    const quarterRecords = attendanceHistory.records.filter((r) => r.quarter === quarter);
+                    const quarterAttendance = quarterRecords.length > 0
+                        ? {
+                            presentDays: quarterRecords.filter((r) => r.status === "present").length,
+                            totalDays: quarterRecords.length
+                        }
+                        : null;
+
                     const assessmentRows = await getAssessmentService(
                         { classSubjectId: subjectRow.classSubjectId, quarter },
                         connection
@@ -202,7 +206,7 @@ export async function getStudentAcademicHistoryService(studentId: number) {
                         }
                     }
 
-                    quarters.push(computeQuarterGrade(assessmentRows, scoresByAssessmentId, weights, attendance));
+                    quarters.push(computeQuarterGrade(assessmentRows, scoresByAssessmentId, weights, quarterAttendance));
 
                     for (const assessment of assessmentRows) {
                         const dateGiven = assessment.dateGiven;

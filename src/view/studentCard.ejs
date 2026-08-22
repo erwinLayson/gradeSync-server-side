@@ -753,7 +753,7 @@
                     <td class="text-center p-md"><%= subject.quarters.q3%></td>
                     <td class="text-center p-md"><%= subject.quarters.q4%></td>
                     <td class="text-center p-md"><%= subject.finalGrades %></td>
-                    <td class="text-center p-md"><%= subject.remarks(subject.finalGrades) %></td>
+                    <td class="text-center p-md"><%= subject.remarks %></td>
                   </tr>
 
                 <% })%>
@@ -775,7 +775,7 @@
                   <td class="text-center p-md"></td>
                   <td class="text-center p-md"></td>
                   <td class="text-center p-md"><%= generalAverages.score%></td>
-                  <td class="text-center p-md"><%= generalAverages.remarks(generalAverages.score)%></td>
+                  <td class="text-center p-md"><%= generalAverages.remarks %></td>
                 </tr>
               </tbody>
             </table>

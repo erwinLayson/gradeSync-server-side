@@ -2,29 +2,9 @@ import { PoolConnection, type RowDataPacket } from "mysql2/promise";
 import { InternalServerError } from "../middleware/errors.js";
 
 
-import type{ReportCard, Subjects, StudentQaurterlyGrades} from "../constant/report-card.js";
+import type{ReportCard, StudentQaurterlyGrades} from "../constant/report-card.js";
 
 
-
-function calculateFinalGrade(quarter: {
-    q1: string | null,
-    q2: string | null,
-    q3: string | null,
-    q4: string | null
-}):number | null {
-    const grades = [
-        quarter.q1,
-        quarter.q2,
-        quarter.q3,
-        quarter.q4
-    ].filter((grade): grade is string => grade !== null).map(Number);
-
-    const total = grades.reduce((sum, grade) => (sum + grade), 0);
-
-    const finalGrade = Number((total / grades.length).toFixed());
-
-    return finalGrade
-}
 
 export default class StudentReportCard {
     constructor(private connection: PoolConnection){}
@@ -87,6 +67,31 @@ export default class StudentReportCard {
             const [row] = await this.connection.execute<RowDataPacket[]>(query, values);
 
             return row as StudentQaurterlyGrades[];
+        }catch(err) {
+            throw new InternalServerError("Internal Server Error", 500, err);
+        }
+    }
+
+
+    async getStudentAttendance(enrollmentId: number) {
+        try {
+            const query =  `
+                SELECT
+                sa.date AS month,
+                SUM(sa.status = "present") AS totalPresentDays,
+                SUM(sa.status = "absent") AS totalAbsentDays,
+                COUNT(DISTINCT DATE(sa.date)) AS totalDays
+                FROM 
+                student_attendance sa 
+                WHERE sa.enrollmentId = ?
+            `;
+
+            const values = [enrollmentId];
+
+            const [row] = await this.connection.execute<RowDataPacket[]>(query,values)
+
+
+            return row;
         }catch(err) {
             throw new InternalServerError("Internal Server Error", 500, err);
         }

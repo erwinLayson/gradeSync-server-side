@@ -1,16 +1,13 @@
 import ejs from "ejs";
+import fs from "fs";
 import path from "path"
 
 
-export async function HTMLRenderer<T>(
+export function HTMLRenderer(
     filename: string, 
     data?: ejs.Data
-) {
-    try {
-        const html = ejs.renderFile(path.join(process.cwd(), "src",  "view", filename), data);
-
-        return html;
-    }catch(err) {
-        throw err;
-    }
+): string {
+    const filePath = path.join(process.cwd(), "src", "view", filename);
+    const template = fs.readFileSync(filePath, "utf-8");
+    return ejs.render(template, data);
 }

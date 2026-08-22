@@ -26,4 +26,5 @@ export interface Subjects {
         q4: number
     }
     finalGrades: number | null,
+    remarks: string
 }

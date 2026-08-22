@@ -1,9 +1,9 @@
 import { Router } from "express";
 
-import {studentReportCarController} from "../controller/studentReportCard.js";
+import {studentReportCardController} from "../controller/studentReportCard.js";
 
 const router: Router = Router();
 
-router.get('/student/:enrollmentId/report-card',studentReportCarController);
+router.get('/student/:enrollmentId/report-card',studentReportCardController);
 
 export default router;

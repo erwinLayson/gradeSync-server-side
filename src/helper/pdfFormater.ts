@@ -9,13 +9,13 @@ export async function pdfFormatter(html: string, pdfFormat: PDFFormat, landScape
     const browser = await puppeteer.launch({headless: true});
 
     try {
-        const pages = await browser.newPage();
+        const page = await browser.newPage();
 
-        await pages.setContent(html, {
+        await page.setContent(html, {
             waitUntil: "load"
         });
-
-        const pdfFile = await pages.pdf({
+
+        const pdfFile = await page.pdf({
             width: `${pdfFormat.width}`,
             height: `${pdfFormat.height}`,
             landscape: landScape,
@@ -23,7 +23,7 @@ export async function pdfFormatter(html: string, pdfFormat: PDFFormat, landScape
         });
 
         return pdfFile
-    }catch(err ) {
-        throw err;
+    } finally {
+        await browser.close();
     }
 }
