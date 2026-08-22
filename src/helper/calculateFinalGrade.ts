@@ -7,12 +7,14 @@ interface CalculateFinalGrade {
 
 export function calculateFinalGrade(quarters: CalculateFinalGrade): number | null {
     const grades = [quarters.q1, quarters.q2, quarters.q3, quarters.q4]
-                    .filter((grade): grade is string => grade !== null).map((grade) => Number(grade));
+                    .filter((grade): grade is string => grade !== null)
+                    .map((grade) => Number(grade))
+                    .filter((grade) => !Number.isNaN(grade));
 
-    const total = grades.reduce((sum, grade) => (sum + grade), 0);
-    const finalGrade = Number((total / grades.length).toFixed(2));
+    if (grades.length === 0) {
+        return null;
+    }
 
-    return finalGrade;
+    const total = grades.reduce((sum, grade) => sum + grade, 0);
+    return Math.round((total / grades.length) * 100) / 100;
 }
-
-

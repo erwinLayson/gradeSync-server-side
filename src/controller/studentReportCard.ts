@@ -3,7 +3,7 @@ import { HTMLRenderer } from "../helper/HTMLRenderer.js";
 import { pdfFormatter } from "../helper/pdfFormater.js";
 
 // Service functions 
-import {getStudentsController} from "../service/studentsReportCard.js";
+import {getStudentReportCardService} from "../service/studentsReportCard.js";
 
 export async function studentReportCardController(req: Request<{enrollmentId: number}>, res: Response, next: NextFunction)  {
     const {enrollmentId} = req.params;
@@ -13,9 +13,10 @@ export async function studentReportCardController(req: Request<{enrollmentId: nu
     }
 
     try {
-        const {students, schoolInfo, subjects, generalAverages} = await getStudentsController(enrollmentId)
+        const {students, schoolInfo, subjects, generalAverages, attendance} = await getStudentReportCardService(enrollmentId)
 
-        const html = HTMLRenderer("studentCard.ejs", {student: students, schoolInfo, subjects, generalAverages});
+        console.log(attendance)
+        const html = HTMLRenderer("studentCard.ejs", {student: students, schoolInfo, subjects, generalAverages, attendance});
         const pdfFormat = {
             width: '8.5in',
             height: '13in',

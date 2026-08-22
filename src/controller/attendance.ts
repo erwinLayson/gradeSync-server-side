@@ -152,11 +152,17 @@ export async function saveAttendanceController(
             return { enrollmentId, status };
         });
 
+        // Resolve the authenticated teacher's userId so the service can check
+        // whether this teacher is the class adviser (adviser attendance is saved
+        // to both student_attendance AND class_daily_attendance).
+        const teacherUserId = req.user?.id ?? null;
+
         await saveAttendanceByClassSubjectAndDateService(
             parsedClassSubjectId,
             date,
             normalizedEntries,
             parsedQuarter,
+            teacherUserId,
         );
 
         res.status(200).json(

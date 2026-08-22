@@ -18,6 +18,10 @@ import { SuccessResponse } from "../helper/response.js";
 import Validate from "../helper/validate.js";
 import NormalizedData from "../helper/normalizedData.js";
 
+// Middleware / errors
+import { ROLES } from "../constant/users.js";
+import { ForbiddenError } from "../middleware/errors.js";
+
 
 // Create Teacher Controller
 export async function CreateTeacherController(req: Request<{}, {}, Omit<TeacherProps, "id" | "userId">>, res: Response, next: NextFunction) {
@@ -79,6 +83,14 @@ export async function UpdateTeacherController(req: Request<{id: number}, {}, Tea
     Validate(validatedFields);
 
     try {
+        // Teachers may only update their own profile; admins may update any.
+        if (req.user?.role === ROLES.TEACHER) {
+            const existing = await getTeacherByIdService(Number(id));
+            if (!existing || existing.userId !== req.user.id) {
+                throw new ForbiddenError("You can only update your own profile");
+            }
+        }
+
         await updateTeacherService(Number(id), teacher);
         res.status(200).json(
             SuccessResponse({message: "Teacher updated successfully"})

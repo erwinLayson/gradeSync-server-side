@@ -230,7 +230,7 @@ export async function studentRecordController(req: Request<{ id: string }>, res:
         }
 
         // ================== HTML AND PDF =====================
-        const html = await HTMLRenderer('studentRecord.ejs', data)
+        const html = HTMLRenderer('studentRecord.ejs', data)
         const studentRecordPDF = await pdfFormatter(html, studentRecordFormat, false)
 
         res.setHeader("Content-Type", "application/pdf");

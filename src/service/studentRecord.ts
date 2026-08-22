@@ -1,6 +1,4 @@
 import { getDBPoolConnection } from "../config/database.js";
-import puppeteer from "puppeteer";
-import ejs from "ejs"
 
 import StudentRecordModel from "../model/studentRecord.js";
 import ClassroomModel from "../model/classrooms.js";
@@ -9,10 +7,15 @@ import AcademicSettingsModel from "../model/academicSettings.js";
 // Reuse existing services
 import { getStudentByClassroomIdService, getStudentByIdService } from "./students.js";
 import { getGradeBookDetailsByClassSubjectIdService } from "./gradebook.js";
-import { getTeacherByUserIdService, getTeacherByIdService } from "./teachers.js";
+import { getTeacherByUserIdService } from "./teachers.js";
 import { getClassAdviserService, getClassroomByIdService } from "./classrooms.js";
 import {getAllEnrollmentRecordByStudentId} from "./enrollments.js";
 
+// Helpers
+import { computeClassGradeMatrix } from "../helper/computeClassGradeMatrix.js";
+import { resolveSubmitter } from "../helper/resolveSubmitter.js";
+import { calculateFinalGrade } from "../helper/calculateFinalGrade.js";
+import { getRemarks } from "../helper/getRemarks.js";
 
 import type { PoolConnection } from "mysql2/promise";
 import { ConflictError, ForbiddenError, NotFoundError } from "../middleware/errors.js";
@@ -33,13 +36,11 @@ import type {
 
 // ==================== helpers ====================
 
-// The teachers.id for the logged-in teacher account (throws when none exists).
 export async function resolveTeacherIdByUserIdService(userId: number): Promise<number> {
     const teacher = await getTeacherByUserIdService(userId);
     return teacher.id;
 }
 
-// teacherId === null means the caller is an admin (adviser-scope check skipped).
 async function assertAdviserOfClass(connection: PoolConnection, classId: number, teacherId: number | null): Promise<void> {
     if (teacherId === null) {
         return;
@@ -51,7 +52,6 @@ async function assertAdviserOfClass(connection: PoolConnection, classId: number,
     }
 }
 
-// The class a teacher advises (for GET /student-records/my-class).
 export async function getAdvisedClassIdService(teacherId: number): Promise<number | null> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
@@ -74,7 +74,6 @@ function normalizeSubmissionDate(submittedAt: Date | string | null): string | nu
     return new Date(submittedAt).toISOString();
 }
 
-// One student's computed grades across the class's subjects (find-per-subject).
 async function computeStudentGrades(
     subjects: ClassRecordSubject[],
     enrollmentId: number,
@@ -89,27 +88,6 @@ async function computeStudentGrades(
     return bySubject;
 }
 
-// Whole-class computed grades: enrollmentId -> (subjectId -> grade|null).
-async function computeClassGradeMatrix(
-    subjects: ClassRecordSubject[],
-    quarter: number
-): Promise<Map<number, Map<number, number | null>>> {
-    const matrix = new Map<number, Map<number, number | null>>();
-    for (const subject of subjects) {
-        const gradebook = await getGradeBookDetailsByClassSubjectIdService(subject.classSubjectId, quarter);
-        for (const row of gradebook.student) {
-            let bySubject = matrix.get(row.enrollmentId);
-            if (!bySubject) {
-                bySubject = new Map();
-                matrix.set(row.enrollmentId, bySubject);
-            }
-            bySubject.set(subject.subjectId, row.quarterGrade);
-        }
-    }
-    return matrix;
-}
-
-// The class's subjects a specific enrollment actually takes (E7).
 async function getEnrolledSubjectIds(
     recordModel: StudentRecordModel,
     subjects: ClassRecordSubject[],
@@ -122,8 +100,6 @@ async function getEnrolledSubjectIds(
         .map((r) => r.subjectId);
 }
 
-// Writes the frozen record for one student inside the caller's transaction.
-// Throws ConflictError (E2) when an enrolled subject has no computed grade yet.
 async function freezeRecordWithin(
     connection: PoolConnection,
     enrollmentId: number,
@@ -164,10 +140,8 @@ async function freezeRecordWithin(
     for (const subjectId of enrolledSubjectIds) {
         const grade = computed.get(subjectId);
         if (grade === null || grade === undefined) {
-            continue; // guarded by the E2 check above, but stay safe
+            continue;
         }
-        // Snapshot the subject's name/code at freeze time — the record must stay
-        // readable (and immutable) even if the subject is later renamed/deleted.
         const subject = subjects.find((s) => s.subjectId === subjectId);
         if (!subject) {
             continue;
@@ -178,19 +152,6 @@ async function freezeRecordWithin(
     await recordModel.upsertQuarterSubmission(record.id, quarter, submittedBy);
 }
 
-// Who "signs" the submission (submittedBy + adviserName snapshot on the record).
-async function resolveSubmitter(classId: number, teacherId: number | null): Promise<{ submittedBy: number | null; adviserName: string }> {
-    if (teacherId !== null) {
-        const teacher = await getTeacherByIdService(teacherId);
-        return { submittedBy: teacher.id, adviserName: teacher.fullname };
-    }
-    const adviser = await getClassAdviserService(classId);
-    return { submittedBy: adviser.adviserId, adviserName: adviser.adviserFullname ?? "" };
-}
-
-// ==================== submissions-lock guard ====================
-
-// Throws ForbiddenError when the admin has locked grade submissions.
 async function assertSubmissionsNotLocked(connection: PoolConnection): Promise<void> {
     const model = new AcademicSettingsModel(connection);
     const settings = await model.getSettings();
@@ -201,8 +162,6 @@ async function assertSubmissionsNotLocked(connection: PoolConnection): Promise<v
 
 // ==================== class records view ====================
 
-// Roster + per-subject grades + submission status for one class and quarter.
-// Display rule: submitted quarters show the frozen qN, pending show live values.
 export async function getClassRecordsService(classId: number, quarter: number, teacherId: number | null): Promise<ClassRecordsResponse> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
@@ -222,7 +181,6 @@ export async function getClassRecordsService(classId: number, quarter: number, t
 
         const computedMatrix = await computeClassGradeMatrix(subjects, quarter);
 
-        // Enrolled subjects per enrollment (E7).
         const enrolledRows = await recordModel.getEnrollmentSubjectIds(enrollmentIds);
         const classSubjectIds = new Set(subjects.map((s) => s.subjectId));
         const enrolledByEnrollment = new Map<number, Set<number>>();
@@ -238,7 +196,6 @@ export async function getClassRecordsService(classId: number, quarter: number, t
             set.add(row.subjectId);
         }
 
-        // Frozen grades + submission state.
         const records = await recordModel.getRecordsByEnrollmentIds(enrollmentIds);
         const recordByEnrollment = new Map<number, StudentAcademicRecordRow>();
         for (const record of records) {
@@ -386,7 +343,6 @@ export async function submitAllStudentRecordsService(classId: number, quarter: n
         const roster = await getStudentByClassroomIdService(classId, connection);
         const enrollmentIds = roster.map((s) => s.enrollmentId);
 
-        // Students already submitted for this quarter are skipped.
         const records = await recordModel.getRecordsByEnrollmentIds(enrollmentIds);
         const recordByEnrollment = new Map(records.map((r) => [r.enrollmentId, r]));
         const submissions = await recordModel.getSubmissionsByRecordIds(records.map((r) => r.id), quarter);
@@ -424,8 +380,6 @@ export async function submitAllStudentRecordsService(classId: number, quarter: n
                     submittedCount++;
                 } catch (err) {
                     if (err instanceof ConflictError) {
-                        // E2: not fully graded — report and continue (E9). DB errors
-                        // still propagate and roll back the whole batch.
                         const enrolledSubjectIds = await getEnrolledSubjectIds(recordModel, subjects, student.enrollmentId);
                         const missingSubjects = enrolledSubjectIds
                             .filter((subjectId) => computed.get(subjectId) == null)
@@ -524,9 +478,6 @@ export async function getSubmissionSummaryService(schoolYearId?: number): Promis
 
 // ==================== enforcement ====================
 
-// Hard enforcement: blocks advancing the quarter until every active-school-year
-// enrollment has a submitted record for `quarter` and every class has an adviser.
-// Called from the academic-settings service before an advance is applied.
 export async function assertQuarterCompleteService(quarter: number, existingConnection?: PoolConnection): Promise<void> {
     const pool = getDBPoolConnection();
     const connection = existingConnection ?? await pool.getConnection();
@@ -535,7 +486,7 @@ export async function assertQuarterCompleteService(quarter: number, existingConn
         const recordModel = new StudentRecordModel(connection);
         const schoolYearId = await recordModel.getActiveSchoolYearId();
         if (schoolYearId === null) {
-            return; // no active school year → nothing to enforce
+            return;
         }
 
         const withoutAdviser = await recordModel.getClassesWithoutAdviser(schoolYearId);
@@ -562,20 +513,13 @@ export async function assertQuarterCompleteService(quarter: number, existingConn
     }
 }
 
+// ==================== PDF details ====================
 
-// All of a student's frozen records across school years, ready for the SF10
-// PDF: per-enrollment record snapshots (section / grade / adviser / school year)
-// plus the frozen per-subject grades. teacherId === null means an admin (no
-// scope check); a teacher may only print students enrolled in their advised
-// class, so a random teacher can't pull another class's records.
 export async function StudentRecordPDFDetailsService(studentId: number) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
 
-    // DepEd convention: 75 is the passing mark for the final rating.
-    const PASSING_GRADE = 75;
     try {
-        // Fail fast on an unknown student before doing any further work.
         const student = await getStudentByIdService(studentId, connection);
 
         const studentRecordModel = new StudentRecordModel(connection);
@@ -583,21 +527,19 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
         const studentEnrollmentRecord = await getAllEnrollmentRecordByStudentId(studentId, connection);
         const enrollmentIds = studentEnrollmentRecord.map((e) => e.enrollmentId);
 
-        // Frozen record headers (classSection / classGradeLevel / adviserName) and
-        // the frozen per-subject grades, both keyed by record id.
         const recordRows = await studentRecordModel.getRecordsByEnrollmentIds(enrollmentIds);
         const recordIds = recordRows.map((r) => r.id);
         const subjectRows = await studentRecordModel.getSubjectRowsByRecordIds(recordIds);
 
         const subjectsByRecord = new Map<number, StudentRecordPdfSubject[]>();
         for (const row of subjectRows) {
-            const quarters = [row.q1, row.q2, row.q3, row.q4];
-            const present = quarters.filter((q): q is number => q !== null && q !== undefined);
-            const finalRating =
-                present.length > 0
-                    ? Math.round((present.reduce((a, b) => a + Number(b), 0) / present.length) * 100) / 100
-                    : null;
-            const remarks = finalRating === null ? "" : finalRating >= PASSING_GRADE ? "Passed" : "Failed";
+            const finalRating = calculateFinalGrade({
+                q1: row.q1 != null ? String(row.q1) : null,
+                q2: row.q2 != null ? String(row.q2) : null,
+                q3: row.q3 != null ? String(row.q3) : null,
+                q4: row.q4 != null ? String(row.q4) : null,
+            });
+            const remarks = finalRating === null ? "" : getRemarks(finalRating);
 
             const list = subjectsByRecord.get(row.recordId) ?? [];
             list.push({
@@ -617,6 +559,14 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
 
         const academicRecord: StudentRecordPdfEntry[] = studentEnrollmentRecord.map((enrollment) => {
             const record = recordByEnrollment.get(enrollment.enrollmentId);
+            const subjects = record ? (subjectsByRecord.get(record.id) ?? []) : [];
+            const finalRating = subjects.map(sub => sub.finalRating);
+            const validRatings = finalRating.filter((rating): rating is number => rating !== null);
+
+            const generalAverage = validRatings.length > 0
+                ? Number((validRatings.reduce((sum, score) => sum + score, 0) / validRatings.length).toFixed(2))
+                : 0;
+
             return {
                 enrollmentId: enrollment.enrollmentId,
                 schoolYear: enrollment.schoolYear,
@@ -624,7 +574,8 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
                 classSection: record?.classSection ?? null,
                 classGradeLevel: record?.classGradeLevel ?? null,
                 adviserName: record?.adviserName ?? null,
-                subjects: record ? (subjectsByRecord.get(record.id) ?? []) : [],
+                subjects,
+                generalAverage
             };
         });
 

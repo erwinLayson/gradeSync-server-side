@@ -34,7 +34,7 @@
     }
     td, th {
         border: 1px solid black;
-        padding: 0 10px ;
+        padding: 0 5px ;
     }
 
     .remedial-classes-tr td {
@@ -42,8 +42,8 @@
     }
 </style>
 <body>
-    <main class="p-2">
-        <div class="flex items-center justify-evenly mb-2">
+    <main class="px-5 py-10">
+        <div class="flex items-center justify-center gap-10 mb-2">
             <div class="w-20 h-20">
                 <img src="https://logodix.com/logo/1355314.png" alt="DepEd Logo 1" class="w-full h-full object-contain">
             </div>
@@ -70,7 +70,7 @@
             </div>
 
             <!-- Personal Information -->
-            <div class="grid grid-cols-4 gap-5 text-[10px] px-2">
+            <div class="flex items-center justify-between gap-5 text-[10px] px-2">
                 <div class="flex gap-2">
                     <span>LAST NAME:</span>
                     <span class="inline-block min-w-20 border-b font-semibold text-center"><%= student.lastname %></span>
@@ -85,7 +85,7 @@
                 </div>
                 <div class="flex gap-2">
                     <span>MIDDLE NAME:</span>
-                    <span class="border-b min-w-20 inline-block text-center font-semibold"><%= student.middlename %></span>
+                    <p class="border-b min-w-20 inline-block text-center font-semibold"><%= student.middlename %></p>
                 </div>
             </div>
 
@@ -309,6 +309,15 @@
                                     <td class="text-center"><%= sub.remarks %></td>
                                 </tr>
                             <% }) %>
+
+                            <tr>
+                                <td colspan="2">
+                                    General Average
+                                </td>
+                                <td colspan="4"></td>
+                                <td class="text-center"><%= record.generalAverage %></td>
+                                <td class="text-center">Promoted</td>
+                            </tr>
 
                             <!-- End of subject details -->
                             <tr class="remedial-classes-tr">

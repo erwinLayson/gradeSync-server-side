@@ -3,6 +3,7 @@ import { getDBPoolConnection } from "../config/database.js";
 import StudentClassesModel from "../model/studentClasses.js";
 import StudentDetailsModel from "../model/studentDetails.js";
 import StudentRecordModel from "../model/studentRecord.js";
+import ClassDailyAttendanceModel from "../model/classDailyAttendance.js";
 
 // Grade computation building blocks (reused from the teacher gradebook)
 import { getAssessmentService } from "./assessment.js";
@@ -44,6 +45,81 @@ export async function getMyClassesService(userId: number) {
             throw new NotFoundError("Student record not found", 404);
         }
 
+        return await getStudentAcademicHistoryService(studentId, { skipFrozen: true });
+    } finally {
+        connection.release();
+    }
+}
+
+// Student class attendance from class_daily_attendance (adviser records,
+// report-card source). Returns the student's class-level attendance for
+// each enrolled class, grouped by quarter.
+export async function getStudentClassAttendanceService(userId: number, quarter?: number) {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const model = new StudentClassesModel(connection);
+
+        const studentId = await model.getStudentIdByUserId(userId);
+        if (studentId === null) {
+            throw new NotFoundError("Student record not found", 404);
+        }
+
+        const enrollments = await model.getEnrollmentsByStudentId(studentId);
+        const classDailyModel = new ClassDailyAttendanceModel(connection);
+
+        const classes = [];
+        for (const enrollment of enrollments) {
+            const records = await classDailyModel.getByEnrollmentForHistory(
+                enrollment.classId,
+                enrollment.enrollmentId,
+                quarter
+            );
+
+            // Group by quarter
+            const attendanceByQuarter = [1, 2, 3, 4].map((q) => {
+                const quarterRecords = records.filter((r) => r.quarter === q);
+                const presentDays = quarterRecords.filter((r) => r.status === "present").length;
+                const totalDays = quarterRecords.length;
+                return {
+                    quarter: q,
+                    presentDays,
+                    totalDays,
+                    absentDays: totalDays - presentDays,
+                    percentage:
+                        totalDays > 0
+                            ? Math.min(100, Math.round((presentDays / totalDays) * 10000) / 100)
+                            : null,
+                    records: quarterRecords.map((r) => ({ date: r.date, status: r.status }))
+                };
+            });
+
+            classes.push({
+                enrollmentId: enrollment.enrollmentId,
+                classId: enrollment.classId,
+                schoolYearId: enrollment.schoolYearId,
+                schoolYear: `${enrollment.startYear}–${enrollment.endYear}`,
+                attendance: attendanceByQuarter
+            });
+        }
+
+        return { classes };
+    } finally {
+        connection.release();
+    }
+}
+
+// Student prospectus: frozen-record-only view of the student's academic
+// history. No live activities or attendance — only the official snapshot grades.
+export async function getStudentProspectusService(userId: number) {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const model = new StudentClassesModel(connection);
+        const studentId = await model.getStudentIdByUserId(userId);
+        if (studentId === null) {
+            throw new NotFoundError("Student record not found", 404);
+        }
         return await getStudentAcademicHistoryService(studentId);
     } finally {
         connection.release();
@@ -53,7 +129,13 @@ export async function getMyClassesService(userId: number) {
 // Academic history for one student (all enrolled school years) with per-subject
 // quarterly grades, finals, remarks, and the general average per class. Shared
 // by the student self-service view and the admin student-details view.
-export async function getStudentAcademicHistoryService(studentId: number) {
+//
+// When skipFrozen is true the live gradebook is always used, even when a
+// frozen academic record exists. This is the student's "My Classroom" view
+// where they should see their own activities, scores, and attendance.
+// When skipFrozen is false (default) the frozen record takes priority —
+// used by the admin academic-history view and the student prospectus.
+export async function getStudentAcademicHistoryService(studentId: number, options?: { skipFrozen?: boolean }) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
@@ -76,8 +158,8 @@ export async function getStudentAcademicHistoryService(studentId: number) {
             // grades — instead of today's live class structure, which drifts from
             // what was actually taught that year. Without a record (e.g. the current
             // in-progress school year) fall back to the live gradebook below.
-            const frozenRecords = await studentRecordModel.getRecordsByEnrollmentIds([enrollment.enrollmentId]);
-            const frozenRecord = frozenRecords[0] ?? null;
+            const frozenRecords = options?.skipFrozen ? [] : await studentRecordModel.getRecordsByEnrollmentIds([enrollment.enrollmentId]);
+            const frozenRecord = options?.skipFrozen ? null : frozenRecords[0] ?? null;
             if (frozenRecord) {
                 const subjectRows = await studentRecordModel.getSubjectRowsByRecordIds([frozenRecord.id]);
 

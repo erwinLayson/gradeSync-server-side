@@ -6,6 +6,7 @@ import { getDBPoolConnection } from "../config/database.js";
 import type {ClassroomResponse, NewClassroomSubject} from "../constant/classrooms.js";
 import { ConflictError, NotFoundError } from "../middleware/errors.js";
 import type { PoolConnection } from "mysql2/promise";
+import type { ClassroomTeachersWithSubjectProps } from "../constant/classrooms.js";
 
 
 // Create new classroom
@@ -163,6 +164,28 @@ export async function getClassAdviserService(classId: number) {
             classId,
             adviserId: adviser?.adviserId ?? null,
             adviserFullname: adviser?.adviserFullname ?? null
+        };
+    } finally {
+        connection.release();
+    }
+}
+
+// Get the full details of the class a teacher advises:
+// classroom info + students roster + all teachers with subjects.
+export async function getMyAdvisedClassService(teacherId: number) {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const classroomModel = new ClassroomModel(connection);
+        const classId = await classroomModel.getClassIdByAdviser(teacherId);
+        if (classId === null) {
+            return null;
+        }
+        const classroom = await classroomModel.getClassroomById(classId);
+        const teachersWithSubjects = await classroomModel.getClassroomTeachersWithSubject(classId);
+        return {
+            classroom,
+            teachersWithSubjects
         };
     } finally {
         connection.release();

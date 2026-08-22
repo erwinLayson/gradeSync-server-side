@@ -17,6 +17,15 @@ export interface StudentQaurterlyGrades {
     q4: number
 }
 
+/** One sub-component row (e.g., Music under MAPEH). */
+export interface ComponentGradeRow {
+    componentName: string,
+    q1: number | null,
+    q2: number | null,
+    q3: number | null,
+    q4: number | null,
+}
+
 export interface Subjects {
     name: string,
     quarters: {
@@ -26,5 +35,7 @@ export interface Subjects {
         q4: number
     }
     finalGrades: number | null,
-    remarks: string
+    remarks: string,
+    /** Sub-component grades (e.g., Music, Arts, PE, Health under MAPEH). */
+    components?: ComponentGradeRow[] | undefined,
 }

@@ -25,7 +25,7 @@ const adminOnlyWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedR
 
 // ==================== ADMIN ONLY ====================
 router.post("/teachers", adminOnly, CreateTeacherController);
-router.patch("/teachers/:id", adminOnlyWithId, UpdateTeacherController);
+router.patch("/teachers/:id", adminTeacherWithId, UpdateTeacherController);
 router.delete("/teachers/:id", adminOnlyWithId, DeleteTeacherController);
 
 // ==================== ADMIN + TEACHER ====================

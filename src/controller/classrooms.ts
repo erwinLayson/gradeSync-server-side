@@ -9,7 +9,8 @@ import {
     getClassAdviserService,
     setClassAdviserService,
     updateClassroomService,
-    archiveClassroomService
+    archiveClassroomService,
+    getMyAdvisedClassService
 } from "../service/classrooms.js";
 
 // Types constants
@@ -17,6 +18,7 @@ import type { ClassroomResponse, NewClassroomSubject } from "../constant/classro
 import { SuccessResponse } from "../helper/response.js";
 import Validate from "../helper/validate.js";
 import NormalizedData from "../helper/normalizedData.js";
+import { resolveTeacherIdByUserIdService } from "../service/studentRecord.js";
 
 // Controller Functions
 export async function CreateClassroomController(req: Request<{}, {}, Omit<ClassroomResponse, "id">>, res: Response, next: NextFunction) {
@@ -147,6 +149,28 @@ export async function getClassAdviserController(req: Request<{id: string}>, res:
             SuccessResponse({
                 message: "Class adviser retrieved successfully",
                 data: adviser
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// get the class the logged-in teacher advises
+// GET /api/classrooms/my-advised-class
+export async function getMyAdvisedClassController(req: Request, res: Response, next: NextFunction) {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ success: false, message: "Unauthorized" });
+            return;
+        }
+        const teacherId = await resolveTeacherIdByUserIdService(userId);
+        const result = await getMyAdvisedClassService(teacherId);
+        res.status(200).json(
+            SuccessResponse({
+                message: "Advised class retrieved successfully",
+                data: result
             })
         );
     } catch (err) {

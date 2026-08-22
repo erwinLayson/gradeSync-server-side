@@ -7,14 +7,12 @@ import {
     getStudentByIdController,
     updateStudentController,
     deleteStudentController
- } from "../controller/students.js";
-
-import {
-    getMyStudentProfileController,
+ } from "../controller/students.js";import { getMyStudentProfileController,
     updateMyStudentDetailsController
 } from "../controller/studentDetails.js";
+import { getAcademicSettingsController } from "../controller/academicSettings.js";
 
-import { getMyClassesController, getStudentAcademicHistoryController } from "../controller/studentClasses.js";
+import { getMyClassesController, getStudentProspectusController, getStudentClassAttendanceController, getStudentAcademicHistoryController } from "../controller/studentClasses.js";
 
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
@@ -35,6 +33,9 @@ const studentOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.STUDEN
 route.get("/students/details", studentOnly, getMyStudentProfileController)
 route.patch("/students/details", studentOnly, updateMyStudentDetailsController)
 route.get("/students/classes", studentOnly, getMyClassesController)
+route.get("/students/prospectus", studentOnly, getStudentProspectusController)
+route.get("/students/attendance", studentOnly, getStudentClassAttendanceController)
+route.get("/students/current-quarter", studentOnly, getAcademicSettingsController)
 
 // ==================== ADMIN ONLY ====================
 route.post("/students", adminOnly, createStudentController)

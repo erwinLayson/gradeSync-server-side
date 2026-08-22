@@ -246,6 +246,7 @@ export default class Classroom {
         try {
             const query = `
                 SELECT 
+                    cs.id AS classSubjectId,
                     t.id AS teacherId,
                     s.code,
                     s.unit,

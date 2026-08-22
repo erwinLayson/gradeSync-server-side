@@ -491,7 +491,7 @@
             <!--  -->
             <div class="flex flex-col items-center justify-center">
               <h1 class="text-2xl text-green-600 font-semibold">
-                <%= schoolInfo.name %>
+                <%= schoolInfo.name.toUpperCase() %>
               </h1>
               <span class="text-md font-semibold">School ID No. <%= schoolInfo.schoolId %></span>
             </div>
@@ -756,6 +756,20 @@
                     <td class="text-center p-md"><%= subject.remarks %></td>
                   </tr>
 
+                  <!-- Sub-component rows (e.g., Music, Arts, PE, Health under MAPEH) -->
+                  <% if (subject.components && subject.components.length > 0) { %>
+                    <% subject.components.forEach(comp => { %>
+                      <tr>
+                        <td class="p-md" style="padding-left: 20px; font-style: italic;">└ <%= comp.componentName %></td>
+                        <td class="text-center p-md"><%= comp.q1 != null ? comp.q1 : '' %></td>
+                        <td class="text-center p-md"><%= comp.q2 != null ? comp.q2 : '' %></td>
+                        <td class="text-center p-md"><%= comp.q3 != null ? comp.q3 : '' %></td>
+                        <td class="text-center p-md"><%= comp.q4 != null ? comp.q4 : '' %></td>
+                        <td class="text-center p-md"></td>
+                        <td class="text-center p-md"></td>
+                      </tr>
+                    <% }) %>
+                  <% } %>
                 <% })%>
                 <tr>
                   <td class="p-md">ALIVE</td>
@@ -1046,50 +1060,35 @@
               </tr>
               </thead>
 
+              <%
+                // Build a lookup from the attendance array (keyed by month number).
+                // months 6..12 are June–Dec, 1..4 are Jan–April.
+                const attByMonth = {};
+                if (typeof attendance !== 'undefined' && attendance) {
+                  attendance.forEach(function(row) { attByMonth[row.month] = row; });
+                }
+                const monthOrder = [6,7,8,9,10,11,12,1,2,3,4];
+              %>
               <tbody>
                 <tr>
                   <td class="text-center">No. of school days</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
+                  <% monthOrder.forEach(function(m) { %>
+                    <td class="text-center"><%= attByMonth[m] ? attByMonth[m].schoolDays : '0' %></td>
+                  <% }); %>
                 </tr>
                 <tr>
                   <td class="text-center">No. of present days</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
+                  <% monthOrder.forEach(function(m) { %>
+                    <td class="text-center"><%= attByMonth[m] ? attByMonth[m].presentDays : '0' %></td>
+                  <% }); %>
                 </tr>
 
                 <!-- No. of Absent days -->
                 <tr>
                   <td class="text-center">No. of Absent days</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
-                  <td class="text-center">12</td>
+                  <% monthOrder.forEach(function(m) { %>
+                    <td class="text-center"><%= attByMonth[m] ? attByMonth[m].absentDays : '0' %></td>
+                  <% }); %>
                 </tr>
               </tbody>
             </table>

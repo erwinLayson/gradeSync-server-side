@@ -90,6 +90,18 @@ export default class StudentAttendance {
     }
   }
 
+  // Resolve a classSubjectId to its parent classId (classrooms.id).
+  async getClassIdByClassSubjectId(classSubjectId: number): Promise<number | null> {
+    try {
+      const query = "SELECT classId FROM class_subjects WHERE id = ? LIMIT 1";
+      const [rows] = await this.connection.execute<RowDataPacket[]>(query, [classSubjectId]);
+      if (rows.length === 0 || rows[0] === undefined) return null;
+      return Number(rows[0].classId);
+    } catch (err) {
+      throw new InternalServerError("Failed to resolve classId from classSubjectId", 500, err);
+    }
+  }
+
   // The enrollment ids of students enrolled in the CLASS of this subject. The
   // service uses this to reject attendance saves for students not in the class.
   async getEnrollmentIdsByClassSubjectId(classSubjectId: number): Promise<number[]> {

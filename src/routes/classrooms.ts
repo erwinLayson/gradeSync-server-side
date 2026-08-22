@@ -1,12 +1,13 @@
 import {Router, type RequestHandler} from 'express';import {
     CreateClassroomController, 
     getAllClassroomController, 
-    getClassroomByIdController, 
+    getClassroomByIdController,
     getClassroomTeachersWithSubjectController,
     getClassAdviserController,
     setClassAdviserController,
     updateClassroomController,
-    archiveClassroomController
+    archiveClassroomController,
+    getMyAdvisedClassController
 } from '../controller/classrooms.js';
 
 import { getClassSubjectDetailsByIdController } from '../controller/class_subjects.js';
@@ -30,6 +31,9 @@ route.post('/classrooms', adminOnly, CreateClassroomController);
 route.put('/classrooms/:id', adminOnlyWithStringId, updateClassroomController);
 route.delete('/classrooms/:id', adminOnlyWithStringId, archiveClassroomController);
 route.put('/classrooms/:id/adviser', adminOnly, setClassAdviserController);
+
+// ==================== TEACHER ONLY ====================
+route.get('/classrooms/my-advised-class', [ValidateToken, allowedRoles([ROLES.TEACHER])], getMyAdvisedClassController);
 
 // ==================== ADMIN + TEACHER ====================
 route.get('/classrooms', adminTeacher, getAllClassroomController);

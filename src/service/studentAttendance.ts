@@ -1,8 +1,10 @@
 import StudentAttendanceModel from "../model/studentAttendance.js";
+import ClassDailyAttendanceModel from "../model/classDailyAttendance.js";
 
 import type { PoolConnection } from "mysql2/promise";
 import { getDBPoolConnection } from "../config/database.js";
 import { BadRequestError } from "../middleware/errors.js";
+import type { RowDataPacket } from "mysql2/promise";
 
 import type { AttendanceInput, AttendanceRecord, AttendanceStatus } from "../constant/grade.js";
 
@@ -16,6 +18,25 @@ export interface AttendanceHistory {
     records: AttendanceRecord[];
 }
 
+
+// Resolve the userId of the class adviser for a given classId.
+// Returns null when the class has no adviser or the classId is unknown.
+async function getAdviserUserIdOfClass(
+  connection: PoolConnection,
+  classId: number,
+): Promise<number | null> {
+  const [rows] = await connection.execute<RowDataPacket[]>(
+    `SELECT u.id AS userId
+     FROM class_teacher ct
+     JOIN teachers t ON t.id = ct.teacherId
+     JOIN users u ON u.id = t.userId
+     WHERE ct.classId = ?
+     LIMIT 1`,
+    [classId],
+  );
+  if (rows.length === 0 || rows[0] === undefined) return null;
+  return Number(rows[0].userId);
+}
 
 function isValidAttendanceStatus(status: string): status is AttendanceStatus {
   return status === "present" || status === "absent";
@@ -119,11 +140,16 @@ export async function getAttendanceByClassSubjectAndDateService(
 // must be present/absent; the write is idempotent per (classSubjectId,
 // enrollmentId, date). The teacher-chosen quarter (1-4) is stored with the day
 // so history can later be filtered per quarter.
+//
+// When teacherUserId is provided and the teacher is the class adviser (found in
+// the class_teacher table), the same entries are ALSO written to
+// class_daily_attendance — the adviser-level table that powers the report card.
 export async function saveAttendanceByClassSubjectAndDateService(
   classSubjectId: number,
   date: string,
   entries: AttendanceInput[],
   quarter: number,
+  teacherUserId?: number | null,
   conn?: PoolConnection,
 ) {
   const pool = getDBPoolConnection();
@@ -159,7 +185,23 @@ export async function saveAttendanceByClassSubjectAndDateService(
 
     await connection.beginTransaction();
     transactionStarted = true;
+
+    // 1. Always save to the per-subject attendance table (used for grading).
     await studentAttendanceModel.upsertAttendanceByDate(classSubjectId, date, entries, quarter);
+
+    // 2. If the caller is a teacher, check whether they are the class adviser.
+    //    If so, mirror the save into class_daily_attendance (report-card source).
+    if (teacherUserId != null) {
+      const classId = await studentAttendanceModel.getClassIdByClassSubjectId(classSubjectId);
+      if (classId !== null) {
+        const adviserUserId = await getAdviserUserIdOfClass(connection, classId);
+        if (adviserUserId !== null && adviserUserId === teacherUserId) {
+          const classDailyModel = new ClassDailyAttendanceModel(connection);
+          await classDailyModel.upsertByDate(classId, date, entries, quarter);
+        }
+      }
+    }
+
     await connection.commit();
   } catch (err) {
     if (transactionStarted) {

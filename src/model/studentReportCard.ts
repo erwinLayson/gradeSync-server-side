@@ -2,7 +2,7 @@ import { PoolConnection, type RowDataPacket } from "mysql2/promise";
 import { InternalServerError } from "../middleware/errors.js";
 
 
-import type{ReportCard, StudentQaurterlyGrades} from "../constant/report-card.js";
+import type{ReportCard, StudentQaurterlyGrades, ComponentGradeRow} from "../constant/report-card.js";
 
 
 
@@ -72,24 +72,72 @@ export default class StudentReportCard {
         }
     }
 
+    /**
+     * Fetch sub-component grades for all subjects that have components
+     * (e.g., MAPEH → Music, Arts, PE, Health). Returns a map keyed by
+     * subjectName so the service can attach components to the right subject.
+     */
+    async getComponentGradesByEnrollment(
+        enrollmentId: number,
+    ): Promise<Map<string, ComponentGradeRow[]>> {
+        try {
+            const query = `
+                SELECT
+                    sars.subjectName,
+                    sarc.componentName,
+                    sarc.q1,
+                    sarc.q2,
+                    sarc.q3,
+                    sarc.q4
+                FROM student_academic_records sar
+                JOIN student_academic_record_subjects sars ON sars.recordId = sar.id
+                JOIN student_academic_record_components sarc ON sarc.subjectRowId = sars.id
+                WHERE sar.enrollmentId = ?
+                ORDER BY sars.subjectName, sarc.componentName
+            `;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [enrollmentId]);
+
+            const bySubject = new Map<string, ComponentGradeRow[]>();
+            for (const row of rows) {
+                const subjectName = row.subjectName as string;
+                const existing = bySubject.get(subjectName) ?? [];
+                existing.push({
+                    componentName: row.componentName as string,
+                    q1: row.q1 as number | null,
+                    q2: row.q2 as number | null,
+                    q3: row.q3 as number | null,
+                    q4: row.q4 as number | null,
+                });
+                bySubject.set(subjectName, existing);
+            }
+            return bySubject;
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch component grades", 500, err);
+        }
+    }
+
 
     async getStudentAttendance(enrollmentId: number) {
         try {
+            // Query class_daily_attendance (adviser-level) instead of
+            // student_attendance (per-subject). The adviser's records are the
+            // authoritative source for report-card attendance — they give
+            // clean per-month totals where present + absent = school days.
             const query =  `
                 SELECT
-                sa.date AS month,
-                SUM(sa.status = "present") AS totalPresentDays,
-                SUM(sa.status = "absent") AS totalAbsentDays,
-                COUNT(DISTINCT DATE(sa.date)) AS totalDays
-                FROM 
-                student_attendance sa 
-                WHERE sa.enrollmentId = ?
+                    MONTH(cda.date) AS month,
+                    COUNT(*) AS schoolDays,
+                    COALESCE(SUM(cda.status = 'present'), 0) AS presentDays,
+                    COALESCE(SUM(cda.status = 'absent'), 0) AS absentDays
+                FROM class_daily_attendance cda
+                WHERE cda.enrollmentId = ?
+                GROUP BY MONTH(cda.date)
+                ORDER BY MONTH(cda.date) ASC
             `;
 
             const values = [enrollmentId];
 
-            const [row] = await this.connection.execute<RowDataPacket[]>(query,values)
-
+            const [row] = await this.connection.execute<RowDataPacket[]>(query, values)
 
             return row;
         }catch(err) {

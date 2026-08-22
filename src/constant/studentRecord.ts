@@ -34,7 +34,6 @@ export interface StudentRecordPdfSubject {
     q2: number | null;
     q3: number | null;
     q4: number | null;
-    // Average of the available quarters (DepEd style); null when nothing frozen.
     finalRating: number | null;
     remarks: "Passed" | "Failed" | "";
 }
@@ -48,6 +47,7 @@ export interface StudentRecordPdfEntry {
     classGradeLevel: number | null;
     adviserName: string | null;
     subjects: StudentRecordPdfSubject[];
+    generalAverage: number
 }
 
 export type QuarterSubmissionStatus = "pending" | "submitted";
