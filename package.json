@@ -5,7 +5,7 @@
   "main": "dist/server.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "tsc && npx puppeteer browsers install chrome",
+    "build": "tsc && npx puppeteer browsers install chrome && pnpm install && pnpm run build && pnpm exec puppeteer browsers install chrome",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "seed": "tsx src/seed.ts",
