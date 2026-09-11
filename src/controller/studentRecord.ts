@@ -227,8 +227,7 @@ export async function studentRecordController(req: Request<{ id: string }>, res:
         const studentRecordPDF = await pdfFormatter(html, studentRecordFormat, false)
 
         res.setHeader("Content-Type", "application/pdf");
-        res.setHeader("Content-Disposition", `inline; filename="student-record-${id}.pdf"`);
-        res.send(studentRecordPDF);
+        res.status(200).send(studentRecordPDF);
     } catch (err) {
         next(err);
     }
