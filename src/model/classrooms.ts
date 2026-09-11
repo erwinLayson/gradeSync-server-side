@@ -2,7 +2,7 @@ import {PoolConnection} from "mysql2/promise";
 import type{ResultSetHeader, RowDataPacket} from "mysql2/promise";
 import { InternalServerError } from "../middleware/errors.js";
 
-import type {ClassroomResponse, ClassroomTeachersWithSubjectProps, NewClassroomSubject} from "../constant/classrooms.js";
+import type {ClassroomResponse, ClassroomTeachersWithSubjectProps} from "../constant/classrooms.js";
 
 export default class Classroom {
     constructor(private connection: PoolConnection) {}

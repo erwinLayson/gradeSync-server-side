@@ -4,9 +4,9 @@ import {InternalServerError, AppError } from "./errors.js";
 
 export default function ErrorHandler(
     err: Error,
-    req: Request,
+    _req: Request,
     res: Response,
-    next: NextFunction
+    _next: NextFunction
 ) {
     if(err instanceof InternalServerError) {
         console.log(err.cause)

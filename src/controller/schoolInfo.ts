@@ -8,7 +8,7 @@ import type { SchoolInfoUpdateProps } from "../constant/schoolInfo.js";
 
 // GET /api/school-info
 // Returns the single school information record.
-export async function getSchoolInfoController(req: Request, res: Response, next: NextFunction) {
+export async function getSchoolInfoController(_req: Request, res: Response, next: NextFunction) {
     try {
         const schoolInfo = await getSchoolInfoService();
         res.status(200).json(

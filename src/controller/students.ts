@@ -18,7 +18,7 @@ import Validate from "../helper/validate.js";
 import { BadRequestError } from "../middleware/errors.js";
 
 export async function createStudentController(req: Request<{}, {}, StudentCreateProps>, res: Response, next: NextFunction) {
-    const {userId,lrn, email, firstname, middlename, lastname, suffix, birthdate, sex} = req.body;
+    const {lrn, email, firstname, middlename, lastname, suffix, birthdate, sex} = req.body;
     try {
         const student = {
             lrn,
@@ -49,7 +49,7 @@ export async function createStudentController(req: Request<{}, {}, StudentCreate
 }
 
 // Get all students controller
-export async function getAllStudentController(req: Request, res: Response, next: NextFunction) {
+export async function getAllStudentController(_req: Request, res: Response, next: NextFunction) {
     try { 
         const result = await getAllStudentService();
         return res.status(200).json(

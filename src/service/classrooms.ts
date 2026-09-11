@@ -3,10 +3,9 @@ import ClassroomModel from "../model/classrooms.js";
 // Configure the database connection
 import { getDBPoolConnection } from "../config/database.js";
 
-import type {ClassroomResponse, NewClassroomSubject} from "../constant/classrooms.js";
+import type {ClassroomResponse} from "../constant/classrooms.js";
 import { ConflictError, NotFoundError } from "../middleware/errors.js";
 import type { PoolConnection } from "mysql2/promise";
-import type { ClassroomTeachersWithSubjectProps } from "../constant/classrooms.js";
 
 
 // Create new classroom

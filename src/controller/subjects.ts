@@ -87,7 +87,7 @@ export async function deleteSubjectController(req: Request<{id: number}>, res: R
 }
 
 // get all subjects
-export async function getAllSubjectController(req: Request, res: Response, next: NextFunction) {
+export async function getAllSubjectController(_req: Request, res: Response, next: NextFunction) {
     try {
         const subjects = await getAllSubjectsService();
         res.status(200).json(

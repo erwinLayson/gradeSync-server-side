@@ -14,7 +14,7 @@ import {
 } from "../service/classrooms.js";
 
 // Types constants
-import type { ClassroomResponse, NewClassroomSubject } from "../constant/classrooms.js";
+import type { ClassroomResponse } from "../constant/classrooms.js";
 import { SuccessResponse } from "../helper/response.js";
 import Validate from "../helper/validate.js";
 import NormalizedData from "../helper/normalizedData.js";
@@ -86,7 +86,7 @@ export async function archiveClassroomController(req: Request<{id: string}>, res
 }
 
 // get all classrooms 
-export async function getAllClassroomController(req: Request, res: Response, next: NextFunction) {
+export async function getAllClassroomController(_req: Request, res: Response, next: NextFunction) {
     try {
         const classrooms = await getAllClassroomsService();
         res.status(200).json(

@@ -6,7 +6,7 @@ import Validate from '../helper/validate.js';
 import { BadRequestError } from '../middleware/errors.js';
 
 
-export async function getSchoolYearController(req: Request, res: Response, next: NextFunction) {
+export async function getSchoolYearController(_req: Request, res: Response, next: NextFunction) {
     try {
         const schoolYear = await getSchoolYearService();
         res.status(200).json(
@@ -21,7 +21,7 @@ export async function getSchoolYearController(req: Request, res: Response, next:
 
 }
 
-export async function createSchoolYearController(req: Request, res: Response, next: NextFunction) {
+export async function createSchoolYearController(_req: Request, res: Response, next: NextFunction) {
     try {
         const schoolYear = await createSchoolYearService();
         res.status(201).json(

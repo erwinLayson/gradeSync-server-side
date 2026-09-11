@@ -152,7 +152,6 @@ export async function updateTeacherService(teacherId: number, teacher: TeacherUp
         await teacherModel.updateTeacher(teacherId, teacher);
 
         if (teacher.email && existing.email !== teacher.email) {
-            const userModel = new UserModel(connection);
             // System-driven sync (admin context): no current-password check needed.
             await updateUserByUserIdService(existing.userId, { email: teacher.email }, false, connection);
         }

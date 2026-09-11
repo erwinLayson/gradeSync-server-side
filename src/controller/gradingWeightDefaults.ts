@@ -9,7 +9,7 @@ import type { GradingWeightDefaultsUpdateProps } from "../constant/gradingWeight
 // GET /api/grading-weight-defaults
 // Returns the single default-weights record (the fallback for class subjects
 // without their own grading_weights row).
-export async function getGradingWeightDefaultsController(req: Request, res: Response, next: NextFunction) {
+export async function getGradingWeightDefaultsController(_req: Request, res: Response, next: NextFunction) {
     try {
         const defaults = await getGradingWeightDefaultsService();
         res.status(200).json(

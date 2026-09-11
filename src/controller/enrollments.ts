@@ -2,7 +2,7 @@ import type { Response, Request, NextFunction } from "express";
 import type { RowDataPacket } from "mysql2/promise";
 import type { EnrollmentCreateProps } from "../constant/enrollments.js";
 
-import { createEnrollmentService, removeStudentFromClassService, bulkRemoveStudentsFromClassService, clearAllFromClassService, clearAllClassroomsService } from "../service/enrollments.js";
+import { createEnrollmentService, bulkRemoveStudentsFromClassService, clearAllFromClassService, clearAllClassroomsService } from "../service/enrollments.js";
 import Enrollments from "../model/enrollments.js";
 import { getDBPoolConnection } from "../config/database.js";
 
@@ -74,7 +74,7 @@ export async function bulkRemoveEnrollmentsController(
 
 // Count active enrollments in the active school year
 export async function countActiveEnrollmentsController(
-    req: Request,
+    _req: Request,
     res: Response,
     next: NextFunction
 ) {
@@ -131,7 +131,7 @@ export async function clearAllFromClassController(
 
 // Clear all students from ALL active classrooms
 export async function clearAllClassroomsController(
-    req: Request,
+    _req: Request,
     res: Response,
     next: NextFunction
 ) {

@@ -1,5 +1,3 @@
-import type { SubjectComponent, ComponentGrade } from "./subjectComponents.js";
-
 export interface GradebookDetails {
     classId: number,
     classSubjectId: number;

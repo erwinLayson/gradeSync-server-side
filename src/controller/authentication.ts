@@ -57,7 +57,7 @@ export async function VerifyUserController(req: Request, res: Response, next: Ne
     }  
 }
 
-export async function LogoutUserController(req: Request, res: Response, next: NextFunction) {
+export async function LogoutUserController(_req: Request, res: Response, next: NextFunction) {
     try {
         res.clearCookie("login_token", {
             httpOnly: true,

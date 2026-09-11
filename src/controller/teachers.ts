@@ -8,7 +8,6 @@ import {
     getTeacherByIdService, 
     updateTeacherService, 
     deleteTeacherService, 
-    getTeachersBySubjectIdService, 
     getTeacherSubjectDetailsTeacherByIdService
 } from "../service/teachers.js";
 import type { TeacherProps, TeacherUpdateProps } from "../constant/teachers.js";
@@ -37,7 +36,7 @@ export async function CreateTeacherController(req: Request<{}, {}, Omit<TeacherP
     Validate(teacher);
 
     try {
-        const teacherId = await CreateTeacherService(teacher);
+        await CreateTeacherService(teacher);
         res.status(201).json(
             SuccessResponse({message: "Teacher created successfully"})
         );
@@ -47,7 +46,7 @@ export async function CreateTeacherController(req: Request<{}, {}, Omit<TeacherP
 }
 
 // Get all teachers controller
-export async function getAllTeachersController(req: Request, res: Response, next: NextFunction) {
+export async function getAllTeachersController(_req: Request, res: Response, next: NextFunction) {
     try {
         const teachers = await getAllTeachersService();
         res.status(200).json(

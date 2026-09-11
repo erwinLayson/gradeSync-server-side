@@ -19,7 +19,7 @@ import { formatDate } from "../helper/formatDate.js";
 
 import type { GradeWeights } from "../constant/grade.js";
 import type { StudentScoreProps } from "../constant/grade.js";
-import type { SubjectComponent, ComponentGrade } from "../constant/subjectComponents.js";
+import type { ComponentGrade } from "../constant/subjectComponents.js";
 
 function formatStudentRow(row: any) {
     return {

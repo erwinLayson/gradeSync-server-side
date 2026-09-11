@@ -14,7 +14,7 @@ export default class Analytics {
     constructor(private connection: PoolConnection) {}
 
     // Total non-deleted students (same status rule used everywhere else).
-    async getStudentCount(schoolYearId?: number): Promise<number> {
+    async getStudentCount(_schoolYearId?: number): Promise<number> {
         try {
             const query = `
                 SELECT COUNT(DISTINCT s.id) AS count

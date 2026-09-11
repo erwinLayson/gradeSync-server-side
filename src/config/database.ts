@@ -9,12 +9,20 @@ export function getDBPoolConnection() {
   if (!pool) {
     pool = mysql.createPool({
       host: getEnv("DB_HOST"),
+      port: Number(getEnv('DB_PORT')),
       user: getEnv("DB_USER"),
       password: getEnv("DB_PASSWORD"),
       database: getEnv("DB_NAME"),
       waitForConnections: true,
       connectionLimit: 10,
-      queueLimit: 0
+      queueLimit: 0,
+
+      // Check if in production mode 
+      ...(getEnv('NODE_ENV') === 'production' && {
+        ssl: {
+          rejectUnauthorized: true
+        }
+      })
     });
   }
   return pool;

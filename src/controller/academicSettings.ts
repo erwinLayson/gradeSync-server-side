@@ -8,7 +8,7 @@ import type { AcademicSettingsUpdateProps } from "../constant/academicSettings.j
 
 // GET /api/academic-settings
 // Returns the current quarter and enrollment status.
-export async function getAcademicSettingsController(req: Request, res: Response, next: NextFunction) {
+export async function getAcademicSettingsController(_req: Request, res: Response, next: NextFunction) {
     try {
         const settings = await getAcademicSettingsService();
         res.status(200).json(

@@ -45,7 +45,7 @@ export async function createUserController(req: Request<{}, {}, CreateUserProps>
     }
 }
 // ================= get all users controller =================
-export async function getAllUsersController(req: Request, res: Response, next: NextFunction) {
+export async function getAllUsersController(_req: Request, res: Response) {
     try {
         const result = await getAllUserService();
         res.status(200).json(
@@ -60,7 +60,7 @@ export async function getAllUsersController(req: Request, res: Response, next: N
 }
 
 // =============== get user by ID controller ================
-export async function getUserByIdController(req: Request<{id: number}>, res: Response, next: NextFunction) {
+export async function getUserByIdController(req: Request<{id: number}>, res: Response) {
     const {id } = req.params;
 
     if(!id) {

@@ -6,7 +6,7 @@ import type{ GradebookDetails} from "../constant/gradebook.js";
 export default class GradeBook {
     constructor(private connection: PoolConnection) {};
 
-    async getGradeBookDetailsByClassSubjectId(classSubjectId: number, quarter?: number):Promise<GradebookDetails | null> {
+    async getGradeBookDetailsByClassSubjectId(classSubjectId: number, _quarter?: number):Promise<GradebookDetails | null> {
         try {
             const query = `
                 SELECT 

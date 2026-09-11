@@ -1,11 +1,4 @@
 import type { NextFunction, Request, Response } from "express";
-import ejs from "ejs";
-import puppeteer from "puppeteer";
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import type { Browser } from "puppeteer";
-
 import {
     getAdvisedClassIdService,
     getClassRecordsService,
