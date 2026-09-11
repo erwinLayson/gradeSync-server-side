@@ -6,7 +6,18 @@ interface PDFFormat {
 }   
 
 export async function pdfFormatter(html: string, pdfFormat: PDFFormat, landScape: boolean) {
-    const browser = await puppeteer.launch({headless: true});
+    const browser = await puppeteer.launch({
+        headless: "shell",
+        args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu",
+            "--no-first-run",
+            "--no-zygote",
+            "--single-process",
+        ],
+    });
 
     try {
         const page = await browser.newPage();

@@ -4,3 +4,6 @@ dist
 
 # Environments
 .env
+
+# Puppeteer cache (downloaded Chrome binary)
+.cache/puppeteer
