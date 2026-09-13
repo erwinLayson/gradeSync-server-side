@@ -33,6 +33,7 @@ import GradingWeightDefaultsRoutes from "./routes/gradingWeightDefaults.js"
 import AcademicSettingsRoutes from "./routes/academicSettings.js"
 import StudentRecordRoutes from "./routes/studentRecord.js"
 import StudentReportCardRoutes from "./routes/studentReportCard.js";
+import FeatureRoutes from "./routes/features.js";
 
 
 import getEnv from "./helper/getEnv.js";
@@ -70,6 +71,7 @@ app.use("/api", GradingWeightDefaultsRoutes);
 app.use("/api", AcademicSettingsRoutes);
 app.use("/api", StudentRecordRoutes);
 app.use("/api", StudentReportCardRoutes);
+app.use("/api", FeatureRoutes);
 
 // Error middleware
 app.use(ErrorHandler)

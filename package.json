@@ -10,7 +10,8 @@
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "seed": "tsx src/seed.ts",
-    "migrate": "node migrate_all.mjs"
+    "migrate": "node migrate_all.mjs",
+    "migrate:tidb": "node migrate_to_tidb.mjs"
   },
   "keywords": [],
   "author": "",

@@ -25,6 +25,8 @@
 //   13. enrollments:            add `status` column (enrolled/unenrolled/dropped)
 //                              + simplify students.status to active/inactive only
 //   14. enrollments:            add 'completed' to enrollment status enum
+//   17. features:          create the feature-flag table (developer role)
+//                          + seed initial toggleable features
 //
 // Each step is idempotent: it inspects the current table layout first and
 // skips itself when the change is already applied, so the file is safe to
@@ -969,6 +971,53 @@ try {
 
     const [classCols] = await conn.query("SHOW COLUMNS FROM `classrooms`");
     console.log("  classrooms columns:", classCols.map((c) => `${c.Field}:${c.Type}`).join(", "));
+  });
+
+  // ---- 17. Feature flags (developer role) -----------------------------------
+  // docs/developer-role-plan.md §3.3: whole-school feature toggles managed by
+  // the developer role. `users.role` is varchar(20), so 'developer' fits —
+  // no ALTER needed for the role column.
+  await step("17/17 — create features table + seed initial feature flags", async () => {
+    // 17a. features table
+    const [featTable] = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+      ["features"]
+    );
+    if (Number(featTable[0].cnt) === 0) {
+      await conn.query(`
+        CREATE TABLE \`features\` (
+          \`id\` bigint(20) NOT NULL AUTO_INCREMENT,
+          \`key\` varchar(64) NOT NULL,
+          \`label\` varchar(128) NOT NULL,
+          \`description\` text DEFAULT NULL,
+          \`enabled\` tinyint(1) NOT NULL DEFAULT 1,
+          \`updatedBy\` bigint(20) DEFAULT NULL,
+          \`updatedAt\` timestamp NULL DEFAULT NULL,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`features_key_unique\` (\`key\`),
+          KEY \`fk_features_updated_by\` (\`updatedBy\`),
+          CONSTRAINT \`fk_features_updated_by\` FOREIGN KEY (\`updatedBy\`) REFERENCES \`users\` (\`id\`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
+      );
+      console.log("  Created features table.");
+    } else {
+      console.log("  features table already exists — skipping create.");
+    }
+
+    // 17b. Seed initial toggleable features (idempotent upserts).
+    const initialFeatures = [
+      ["reports_analytics", "Reports & Analytics", "Admin analytics dashboards covering enrollment, grades and attendance trends."],
+      ["reports_generation", "Report Generation", "Printable reports: master lists, class rosters, grade sheets and attendance summaries."],
+      ["submission_tracker", "Submission Tracker", "Quarterly submission workflow for advisers freezing class records (SF10 / Form-137)."],
+    ];
+    for (const [key, label, description] of initialFeatures) {
+      await conn.query(
+        "INSERT INTO features (`key`, label, description, enabled) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE label = VALUES(label), description = VALUES(description)",
+        [key, label, description]
+      );
+    }
+    console.log(`  Seeded/updated ${initialFeatures.length} feature flag(s).`);
   });
 
   console.log("\nALL MIGRATIONS COMPLETE.");

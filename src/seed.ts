@@ -62,6 +62,12 @@ async function seed() {
       sql("admin@gradesync.edu", hash, "admin")
     );
 
+    // Developer account — manages system feature flags (docs/developer-role-plan.md).
+    await connection.execute(
+      "INSERT INTO users(email, password, role) VALUES(?,?,?)",
+      sql("dev@gradesync.edu", hash, "developer")
+    );
+
     const teacherEmails: string[] = [
       "juan.delacruz@gradesync.edu",
       "maria.santos@gradesync.edu",
