@@ -11,6 +11,10 @@ import type { AssessmentType } from "./constant/assessment.js";
 // the teacher page computes (no hand-rolled constants to drift).
 import { submitStudentRecordService } from "./service/studentRecord.js";
 
+// Landing page content seed (docs/landing-content-plan.md Phase 2) —
+// mirrors client/src/constant/landingContent.ts.
+import { LANDING_CONTENT_SEED } from "./constant/landingSeed.js";
+
 // Helper: coerce values to mysql-compatible array
 function sql(...args: (string | number | null | undefined)[]): (string | number | null)[] {
   return args.map((v) => (v === undefined ? null : v));
@@ -721,6 +725,19 @@ async function seed() {
       sql(12345, "GradeSync National High School", "District I", "City Schools Division", "National Capital Region")
     );
 
+    // ──────────────────────────────────────────────────────
+    // 15a. landing_content (7 sections — developer-managed landing page)
+    //     Idempotent upserts; does NOT clobber developer edits made via
+    //     PATCH /landing-content/:section (updatedBy/updatedAt preserved).
+    // ──────────────────────────────────────────────────────
+    console.log("Seeding landing_content...");
+    for (const [section, content] of Object.entries(LANDING_CONTENT_SEED)) {
+      await connection.execute(
+        "INSERT INTO landing_content (section, content) VALUES (?, ?) ON DUPLICATE KEY UPDATE content = VALUES(content)",
+        sql(section, JSON.stringify(content))
+      );
+    }
+
     await connection.commit();
 
     // ──────────────────────────────────────────────────────
@@ -772,6 +789,7 @@ async function seed() {
     console.log(`  student_attendance: ${attendanceCount}`);
     console.log(`  grading_weights:    ${weightSeeds.length}`);
     console.log(`  school_info:        1`);
+    console.log(`  landing_content:    ${Object.keys(LANDING_CONTENT_SEED).length} sections`);
     console.log("==========================================");
     console.log("  Default password for all users: password123");
     console.log("==========================================\n");

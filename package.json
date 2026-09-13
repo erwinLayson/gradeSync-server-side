@@ -6,7 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc && npx puppeteer browsers install chrome-headless-shell",
-    "postinstall": "npx puppeteer browsers install chrome",
+    "postinstall": "npx puppeteer browsers install chrome-headless-shell",
     "start": "node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "seed": "tsx src/seed.ts",
@@ -31,8 +31,10 @@
   },
   "dependencies": {
     "@types/ejs": "^3.1.5",
+    "@types/multer": "^2.2.0",
     "dotenv": "^17.4.2",
     "ejs": "^6.0.1",
+    "multer": "^2.3.0",
     "mysql2": "^3.23.2",
     "puppeteer": "^25.6.0",
     "tsx": "^4.23.1",

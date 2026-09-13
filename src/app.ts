@@ -34,6 +34,8 @@ import AcademicSettingsRoutes from "./routes/academicSettings.js"
 import StudentRecordRoutes from "./routes/studentRecord.js"
 import StudentReportCardRoutes from "./routes/studentReportCard.js";
 import FeatureRoutes from "./routes/features.js";
+import LandingContentRoutes from "./routes/landingContent.js";
+import UploadRoutes from "./routes/uploads.js";
 
 
 import getEnv from "./helper/getEnv.js";
@@ -72,6 +74,8 @@ app.use("/api", AcademicSettingsRoutes);
 app.use("/api", StudentRecordRoutes);
 app.use("/api", StudentReportCardRoutes);
 app.use("/api", FeatureRoutes);
+app.use("/api", LandingContentRoutes);
+app.use("/api", UploadRoutes);
 
 // Error middleware
 app.use(ErrorHandler)

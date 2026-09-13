@@ -11,10 +11,20 @@
 //                              or 127.0.0.1 for a local tiup playground
 //   TIDB_PORT       optional — default 4000 (TiDB's default, not MySQL's 3306)
 //   TIDB_USER       required — e.g. <user>.root on TiDB Cloud
-//   TIDB_PASSWORD   required
+//   TIDB_PASSWORD   optional — if unset/empty, falls back to the existing
+//                              DEFAULT_PASSWORD default, then to an empty
+//                              password; pass --require-password to abort
+//                              instead of using a fallback
 //   TIDB_DATABASE   required — target database name
 //   TIDB_SSL        optional — TLS is ON by default (TiDB Cloud requires it).
 //                              Set TIDB_SSL=0 for local/self-hosted clusters.
+//
+//   What if the target creds live under DB_* in the production env?
+//   Pass --target-env=<path> (or TIDB_ENV_FILE) to an env file that holds the
+//   TiDB connection in its DB_* variables (e.g. gradeSync-server-side.env).
+//   Its DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/DB_NAME define the TIDB_* target;
+//   any TIDB_* values from the CWD .env are overridden except an empty
+//   DB_PASSWORD, which keeps the DEFAULT_PASSWORD fallback.
 //
 // Flags:
 //   --drop           DROP TABLE IF EXISTS on the target before copying (fresh load)
@@ -24,6 +34,9 @@
 //   --tables=a,b     migrate only these tables (comma-separated)
 //   --batch-size=N   rows per INSERT batch (default 500)
 //   --force          allow running when source and target look identical
+//   --require-password  abort when TIDB_PASSWORD is not explicitly set
+//   --target-env=PATH   load target credentials (DB_* -> TIDB_*) from another
+//                       env file; alias: TIDB_ENV_FILE
 //
 // How it works:
 //   1. Discovers every BASE TABLE in the source schema (views are skipped).
@@ -36,9 +49,11 @@
 //   5. Verifies per-table row counts; exits non-zero on any mismatch.
 //
 // Usage: from the server directory -> `npm run migrate:tidb`
+//   e.g. `node migrate_to_tidb.mjs --verify-only --target-env=gradeSync-server-side.env`
 // ============================================================================
 
 import "dotenv/config";
+import fs from "node:fs";
 import mysql from "mysql2/promise";
 
 // ---------------------------------------------------------------------------
@@ -59,12 +74,61 @@ const OPT_CREATE_DB = hasFlag("--create-db");
 const OPT_SCHEMA_ONLY = hasFlag("--schema-only");
 const OPT_VERIFY_ONLY = hasFlag("--verify-only");
 const OPT_FORCE = hasFlag("--force");
+const OPT_REQUIRE_PASSWORD = hasFlag("--require-password");
 const OPT_TABLES = flagValue("--tables", null);
 const BATCH_SIZE = Math.max(1, Number(flagValue("--batch-size", "500")) || 500);
 
 const ONLY_TABLES = OPT_TABLES
     ? OPT_TABLES.split(",").map((t) => t.trim()).filter(Boolean)
     : null;
+
+// --target-env=<path> (or TIDB_ENV_FILE) loads ANOTHER env file's DB_* variables
+// as the TiDB target. That lets the migration run with a local MySQL source
+// (the .env in the CWD) and, say, the live production TiDB — whose credentials
+// live under DB_* in a named env like gradeSync-server-side.env — as the target,
+// without copying production secrets into the dev .env.
+const TARGET_ENV_FILE = flagValue("--target-env", process.env.TIDB_ENV_FILE);
+
+const TARGET_ENV_MAP = {
+    DB_HOST: "TIDB_HOST",
+    DB_PORT: "TIDB_PORT",
+    DB_USER: "TIDB_USER",
+    DB_PASSWORD: "TIDB_PASSWORD",
+    DB_NAME: "TIDB_DATABASE",
+};
+
+// Runs before SRC/TGT are built. When --target-env is given, the file's DB_*
+// values define the TIDB_* target outright — any TIDB_* values already loaded
+// from the CWD .env (e.g. placeholder values) are overridden, so a named
+// production env cannot be shadowed by a dev .env.
+function applyTargetEnvOverrides() {
+    if (!TARGET_ENV_FILE) return;
+    if (!fs.existsSync(TARGET_ENV_FILE)) {
+        console.error(`--target-env file not found: ${TARGET_ENV_FILE}`);
+        process.exit(1);
+    }
+
+    const source = fs.readFileSync(TARGET_ENV_FILE, "utf8");
+    for (const rawLine of source.split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line || line.startsWith("#")) continue;
+        const eq = line.indexOf("=");
+        if (eq === -1) continue;
+        const key = line.slice(0, eq).trim();
+        const targetKey = TARGET_ENV_MAP[key];
+        if (!targetKey) continue;
+
+        const value = line.slice(eq + 1).trim();
+        // Don't map an empty target password — that would disable the
+        // DEFAULT_PASSWORD fallback chain.
+        if (targetKey === "TIDB_PASSWORD" && value === "") continue;
+
+        process.env[targetKey] = value;
+    }
+    console.log(`Target credentials loaded from --target-env ${TARGET_ENV_FILE}`);
+}
+
+applyTargetEnvOverrides();
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -83,11 +147,28 @@ const SRC = {
 
 const TIDB_SSL = process.env.TIDB_SSL !== "0";
 
+// TiDB password resolution: an explicit TIDB_PASSWORD always wins, otherwise
+// the existing DEFAULT_PASSWORD env default is used, otherwise an empty
+// password. Only the chosen source is ever logged — never the value itself.
+function resolvePassword() {
+    const explicit = process.env.TIDB_PASSWORD;
+    const fallback = process.env.DEFAULT_PASSWORD;
+    if (explicit !== undefined && explicit !== "") {
+        return { value: explicit, source: "set" };
+    }
+    if (fallback !== undefined && fallback !== "") {
+        return { value: fallback, source: "defaulted" };
+    }
+    return { value: "", source: "empty" };
+}
+
+const PASSWORD_RESULT = resolvePassword();
+
 const TGT = {
     host: process.env.TIDB_HOST,
     port: Number(process.env.TIDB_PORT || 4000),
     user: process.env.TIDB_USER,
-    password: process.env.TIDB_PASSWORD,
+    password: PASSWORD_RESULT.value,
     database: process.env.TIDB_DATABASE,
     connectTimeout: 30000,
     dateStrings: true,
@@ -95,9 +176,9 @@ const TGT = {
     ...(TIDB_SSL ? { ssl: { minVersion: "TLSv1.2", rejectUnauthorized: true } } : {}),
 };
 
-function requireEnv(value, label) {
+function requireEnv(value, label, hint) {
     if (!value) {
-        console.error(`Missing required env var: ${label}`);
+        console.error(`Missing required env var: ${label}${hint ? ` — ${hint}` : ""}`);
         process.exit(1);
     }
     return value;
@@ -108,9 +189,20 @@ function validateConfig() {
     requireEnv(SRC.user, "DB_USER");
     requireEnv(SRC.database, "DB_NAME");
 
-    requireEnv(TGT.host, "TIDB_HOST");
-    requireEnv(TGT.user, "TIDB_USER");
-    requireEnv(TGT.database, "TIDB_DATABASE");
+    const targetHint =
+        `set TIDB_* in the env file or pass --target-env=<production env file> ` +
+        `(e.g. --target-env=gradeSync-server-side.env)`;
+    requireEnv(TGT.host, "TIDB_HOST", targetHint);
+    requireEnv(TGT.user, "TIDB_USER", targetHint);
+    requireEnv(TGT.database, "TIDB_DATABASE", targetHint);
+
+    if (OPT_REQUIRE_PASSWORD && PASSWORD_RESULT.source !== "set") {
+        console.error(
+            "--require-password was set but TIDB_PASSWORD is not explicitly configured " +
+            `(password resolved from ${PASSWORD_RESULT.source}).`
+        );
+        process.exit(1);
+    }
 
     // Hard guard: refuse to migrate a database onto itself (would DROP the source).
     const sameTarget =
@@ -128,16 +220,45 @@ function validateConfig() {
 
 function logConfig() {
     console.log("Source  :", `${SRC.host}:${SRC.port}/${SRC.database} (user ${SRC.user})`);
-    console.log("Target  :", `${TGT.host}:${TGT.port}/${TGT.database} (user ${TGT.user}, TLS ${TIDB_SSL ? "on" : "off"})`);
+    console.log("Target  :", `${TGT.host}:${TGT.port}/${TGT.database} (user ${TGT.user}, TLS ${TIDB_SSL ? "on" : "off"}, password ${PASSWORD_RESULT.source})`);
     console.log("Options :", [
         OPT_DROP && "--drop",
         OPT_CREATE_DB && "--create-db",
         OPT_SCHEMA_ONLY && "--schema-only",
         OPT_VERIFY_ONLY && "--verify-only",
+        OPT_REQUIRE_PASSWORD && "--require-password",
+        TARGET_ENV_FILE && `--target-env=${TARGET_ENV_FILE}`,
         ONLY_TABLES && `--tables=${ONLY_TABLES.join(",")}`,
         `batch-size=${BATCH_SIZE}`,
     ].filter(Boolean).join(" ") || "(none)");
+
+    if (PASSWORD_RESULT.source === "defaulted") {
+        console.warn("Target password: using DEFAULT_PASSWORD fallback — set TIDB_PASSWORD to override.");
+    } else if (PASSWORD_RESULT.source === "empty") {
+        console.warn("Target password: empty — set TIDB_PASSWORD or DEFAULT_PASSWORD if TiDB requires one.");
+    }
     console.log("");
+}
+
+// Map a connection/handshake failure to a hint naming the env vars involved.
+// The password value is never printed.
+function exitWithConnectionError(err, side) {
+    const code = err && err.code;
+    const message = (err && err.message) || "";
+    const envLabel = side === "Source" ? "DB_*" : "TIDB_* / DEFAULT_PASSWORD";
+
+    if (code === "ER_ACCESS_DENIED_ERROR") {
+        console.error(`${side} access denied — check ${envLabel} env vars in the env file.`);
+    } else if (side === "Target" && /ssl|tls|certificate/i.test(message)) {
+        console.error("Target TLS/handshake failed — check TIDB_SSL (1 for TiDB Cloud, 0 for local clusters).");
+    } else if (code === "ECONNREFUSED" || code === "ETIMEDOUT" || code === "ENOTFOUND" || code === "EAI_AGAIN") {
+        console.error(`${side} unreachable — check host/port env vars and network access.`);
+    } else if (code === "ER_BAD_DB_ERROR") {
+        console.error(`${side} database not found — check the database env var (or use --create-db).`);
+    } else {
+        console.error(`${side} connection failed:`, message);
+    }
+    process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -357,10 +478,33 @@ async function main() {
     validateConfig();
     logConfig();
 
-    const source = await mysql.createConnection(SRC);
-    const target = await mysql.createConnection({ ...TGT, database: undefined });
+    let source;
+    let target;
 
     try {
+        source = await mysql.createConnection(SRC);
+    } catch (err) {
+        exitWithConnectionError(err, "Source");
+    }
+    try {
+        target = await mysql.createConnection({ ...TGT, database: undefined });
+    } catch (err) {
+        exitWithConnectionError(err, "Target");
+    }
+
+    try {
+        // Pre-flight: prove both connections can actually talk before any work.
+        // --drop would destroy data on the target, so fail fast on misconfig.
+        try {
+            await source.query("SELECT 1");
+        } catch (err) {
+            exitWithConnectionError(err, "Source");
+        }
+        try {
+            await target.query("SELECT 1");
+        } catch (err) {
+            exitWithConnectionError(err, "Target");
+        }
         await source.query(`USE \`${SRC.database}\``);
         if (OPT_CREATE_DB) {
             await ensureTargetDatabase(target);

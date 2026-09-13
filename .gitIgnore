@@ -2,8 +2,15 @@
 node_modules
 dist
 
-# Environments
-.env
+# Environments (never commit credentials — covers .env, .env.production and
+# named snapshots such as gradeSync-server-side.env; .env.example is the template)
+*.env
+!*.env.example
+*gradeSync-server-side.env
 
 # Puppeteer cache (downloaded Chrome binary)
 .cache/puppeteer
+
+# Uploaded files (developer-managed landing page images — user content, not source)
+uploads
+!uploads/.gitkeep

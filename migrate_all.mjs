@@ -27,6 +27,9 @@
 //   14. enrollments:            add 'completed' to enrollment status enum
 //   17. features:          create the feature-flag table (developer role)
 //                          + seed initial toggleable features
+//   18. landing_content:   create the landing-page content table (developer role)
+//                          + seed the 7 sections (hero/stats/about/how_it_works/
+//                          audiences/contact/cta) mirroring the client defaults
 //
 // Each step is idempotent: it inspects the current table layout first and
 // skips itself when the change is already applied, so the file is safe to
@@ -1018,6 +1021,126 @@ try {
       );
     }
     console.log(`  Seeded/updated ${initialFeatures.length} feature flag(s).`);
+  });
+
+  // ---- 18. Landing page content (developer role) -----------------------------
+  // docs/landing-content-plan.md Phase 2: per-section JSON blobs managed by the
+  // developer via PATCH /landing-content/:section; public GET feeds the landing
+  // page. Seed data mirrors client/src/constant/landingContent.ts (Phase 1).
+  // Hero slide paths are the stable public asset URLs (client/public/assets),
+  // NOT Vite's hashed bundle paths.
+  await step("18/18 — create landing_content table + seed the 7 sections", async () => {
+    // 18a. landing_content table
+    const [landingTable] = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.TABLES
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?`,
+      ["landing_content"]
+    );
+    if (Number(landingTable[0].cnt) === 0) {
+      await conn.query(`
+        CREATE TABLE \`landing_content\` (
+          \`id\` bigint(20) NOT NULL AUTO_INCREMENT,
+          \`section\` varchar(64) NOT NULL,
+          \`content\` json NOT NULL,
+          \`updatedBy\` bigint(20) DEFAULT NULL,
+          \`updatedAt\` timestamp NULL DEFAULT NULL,
+          PRIMARY KEY (\`id\`),
+          UNIQUE KEY \`landing_content_section_unique\` (\`section\`),
+          KEY \`fk_landing_content_updated_by\` (\`updatedBy\`),
+          CONSTRAINT \`fk_landing_content_updated_by\` FOREIGN KEY (\`updatedBy\`) REFERENCES \`users\` (\`id\`) ON DELETE SET NULL
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci`
+      );
+      console.log("  Created landing_content table.");
+    } else {
+      console.log("  landing_content table already exists — skipping create.");
+    }
+
+    // 18b. Seed the 7 sections (idempotent upserts; keep in sync with the
+    //      client defaults and server/src/constant/landingSeed.ts).
+    const landingSections = {
+      hero: {
+        slides: [
+          { image: "/assets/hero-1.svg", label: "School campus" },
+          { image: "/assets/hero-2.svg", label: "Classroom learning" },
+          { image: "/assets/hero-3.svg", label: "Student graduation" },
+        ],
+        title: "School records,",
+        titleAccent: " simplified.",
+        subtitle:
+          "Abang Suizu Integrated School runs on GradeSync — one system for grading, attendance, class submission and official school records, all in one place.",
+      },
+      stats: {
+        rows: [
+          { value: "3", label: "Roles, one system" },
+          { value: "4", label: "Quarters tracked" },
+          { value: "100%", label: "Digital records" },
+          { value: "SF10", label: "Ready submissions" },
+        ],
+      },
+      about: {
+        heading: {
+          eyebrow: "About Us",
+          title: "A complete academic record system",
+          text: "Abang Suizu Integrated School uses GradeSync to keep academic records accurate, organized and up to date — from daily attendance to the quarterly submission of official student records (SF10 / Form-137).",
+        },
+        features: [
+          { iconKey: "FaUserGraduate", title: "Student Records", text: "Every learner's profile, enrollment and class placement in one place." },
+          { iconKey: "FaClipboardCheck", title: "Grading & Attendance", text: "Quarter grades computed automatically from teacher-entered scores and attendance." },
+          { iconKey: "FaBookOpen", title: "Class Submission", text: "Advisers review and submit frozen student records each quarter for SF10 / Form-137." },
+          { iconKey: "FaChartLine", title: "Reports & Analytics", text: "Dashboards for admins, report cards for teachers and prospects for students." },
+        ],
+      },
+      how_it_works: {
+        heading: {
+          eyebrow: "How it works",
+          title: "From enrollment to Form-137",
+          text: "Four steps connect the school office, the classrooms and every learner's permanent record.",
+        },
+        steps: [
+          { step: "01", title: "Enroll the learner", text: "Admins record student information and place them in a class for the school year." },
+          { step: "02", title: "Record daily progress", text: "Teachers take attendance and encode scores in the gradebook as classes happen." },
+          { step: "03", title: "Grades compute themselves", text: "Quarterly grades are calculated automatically against the school's grading weights." },
+          { step: "04", title: "Submit official records", text: "Advisers review, freeze and submit class records for SF10 / Form-137 printing." },
+        ],
+      },
+      audiences: {
+        heading: {
+          eyebrow: "Who it's for",
+          title: "Built for every role in school",
+          text: "Each role gets a workspace with exactly the tools it needs — nothing more, nothing missing.",
+        },
+        cards: [
+          { iconKey: "FaSchool", title: "For Administrators", text: "See the whole school at a glance and keep records moving.", points: ["Enrollment and records oversight", "School-wide reports and analytics", "Academic settings control"] },
+          { iconKey: "FaChalkboardTeacher", title: "For Teachers", text: "Spend less time on paperwork, more time teaching.", points: ["Fast attendance taking", "Gradebook with auto-computed grades", "One-click class record submission"] },
+          { iconKey: "FaUserGraduate", title: "For Students", text: "Your school life, visible in one place.", points: ["Profile and class schedule", "Grades per quarter", "Subject prospectus tracking"] },
+        ],
+      },
+      contact: {
+        heading: {
+          eyebrow: "Contact Us",
+          title: "Reach the school office",
+          text: "For login help or questions about records, get in touch with the school office during office hours.",
+        },
+        items: [
+          { iconKey: "FiMapPin", title: "Address", lines: ["Abang Suizu Integrated School", "Your School Address Here"] },
+          { iconKey: "FiMail", title: "Email", lines: ["admin@abangsuizu.edu.ph"] },
+          { iconKey: "FiPhone", title: "Phone", lines: ["(000) 000-0000"] },
+          { iconKey: "FiClock", title: "Office Hours", lines: ["Mon – Fri, 8:00 AM – 5:00 PM"] },
+        ],
+      },
+      cta: {
+        title: "Ready to simplify school records?",
+        text: "Sign in with your school account — admins, teachers and students all use the same door.",
+      },
+    };
+
+    for (const [section, content] of Object.entries(landingSections)) {
+      await conn.query(
+        "INSERT INTO landing_content (section, content) VALUES (?, ?) ON DUPLICATE KEY UPDATE content = VALUES(content)",
+        [section, JSON.stringify(content)]
+      );
+    }
+    console.log(`  Seeded/updated ${Object.keys(landingSections).length} landing section(s).`);
   });
 
   console.log("\nALL MIGRATIONS COMPLETE.");
