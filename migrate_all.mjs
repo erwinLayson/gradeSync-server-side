@@ -48,11 +48,18 @@ import mysql from "mysql2/promise";
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
+  // TiDB Cloud listens on 4000, not MySQL's 3306 default — DB_PORT is required there.
+  port: Number(process.env.DB_PORT || 3306),
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
   waitForConnections: true,
   connectionLimit: 5,
+  // TiDB Cloud requires TLS. Same convention as src/config/database.ts:
+  // SSL when NODE_ENV=production (set in the deploy environment).
+  ...(process.env.NODE_ENV === "production" && {
+    ssl: { rejectUnauthorized: true },
+  }),
 });
 
 const conn = await pool.getConnection();
@@ -1055,8 +1062,12 @@ try {
       console.log("  landing_content table already exists — skipping create.");
     }
 
-    // 18b. Seed the 7 sections (idempotent upserts; keep in sync with the
-    //      client defaults and server/src/constant/landingSeed.ts).
+    // 18b. Seed the 7 sections. INSERT IGNORE (not ON DUPLICATE KEY UPDATE):
+    //      missing sections are inserted, but EXISTING rows are never touched —
+    //      this step runs on every deploy via `npm start`, and the developer's
+    //      published landing content (edited via PATCH /landing-content/:section)
+    //      must survive re-runs. Keep values in sync with the client defaults
+    //      and server/src/constant/landingSeed.ts.
     const landingSections = {
       hero: {
         slides: [
@@ -1136,11 +1147,11 @@ try {
 
     for (const [section, content] of Object.entries(landingSections)) {
       await conn.query(
-        "INSERT INTO landing_content (section, content) VALUES (?, ?) ON DUPLICATE KEY UPDATE content = VALUES(content)",
+        "INSERT IGNORE INTO landing_content (section, content) VALUES (?, ?)",
         [section, JSON.stringify(content)]
       );
     }
-    console.log(`  Seeded/updated ${Object.keys(landingSections).length} landing section(s).`);
+    console.log(`  Seeded missing landing section(s) — existing content left untouched (${Object.keys(landingSections).length} section shapes checked).`);
   });
 
   console.log("\nALL MIGRATIONS COMPLETE.");

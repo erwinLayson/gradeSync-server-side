@@ -727,13 +727,14 @@ async function seed() {
 
     // ──────────────────────────────────────────────────────
     // 15a. landing_content (7 sections — developer-managed landing page)
-    //     Idempotent upserts; does NOT clobber developer edits made via
-    //     PATCH /landing-content/:section (updatedBy/updatedAt preserved).
+    //     INSERT IGNORE: missing sections are inserted, existing rows are
+    //     NEVER touched — developer edits made via PATCH /landing-content/:section
+    //     survive re-seeding (updatedBy/updatedAt preserved).
     // ──────────────────────────────────────────────────────
     console.log("Seeding landing_content...");
     for (const [section, content] of Object.entries(LANDING_CONTENT_SEED)) {
       await connection.execute(
-        "INSERT INTO landing_content (section, content) VALUES (?, ?) ON DUPLICATE KEY UPDATE content = VALUES(content)",
+        "INSERT IGNORE INTO landing_content (section, content) VALUES (?, ?)",
         sql(section, JSON.stringify(content))
       );
     }

@@ -7,7 +7,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc && npx puppeteer browsers install chrome-headless-shell",
     "postinstall": "npx puppeteer browsers install chrome-headless-shell",
-    "start": "node dist/server.js",
+    "start": "node migrate_all.mjs && node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "seed": "tsx src/seed.ts",
     "migrate": "node migrate_all.mjs",
