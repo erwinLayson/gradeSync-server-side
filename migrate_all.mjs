@@ -1154,6 +1154,28 @@ try {
     console.log(`  Seeded missing landing section(s) — existing content left untouched (${Object.keys(landingSections).length} section shapes checked).`);
   });
 
+  // ---- 19. Role login switches (developer role) ------------------------------
+  // docs/role-login-switches-plan.md: login_admin / login_teacher / login_student
+  // rows in the EXISTING features table. LoginUserService refuses logins for a
+  // role while its flag is disabled (fail-open when the row is missing).
+  // login_developer intentionally does NOT exist — the developer can never be
+  // locked out by a role switch. Upsert refreshes label/description only;
+  // `enabled` is never touched so a developer's chosen state survives re-runs.
+  await step("19/19 — seed role login switches (login_admin, login_teacher, login_student)", async () => {
+    const loginSwitches = [
+      ["login_admin", "Admin Logins", "Master switch for admin account logins. While disabled, no admin can sign in (existing sessions expire naturally)."],
+      ["login_teacher", "Teacher Logins", "Master switch for teacher account logins. While disabled, no teacher can sign in (existing sessions expire naturally)."],
+      ["login_student", "Student Logins", "Master switch for student account logins. While disabled, no student can sign in (existing sessions expire naturally)."],
+    ];
+    for (const [key, label, description] of loginSwitches) {
+      await conn.query(
+        "INSERT INTO features (`key`, label, description, enabled) VALUES (?, ?, ?, 1) ON DUPLICATE KEY UPDATE label = VALUES(label), description = VALUES(description)",
+        [key, label, description]
+      );
+    }
+    console.log(`  Seeded/updated ${loginSwitches.length} role login switch(es) — enabled state preserved.`);
+  });
+
   console.log("\nALL MIGRATIONS COMPLETE.");
   console.log("Backup tables kept (drop once you are satisfied):");
   console.log("  - student_attendance_backup");

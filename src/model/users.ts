@@ -1,7 +1,7 @@
 import { PoolConnection } from "mysql2/promise";
 import type{ResultSetHeader, RowDataPacket} from "mysql2/promise";
 
-import type{CreateUserProps, UserResponseProps} from "../constant/users.js";
+import type{CreateUserProps, UserResponseProps, UserRoles} from "../constant/users.js";
 
 
 import {InternalServerError} from "../middleware/errors.js";
@@ -73,6 +73,30 @@ export default class Users {
         }
     }
 
+
+    // Change a user's role by ID (developer account management only —
+    // never reachable through the credentials PUT, which whitelists
+    // email/password to prevent escalation).
+    async updateUserRole(userId: number, role: UserRoles):Promise<void> {
+        try {
+            const query = "UPDATE users SET role = ? WHERE id = ?";
+            await this.connection.execute<ResultSetHeader>(query, [role, userId]);
+        }catch(err) {
+            throw new InternalServerError("Internal server error", 500, err);
+        }
+    }
+
+    // Count of currently-active accounts with the given role. Powers the
+    // "last active developer" guardrail (docs/developer-users-plan.md §3.2).
+    async countActiveUsersByRole(role: UserRoles):Promise<number> {
+        try {
+            const query = "SELECT COUNT(*) AS cnt FROM users WHERE role = ? AND status = 'active'";
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [role]);
+            return Number(rows[0]?.cnt ?? 0);
+        }catch(err) {
+            throw new InternalServerError("Internal server error", 500, err);
+        }
+    }
 
     // Delete user by ID
     async deleteUserById(userId: number):Promise<void> {
