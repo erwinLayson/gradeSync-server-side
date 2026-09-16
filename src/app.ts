@@ -15,6 +15,7 @@ checkDBConnection()
 
 //Import Routes
 import UserRoutes from "./routes/users.js";
+import SystemWipeRoutes from "./routes/systemWipe.js";
 import StudentRoutes from "./routes/students.js"
 import AuthRoutes from "./routes/auth.js"
 import ClassroomRoutes from "./routes/classrooms.js"
@@ -76,6 +77,7 @@ app.use("/api", StudentReportCardRoutes);
 app.use("/api", FeatureRoutes);
 app.use("/api", LandingContentRoutes);
 app.use("/api", UploadRoutes);
+app.use("/api", SystemWipeRoutes);
 
 // Error middleware
 app.use(ErrorHandler)
