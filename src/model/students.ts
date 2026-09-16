@@ -64,6 +64,7 @@ export default class Students {
                 suffix,
                 CONCAT(firstname, ' ', middlename, ' ', lastname, IF(suffix IS NOT NULL, CONCAT(' ', suffix), '')) AS fullname,
                 birthdate,
+                TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age,
                 sex,
                 status
                 FROM

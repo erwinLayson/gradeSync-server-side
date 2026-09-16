@@ -110,6 +110,7 @@ export async function getAllStudentService(){
             suffix: s.suffix,
             fullname: s.fullname,
             birthdate: new Date(s.birthdate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "2-digit" }),
+            age: s.age,
             sex: s.sex,
             status: s.status
         }));
