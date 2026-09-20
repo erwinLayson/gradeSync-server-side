@@ -12,6 +12,8 @@ import { getGradingWeightsService } from "./gradingWeight.js";
 import { getAttendanceHistoryService } from "./studentAttendance.js";
 import { computeQuarterGrade, computeCompositeQuarterGrade, getRemarksForQuarterGrade } from "./gradebook.js";
 import { getSubjectComponentsWithConnection } from "./subjectComponents.js";
+import { getNumQuarters } from "./academicSettings.js";
+import { getQuarterArray } from "../helper/quarterValidation.js";
 
 // Error handling
 import { NotFoundError } from "../middleware/errors.js";
@@ -77,7 +79,8 @@ export async function getStudentClassAttendanceService(userId: number, quarter?:
             );
 
             // Group by quarter
-            const attendanceByQuarter = [1, 2, 3, 4].map((q) => {
+            const numQuarters = await getNumQuarters();
+            const attendanceByQuarter = getQuarterArray(numQuarters).map((q) => {
                 const quarterRecords = records.filter((r) => r.quarter === q);
                 const presentDays = quarterRecords.filter((r) => r.status === "present").length;
                 const totalDays = quarterRecords.length;
@@ -234,8 +237,9 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     connection
                 );
 
-                // Attendance summary + records grouped per quarter (1-4).
-                const attendanceByQuarter = [1, 2, 3, 4].map((quarter) => {
+                // Attendance summary + records grouped per quarter.
+                const numQuarters2 = await getNumQuarters();
+                const attendanceByQuarter = getQuarterArray(numQuarters2).map((quarter) => {
                     const records = attendanceHistory.records.filter((record) => record.quarter === quarter);
                     const presentDays = records.filter((record) => record.status === "present").length;
                     const totalDays = records.length;
@@ -266,7 +270,8 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     dateGiven: string | null;
                     score: number | null;
                 }[] = [];
-                for (let quarter = 1; quarter <= 4; quarter++) {
+                const numQuartersSubject = await getNumQuarters();
+                for (let quarter = 1; quarter <= numQuartersSubject; quarter++) {
                     // Filter attendance to THIS quarter only — the gradebook
                     // must not bleed attendance from other quarters into this one.
                     const quarterRecords = attendanceHistory.records.filter((r) => r.quarter === quarter);

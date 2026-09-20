@@ -1,5 +1,5 @@
 import { getDBPoolConnection } from "../config/database.js";
-import { NotFoundError } from "../middleware/errors.js";
+import { InternalServerError } from "../middleware/errors.js";
 
 import GradingWeightDefaultsModel from "../model/gradingWeightDefaults.js";
 
@@ -22,16 +22,15 @@ export async function updateGradingWeightDefaultsService(updates: GradingWeightD
     const connection = await pool.getConnection();
     try {
         const model = new GradingWeightDefaultsModel(connection);
-        const existing = await model.getDefaults();
-        if (!existing) {
-            throw new NotFoundError("Grading weight defaults not found", 404);
-        }
+        // Self-heal: seed the default row when the table is empty (e.g. after a
+        // settings wipe) instead of failing every save with 404.
+        const existing = await model.ensureDefaults();
 
         await model.updateDefaults(existing.id, updates);
 
         const updated = await model.getDefaults();
         if (!updated) {
-            throw new NotFoundError("Grading weight defaults not found after update", 404);
+            throw new InternalServerError("Grading weight defaults not found after update", 500);
         }
         return updated;
     } finally {

@@ -74,7 +74,10 @@ export async function wipeSystemController(req: Request, res: Response, next: Ne
 
             res.status(200).json(
                 SuccessResponse({
-                    message: `Wipe "${wipeScope}" completed in ${result.durationMs}ms`,
+                    message:
+                        result.reseeded.length > 0
+                            ? `Wipe "${wipeScope}" completed in ${result.durationMs}ms — re-seeded ${result.reseeded.join(", ")}`
+                            : `Wipe "${wipeScope}" completed in ${result.durationMs}ms`,
                     data: { ...result, uploadFilesDeleted },
                 }),
             );

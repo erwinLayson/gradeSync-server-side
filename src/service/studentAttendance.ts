@@ -7,6 +7,7 @@ import { BadRequestError } from "../middleware/errors.js";
 import type { RowDataPacket } from "mysql2/promise";
 
 import type { AttendanceInput, AttendanceRecord, AttendanceStatus } from "../constant/grade.js";
+import { getNumQuarters } from "./academicSettings.js";
 
 // One student's attendance history for a subject with a computed summary.
 export interface AttendanceHistory {
@@ -42,8 +43,8 @@ function isValidAttendanceStatus(status: string): status is AttendanceStatus {
   return status === "present" || status === "absent";
 }
 
-function isValidQuarter(quarter: number): boolean {
-  return Number.isInteger(quarter) && quarter >= 1 && quarter <= 4;
+function isValidQuarter(quarter: number, numQuarters: number = 4): boolean {
+  return Number.isInteger(quarter) && quarter >= 1 && quarter <= numQuarters;
 }
 
 // Reject malformed/impossible date strings early so the DB never sees garbage.
@@ -163,8 +164,11 @@ export async function saveAttendanceByClassSubjectAndDateService(
     if (entries.length === 0) {
       throw new BadRequestError("Attendance entries cannot be empty");
     }
-    if (!isValidQuarter(quarter)) {
-      throw new BadRequestError("quarter must be a number between 1 and 4");
+    const numQuarters = await getNumQuarters();
+    if (!isValidQuarter(quarter, numQuarters)) {
+      throw new BadRequestError(
+        `quarter must be a number between 1 and ${numQuarters}`
+      );
     }
     for (const entry of entries) {
       if (!isValidAttendanceStatus(entry.status)) {
@@ -228,8 +232,13 @@ export async function getAttendanceHistoryService(
   const connection = conn ?? await pool.getConnection();
   const ownConn = !conn;
   try {
-    if (quarter !== undefined && !isValidQuarter(quarter)) {
-      throw new BadRequestError("quarter query parameter must be a number between 1 and 4");
+    if (quarter !== undefined) {
+      const numQuarters = await getNumQuarters();
+      if (!isValidQuarter(quarter, numQuarters)) {
+        throw new BadRequestError(
+          `quarter query parameter must be a number between 1 and ${numQuarters}`
+        );
+      }
     }
     if (schoolYearId !== undefined && (Number.isNaN(schoolYearId) || !Number.isInteger(schoolYearId))) {
       throw new BadRequestError("schoolYearId query parameter must be a number");

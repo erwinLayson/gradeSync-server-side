@@ -23,12 +23,12 @@ export async function getDashboardSummaryService(): Promise<DashboardSummary> {
             enrollmentCount,
             gradedEnrollments,
         ] = await Promise.all([
-            connection.execute("SELECT currentQuarter, enrollmentOpen FROM academic_settings LIMIT 1")
+            connection.execute("SELECT currentQuarter, numQuarters, enrollmentOpen FROM academic_settings LIMIT 1")
                 .then(([rows]) => {
                     const row = (rows as Record<string, unknown>[])[0];
                     return row
-                        ? { currentQuarter: Number(row.currentQuarter), enrollmentOpen: Boolean(row.enrollmentOpen) }
-                        : { currentQuarter: 1, enrollmentOpen: true };
+                        ? { currentQuarter: Number(row.currentQuarter), numQuarters: Number(row.numQuarters) || 4, enrollmentOpen: Boolean(row.enrollmentOpen) }
+                        : { currentQuarter: 1, numQuarters: 4, enrollmentOpen: true };
                 }),
             model.getStudentCount(schoolYearId),
             model.getTeacherCount(),
@@ -54,6 +54,7 @@ export async function getDashboardSummaryService(): Promise<DashboardSummary> {
         return {
             schoolYear,
             academicQuarter: quarter,
+            numQuarters: academicSettingsResult.numQuarters,
             enrollmentOpen: academicSettingsResult.enrollmentOpen,
             students,
             teachers,

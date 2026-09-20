@@ -95,6 +95,22 @@ const SETTINGS: WipeStep[] = [
     { table: "schoolyear", sql: "DELETE FROM schoolyear" },
 ];
 
+// Single-row config tables that migrate_all.mjs seeds only when it first
+// CREATES the table. The settings/master wipes DELETE them, so without a
+// re-seed the admin Settings page could never save again (every PATCH
+// failed with "Academic settings not found"). executeWipe restores the
+// migration defaults for these scopes (see the re-seed step below).
+const RESEED_DEFAULTS: { table: string; sql: string }[] = [
+    {
+        table: "academic_settings",
+        sql: "INSERT INTO academic_settings(currentQuarter, numQuarters, enrollmentOpen, submissionsLocked) VALUES(1, 4, 1, 0)",
+    },
+    {
+        table: "grading_weight_defaults",
+        sql: "INSERT INTO grading_weight_defaults(writtenWorkWeight, performanceTaskWeight, quarterlyAssessmentWeight, attendanceWeight) VALUES(20.00, 60.00, 20.00, 0.00)",
+    },
+];
+
 // The master scope runs every domain in dependency order.
 const ALL: WipeStep[][] = [
     ACADEMICS,
@@ -138,6 +154,8 @@ export interface WipeTableReceipt {
 
 export interface WipeResult {
     tables: WipeTableReceipt[];
+    /** Single-row config tables re-seeded with their migration defaults. */
+    reseeded: string[];
     durationMs: number;
 }
 
@@ -181,6 +199,18 @@ export async function executeWipe(scope: WipeScope, requesterId: number): Promis
         }
         tables.push(...byTable.values());
 
+        // Restore the migration defaults for the single-row config tables this
+        // wipe emptied (settings/master scopes) so the system comes back in the
+        // same clean-but-functional state as a fresh database. Runs inside the
+        // same transaction: a failure rolls the whole wipe back.
+        const reseeded: string[] = [];
+        if (scope === "all" || scope === "settings") {
+            for (const step of RESEED_DEFAULTS) {
+                await connection.execute<ResultSetHeader>(step.sql);
+                reseeded.push(step.table);
+            }
+        }
+
         // Final guardrail for user-touching scopes: at least one admin and one
         // developer login must survive (the requester was verified above, but
         // this also covers seeded-from-scratch databases).
@@ -200,7 +230,7 @@ export async function executeWipe(scope: WipeScope, requesterId: number): Promis
         }
 
         await connection.commit();
-        return { tables, durationMs: Date.now() - started };
+        return { tables, reseeded, durationMs: Date.now() - started };
     } catch (err) {
         await connection.rollback();
         if (err instanceof InternalServerError) throw err;

@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Permanent Record</title>
+    <% // Respect the school's configured number of grading periods (3 or 4).
+       const nq = Number(numQuarters) === 3 ? 3 : 4; %>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
 <style>
@@ -256,7 +258,7 @@
                                         <span class="font-semibold"><%= record.schoolYear %></span>
                                     </div>
                                 </th>
-                                <th colspan="3">
+                                <th colspan="<%= nq > 3 ? 3 : 2 %>">
                                     <div class="grid">
                                         <span class="text-[8px]">Name of Adviser/Teacher:</span>
                                         <span class="font-semibold"><%= record.adviserName %></span>
@@ -278,7 +280,7 @@
                                 <td colspan="2" rowspan="2" class="text-center font-semibold">
                                     LEARNNG AREAS
                                 </td>
-                                <td colspan="4" class="text-center">
+                                <td colspan="<%= nq %>" class="text-center">
                                     Quarter Rating
                                 </td>
                                 <td class="text-center" rowspan="2">
@@ -290,10 +292,9 @@
                             </tr>
 
                             <tr>
-                                <td class="text-center">1</td>
-                                <td class="text-center">2</td>
-                                <td class="text-center">3</td>
-                                <td class="text-center">4</td>
+                                <% for (let q = 1; q <= nq; q++) { %>
+                                    <td class="text-center"><%= q %></td>
+                                <% } %>
                             </tr>
 
 
@@ -301,10 +302,9 @@
                             <% record.subjects.forEach(sub => { %>
                                 <tr>
                                     <td colspan="2"><%= sub.subjectName %></td>
-                                    <td class="text-center"><%= sub.q1 %></td>
-                                    <td class="text-center"><%= sub.q2 %></td>
-                                    <td class="text-center"><%= sub.q3%></td>
-                                    <td class="text-center"><%= sub.q4%> </td>
+                                    <% for (let q = 1; q <= nq; q++) { %>
+                                        <td class="text-center"><%= sub['q' + q] %></td>
+                                    <% } %>
                                     <td class="text-center"><%= sub.finalRating %></td>
                                     <td class="text-center"><%= sub.remarks %></td>
                                 </tr>
@@ -314,20 +314,20 @@
                                 <td colspan="2">
                                     General Average
                                 </td>
-                                <td colspan="4"></td>
+                                <td colspan="<%= nq %>"></td>
                                 <td class="text-center"><%= record.generalAverage %></td>
                                 <td class="text-center">Promoted</td>
                             </tr>
 
                             <!-- End of subject details -->
                             <tr class="remedial-classes-tr">
-                                <td class="bg-gray-300" colspan="8"></td>
+                                <td class="bg-gray-300" colspan="<%= nq + 4 %>"></td>
                             </tr>
                             <tr>
                                 <td class="text-center">
                                     Remedial Classess
                                 </td>
-                                <td colspan="7">
+                                <td colspan="<%= nq + 3 %>">
                                     <div class="grid grid-cols-2">
                                         <span>Conducted from (mm/dd/yyyy)</span>
                                         <span>to (mm/dd/yyyy)</span>
@@ -352,22 +352,22 @@
                                 <td colspan="2" class="text-center">
                                     Recomputed Final Rating
                                 </td>
-                                <td colspan="2" class="text-center">
-                                    Remarks
+                                <td colspan="<%= nq >= 4 ? 2 : 1 %>" class="text-center">
+                                    Remarkss
                                 </td>
                             </tr>
 
                             <tr class="remedial-classes-tr">
                                 <td class="text-center"></td>
                                 <td class="text-center"></td>
-                                <td class="text-center" colspan="2"></td>
+                                <td class="text-center" colspan="<%= nq >= 4 ? 2 : 1 %>"></td>
                                 <td class="text-center" colspan="2"></td>
                                 <td class="text-center" colspan="2"></td>
                             </tr>
                             <tr class="remedial-classes-tr">
                                 <td class="text-center"></td>
                                 <td class="text-center"></td>
-                                <td class="text-center" colspan="2"></td>
+                                <td class="text-center" colspan="<%= nq >= 4 ? 2 : 1 %>"></td>
                                 <td class="text-center" colspan="2"></td>
                                 <td class="text-center" colspan="2"></td>
                             </tr>
@@ -506,7 +506,7 @@
                                     <td colspan="2" rowspan="2" class="text-center font-semibold">
                                         LEARNNG AREAS
                                     </td>
-                                    <td colspan="4" class="text-center">
+                                    <td colspan="<%= nq %>" class="text-center">
                                         Quarter Rating
                                     </td>
                                     <td class="text-center" rowspan="2">
@@ -518,10 +518,9 @@
                                 </tr>
 
                                 <tr>
-                                    <td class="text-center">1</td>
-                                    <td class="text-center">2</td>
-                                    <td class="text-center">3</td>
-                                    <td class="text-center">4</td>
+                                    <% for (let q = 1; q <= nq; q++) { %>
+                                        <td class="text-center"><%= q %></td>
+                                    <% } %>
                                 </tr>
 
 
@@ -529,10 +528,9 @@
                                 <% record.subjects.forEach(sub => { %>
                                     <tr>
                                         <td colspan="2"><%= sub.subjectName %></td>
-                                        <td class="text-center"><%= sub.q1 %></td>
-                                        <td class="text-center"><%= sub.q2 %></td>
-                                        <td class="text-center"><%= sub.q3%></td>
-                                        <td class="text-center"><%= sub.q4%> </td>
+                                        <% for (let q = 1; q <= nq; q++) { %>
+                                            <td class="text-center"><%= sub['q' + q] %></td>
+                                        <% } %>
                                         <td class="text-center"><%= sub.finalRating %></td>
                                         <td class="text-center"><%= sub.remarks %></td>
                                     </tr>
@@ -540,13 +538,13 @@
 
                                 <!-- End of subject details -->
                                 <tr class="remedial-classes-tr">
-                                    <td class="bg-gray-300" colspan="8"></td>
+                                    <td class="bg-gray-300" colspan="<%= nq + 4 %>"></td>
                                 </tr>
                                 <tr>
                                     <td class="text-center">
                                         Remedial Classess
                                     </td>
-                                    <td colspan="7">
+                                    <td colspan="<%= nq + 3 %>">
                                         <div class="grid grid-cols-2">
                                             <span>Conducted from (mm/dd/yyyy)</span>
                                             <span>to (mm/dd/yyyy)</span>
@@ -579,14 +577,14 @@
                                 <tr class="remedial-classes-tr">
                                     <td class="text-center"></td>
                                     <td class="text-center"></td>
-                                    <td class="text-center" colspan="2"></td>
+                                    <td class="text-center" colspan="<%= nq >= 4 ? 2 : 1 %>"></td>
                                     <td class="text-center" colspan="2"></td>
                                     <td class="text-center" colspan="2"></td>
                                 </tr>
                                 <tr class="remedial-classes-tr">
                                     <td class="text-center"></td>
                                     <td class="text-center"></td>
-                                    <td class="text-center" colspan="2"></td>
+                                    <td class="text-center" colspan="<%= nq >= 4 ? 2 : 1 %>"></td>
                                     <td class="text-center" colspan="2"></td>
                                     <td class="text-center" colspan="2"></td>
                                 </tr>

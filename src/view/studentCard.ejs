@@ -4,6 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Student Report Card</title>
+    <% // Respect the school's configured number of grading periods (3 or 4).
+       const nq = Number(numQuarters) === 3 ? 3 : 4; %>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
       @page {
@@ -722,7 +724,7 @@
                   <th rowspan="2" class="text-center p-md bg-green-600 w-30">
                     Subjects
                   </th>
-                  <th colspan="4" class="text-center p-md bg-green-600 w-50">
+                  <th colspan="<%= nq %>" class="text-center p-md bg-green-600 w-50">
                     Quarter
                   </th>
                   <th rowspan="2" class="text-center p-md bg-green-600">
@@ -734,10 +736,9 @@
                 </tr>
 
                 <tr>
-                  <th class="text-center p-md bg-green-600">1</th>
-                  <th class="text-center p-md bg-green-600">2</th>
-                  <th class="text-center p-md bg-green-600">3</th>
-                  <th class="text-center p-md bg-green-600">4</th>
+                  <% for (let q = 1; q <= nq; q++) { %>
+                    <th class="text-center p-md bg-green-600"><%= q %></th>
+                  <% } %>
                 </tr>
               </thead>
 
@@ -748,10 +749,9 @@
                 <% subjects.forEach(subject => { %>
                   <tr>
                     <td class="p-md"><%= subject.name%></td>
-                    <td class="text-center p-md"><%= subject.quarters.q1%></td>
-                    <td class="text-center p-md"><%= subject.quarters.q2%></td>
-                    <td class="text-center p-md"><%= subject.quarters.q3%></td>
-                    <td class="text-center p-md"><%= subject.quarters.q4%></td>
+                    <% for (let q = 1; q <= nq; q++) { %>
+                      <td class="text-center p-md"><%= subject.quarters['q' + q] %></td>
+                    <% } %>
                     <td class="text-center p-md"><%= subject.finalGrades %></td>
                     <td class="text-center p-md"><%= subject.remarks %></td>
                   </tr>
@@ -761,10 +761,9 @@
                     <% subject.components.forEach(comp => { %>
                       <tr>
                         <td class="p-md" style="padding-left: 20px; font-style: italic;">└ <%= comp.componentName %></td>
-                        <td class="text-center p-md"><%= comp.q1 != null ? comp.q1 : '' %></td>
-                        <td class="text-center p-md"><%= comp.q2 != null ? comp.q2 : '' %></td>
-                        <td class="text-center p-md"><%= comp.q3 != null ? comp.q3 : '' %></td>
-                        <td class="text-center p-md"><%= comp.q4 != null ? comp.q4 : '' %></td>
+                        <% for (let q = 1; q <= nq; q++) { %>
+                          <td class="text-center p-md"><%= comp['q' + q] != null ? comp['q' + q] : '' %></td>
+                        <% } %>
                         <td class="text-center p-md"></td>
                         <td class="text-center p-md"></td>
                       </tr>
@@ -772,22 +771,18 @@
                   <% } %>
                 <% })%>
                 <tr>
-                  <td class="p-md">ALIVE</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
+                  <td class="p-md">ALIVE</td>                    <% for (let q = 1; q <= nq; q++) { %>
+                      <td class="text-center p-md"></td>
+                    <% } %>
                   <td class="text-center p-md"></td>
                   <td class="text-center p-md"></td>
                 </tr>
 
                 <!--  -->
                 <tr>
-                  <td class="font-bold p-md">General Average</td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
+                  <td class="font-bold p-md">General Average</td>                    <% for (let q = 1; q <= nq; q++) { %>
+                      <td class="text-center p-md"></td>
+                    <% } %>
                   <td class="text-center p-md"><%= generalAverages.score%></td>
                   <td class="text-center p-md"><%= generalAverages.remarks %></td>
                 </tr>
@@ -848,14 +843,13 @@
                   <th class="text-center font-bold" rowspan="2">
                     Behaviour Statement
                   </th>
-                  <th class="text-center w-25" colspan="4">Quarter</th>
+                  <th class="text-center w-25" colspan="<%= nq %>">Quarter</th>
                 </tr>
 
                 <tr>
-                  <th class="text-center">1</th>
-                  <th class="text-center">2</th>
-                  <th class="text-center">3</th>
-                  <th class="text-center">4</th>
+                  <% for (let q = 1; q <= nq; q++) { %>
+                    <th class="text-center"><%= q %></th>
+                  <% } %>
                 </tr>
               </thead>
 
@@ -866,22 +860,18 @@
                   <td class="p-md">
                     Express one spiritual belief while respecting the spiritual
                     belief of others.
-                  </td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
+                  </td>                    <% for (let q = 1; q <= nq; q++) { %>
+                      <td class="text-center p-md"></td>
+                    <% } %>
                 </tr>
 
                 <tr>
                   <td class="p-md">
                     Show adherence to ethical principles by upholding the truth
                     in all understanding
-                  </td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
+                  </td>                    <% for (let q = 1; q <= nq; q++) { %>
+                      <td class="text-center p-md"></td>
+                    <% } %>
                 </tr>
 
                 <!-- 2 -->
@@ -890,21 +880,17 @@
                   <td class="p-md">
                     Is sensitive to individual, social and cultural difference;
                     resists stereotyping people
-                  </td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
+                  </td>                    <% for (let q = 1; q <= nq; q++) { %>
+                      <td class="text-center p-md"></td>
+                    <% } %>
                 </tr>
 
                 <tr>
                   <td class="p-md">
                     Demonstrate contributions toward solidarity
-                  </td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
+                  </td>                    <% for (let q = 1; q <= nq; q++) { %>
+                      <td class="text-center p-md"></td>
+                    <% } %>
                 </tr>
 
                 <!-- 3 -->
@@ -914,10 +900,9 @@
                     Cares for environment and utilize resources wisely,
                     judiciously, and econamically
                   </td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td></td>
+                  <% for (let q = 1; q <= nq; q++) { %>
+                    <td class="text-center p-md"></td>
+                  <% } %>
                 </tr>
 
                 <tr>
@@ -925,21 +910,17 @@
                   <td class="p-md">
                     Demonstrate pride in being a Filipino; exercises the rights
                     and responsibilities if Filipino citizen
-                  </td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
+                  </td>                    <% for (let q = 1; q <= nq; q++) { %>
+                      <td class="text-center p-md"></td>
+                    <% } %>
                 </tr>
                 <tr>
                   <td class="p-md">
                     Demonstrate appropriate behaviour in carrying out activities
                     in the school, community, and country.
-                  </td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
-                  <td class="text-center p-md"></td>
+                  </td>                    <% for (let q = 1; q <= nq; q++) { %>
+                      <td class="text-center p-md"></td>
+                    <% } %>
                 </tr>
               </tbody>
             </table>

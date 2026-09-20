@@ -7,7 +7,7 @@ import { BadRequestError } from "../middleware/errors.js";
 import type { AcademicSettingsUpdateProps } from "../constant/academicSettings.js";
 
 // GET /api/academic-settings
-// Returns the current quarter and enrollment status.
+// Returns the current quarter, numQuarters, and enrollment status.
 export async function getAcademicSettingsController(_req: Request, res: Response, next: NextFunction) {
     try {
         const settings = await getAcademicSettingsService();
@@ -23,10 +23,10 @@ export async function getAcademicSettingsController(_req: Request, res: Response
 }
 
 // PATCH /api/academic-settings
-// Updates currentQuarter (1-4) and/or enrollmentOpen (0/1).
-export async function updateAcademicSettingsController(req: Request<{}, {}, AcademicSettingsUpdateProps>, res: Response, next: NextFunction) {
+// Updates currentQuarter, numQuarters, and/or enrollmentOpen (0/1).
+export async function updateAcademicSettingsController(req: Request<{}, {}, AcademicSettingsUpdateProps & { confirmForce?: boolean }>, res: Response, next: NextFunction) {
     try {
-        const updates = req.body;
+        const { confirmForce, ...updates } = req.body;
 
         if (updates.currentQuarter !== undefined) {
             const quarter = Number(updates.currentQuarter);
@@ -34,6 +34,14 @@ export async function updateAcademicSettingsController(req: Request<{}, {}, Acad
                 throw new BadRequestError("currentQuarter must be an integer between 1 and 4");
             }
             updates.currentQuarter = quarter;
+        }
+
+        if (updates.numQuarters !== undefined) {
+            const num = Number(updates.numQuarters);
+            if (num !== 3 && num !== 4) {
+                throw new BadRequestError("numQuarters must be 3 or 4");
+            }
+            updates.numQuarters = num;
         }
 
         if (updates.enrollmentOpen !== undefined) {
@@ -52,11 +60,23 @@ export async function updateAcademicSettingsController(req: Request<{}, {}, Acad
             updates.submissionsLocked = locked;
         }
 
-        const updated = await updateAcademicSettingsService(updates);
+        const result = await updateAcademicSettingsService(updates, confirmForce);
+
+        // If there's a Q4 data warning, return it so the frontend can show a confirmation dialog
+        if (result.quarter4Warning) {
+            res.status(200).json(
+                SuccessResponse({
+                    message: "Quarter 4 contains existing data",
+                    data: { ...result.settings, quarter4Warning: result.quarter4Warning.counts }
+                })
+            );
+            return;
+        }
+
         res.status(200).json(
             SuccessResponse({
                 message: "Academic settings updated successfully",
-                data: updated
+                data: result.settings
             })
         );
     } catch (err) {

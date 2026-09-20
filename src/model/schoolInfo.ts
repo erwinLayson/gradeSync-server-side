@@ -25,6 +25,27 @@ export default class SchoolInfo {
         }
     }
 
+    // Return the single school-info row, seeding a placeholder row when the
+    // table is empty. The migration seeds this table only on CREATE TABLE (and
+    // dev seed.ts), so an emptied table (e.g. after a settings wipe) would
+    // otherwise leave every admin settings save stuck on a 404 forever. The
+    // placeholder satisfies the NOT NULL columns; the admin's next save
+    // replaces it with the real values.
+    async ensureSchoolInfo(): Promise<SchoolInfoProps> {
+        const existing = await this.getSchoolInfo();
+        if (existing) return existing;
+
+        await this.connection.execute<ResultSetHeader>(
+            "INSERT INTO school_info(schoolId, name, district, division, region) VALUES(0, '', '', '', '')"
+        );
+
+        const seeded = await this.getSchoolInfo();
+        if (!seeded) {
+            throw new InternalServerError("Failed to create the school information row", 500);
+        }
+        return seeded;
+    }
+
     // Update the editable fields of the school information row.
     async updateSchoolInfo(id: number, updates: SchoolInfoUpdateProps): Promise<void> {
         const updateFields: string[] = [];

@@ -16,6 +16,7 @@ import { computeClassGradeMatrix } from "../helper/computeClassGradeMatrix.js";
 import { resolveSubmitter } from "../helper/resolveSubmitter.js";
 import { calculateFinalGrade } from "../helper/calculateFinalGrade.js";
 import { getRemarks } from "../helper/getRemarks.js";
+import { getNumQuarters } from "./academicSettings.js";
 
 import type { PoolConnection } from "mysql2/promise";
 import { ConflictError, ForbiddenError, NotFoundError } from "../middleware/errors.js";
@@ -523,6 +524,9 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
         const student = await getStudentByIdService(studentId, connection);
 
         const studentRecordModel = new StudentRecordModel(connection);
+        // Respect the admin-configured number of grading periods: quarters
+        // beyond it are excluded from final ratings and hidden in the PDF.
+        const numQuarters = await getNumQuarters();
 
         const studentEnrollmentRecord = await getAllEnrollmentRecordByStudentId(studentId, connection);
         const enrollmentIds = studentEnrollmentRecord.map((e) => e.enrollmentId);
@@ -538,7 +542,7 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
                 q2: row.q2 != null ? String(row.q2) : null,
                 q3: row.q3 != null ? String(row.q3) : null,
                 q4: row.q4 != null ? String(row.q4) : null,
-            });
+            }, numQuarters);
             const remarks = finalRating === null ? "" : getRemarks(finalRating);
 
             const list = subjectsByRecord.get(row.recordId) ?? [];
@@ -582,7 +586,7 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
         const sem1 = academicRecord.slice(0, 2);
         const sem2 = academicRecord.slice(2);
 
-        return { student, academicRecord: {semester1: sem1, semester2: sem2} };
+        return { student, academicRecord: {semester1: sem1, semester2: sem2}, numQuarters };
     } finally {
         connection.release();
     }

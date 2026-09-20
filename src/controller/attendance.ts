@@ -5,6 +5,8 @@ import {
     getAttendanceHistoryService,
     saveAttendanceByClassSubjectAndDateService,
 } from "../service/studentAttendance.js";
+import { getAcademicSettingsService } from "../service/academicSettings.js";
+import { isValidQuarter } from "../helper/quarterValidation.js";
 
 import type { AttendanceInput } from "../constant/grade.js";
 
@@ -68,14 +70,16 @@ export async function getAttendanceHistoryController(
             );
         }
 
-        // Optional quarter filter (1-4). Absent/empty = all quarters.
+        // Optional quarter filter (1-numQuarters). Absent/empty = all quarters.
         const quarterRaw = req.query.quarter;
         let parsedQuarter: number | undefined;
         if (quarterRaw !== undefined && quarterRaw !== "") {
             parsedQuarter = Number(quarterRaw);
-            if (Number.isNaN(parsedQuarter) || parsedQuarter < 1 || parsedQuarter > 4) {
+            const settings = await getAcademicSettingsService();
+            const numQuarters = settings?.numQuarters ?? 4;
+            if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
                 throw new BadRequestError(
-                    "quarter query parameter must be a number between 1 and 4"
+                    `quarter query parameter must be a number between 1 and ${numQuarters}`
                 );
             }
         }
@@ -133,8 +137,10 @@ export async function saveAttendanceController(
             throw new BadRequestError("date is required (YYYY-MM-DD)");
         }
         const parsedQuarter = Number(quarter);
-        if (Number.isNaN(parsedQuarter) || parsedQuarter < 1 || parsedQuarter > 4) {
-            throw new BadRequestError("quarter is required and must be a number between 1 and 4");
+        const settings = await getAcademicSettingsService();
+        const numQuarters = settings?.numQuarters ?? 4;
+        if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
+            throw new BadRequestError(`quarter is required and must be a number between 1 and ${numQuarters}`);
         }
         if (!Array.isArray(entries)) {
             throw new BadRequestError("entries must be an array of { enrollmentId, status }");

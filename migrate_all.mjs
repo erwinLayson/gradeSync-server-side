@@ -1176,6 +1176,37 @@ try {
     console.log(`  Seeded/updated ${loginSwitches.length} role login switch(es) — enabled state preserved.`);
   });
 
+  // ---- 20. academic_settings: add numQuarters column -----------------------
+  // Allows the school admin to configure 3 or 4 grading quarters.
+  await step("20/20 — add numQuarters column to academic_settings", async () => {
+    const hasCol = await columnExists("academic_settings", "numQuarters");
+    if (!hasCol) {
+      await conn.query(
+        `ALTER TABLE \`academic_settings\`
+         ADD COLUMN \`numQuarters\` tinyint(1) NOT NULL DEFAULT 4 AFTER \`submissionsLocked\``
+      );
+      console.log("  Added numQuarters column (DEFAULT 4).");
+    } else {
+      console.log("  numQuarters column already exists — skipping.");
+    }
+
+    // Add CHECK constraint if missing
+    const [chkRows] = await conn.query(
+      `SELECT COUNT(*) AS cnt FROM information_schema.TABLE_CONSTRAINTS
+       WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'academic_settings'
+         AND CONSTRAINT_NAME = 'chk_num_quarters' AND CONSTRAINT_TYPE = 'CHECK'`
+    );
+    if (Number(chkRows[0].cnt) === 0) {
+      await conn.query(
+        `ALTER TABLE \`academic_settings\`
+         ADD CONSTRAINT \`chk_num_quarters\` CHECK (\`numQuarters\` IN (3, 4))`
+      );
+      console.log("  Added chk_num_quarters CHECK constraint.");
+    } else {
+      console.log("  chk_num_quarters CHECK constraint already exists — skipping.");
+    }
+  });
+
   console.log("\nALL MIGRATIONS COMPLETE.");
   console.log("Backup tables kept (drop once you are satisfied):");
   console.log("  - student_attendance_backup");

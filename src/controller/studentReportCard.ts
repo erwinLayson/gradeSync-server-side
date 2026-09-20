@@ -13,10 +13,10 @@ export async function studentReportCardController(req: Request<{enrollmentId: nu
     }
 
     try {
-        const {students, schoolInfo, subjects, generalAverages, attendance} = await getStudentReportCardService(enrollmentId)
+        const {students, schoolInfo, subjects, generalAverages, attendance, numQuarters} = await getStudentReportCardService(enrollmentId)
 
         console.log(attendance)
-        const html = HTMLRenderer("studentCard.ejs", {student: students, schoolInfo, subjects, generalAverages, attendance});
+        const html = HTMLRenderer("studentCard.ejs", {student: students, schoolInfo, subjects, generalAverages, attendance, numQuarters});
         const pdfFormat = {
             width: '8.5in',
             height: '13in',

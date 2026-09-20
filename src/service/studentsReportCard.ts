@@ -4,6 +4,7 @@ import { NotFoundError } from "../middleware/errors.js";
 
 // ============= Services ===========
 import { getSchoolInfoService } from "./schoolInfo.js";
+import { getNumQuarters } from "./academicSettings.js";
 
 // ============= Helpers ===========
 import { buildSubjectList } from "../helper/buildSubjectList.js";
@@ -29,7 +30,11 @@ export async function getStudentReportCardService(enrollmentId: number) {
             throw new NotFoundError("Student Not Found", 404);
         }
 
-        const subjects = buildSubjectList(quarterlyGrades, componentGradesBySubject);
+        // Respect the admin-configured number of grading periods: quarters
+        // beyond it are excluded from final grades and hidden in the PDF.
+        const numQuarters = await getNumQuarters();
+
+        const subjects = buildSubjectList(quarterlyGrades, componentGradesBySubject, numQuarters);
         const generalAverages = computeGeneralAverage(subjects);
 
         return {
@@ -38,6 +43,7 @@ export async function getStudentReportCardService(enrollmentId: number) {
             subjects,
             generalAverages,
             attendance,
+            numQuarters,
         };
     } finally {
         connection.release();

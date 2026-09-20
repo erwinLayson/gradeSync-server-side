@@ -1,7 +1,7 @@
 import type { PoolConnection } from "mysql2/promise";
 
 import { getDBPoolConnection } from "../config/database.js";
-import { NotFoundError } from "../middleware/errors.js";
+import { InternalServerError } from "../middleware/errors.js";
 
 import SchoolInfoModel from "../model/schoolInfo.js";
 
@@ -27,16 +27,16 @@ export async function updateSchoolInfoService(updates: SchoolInfoUpdateProps): P
     const connection = await pool.getConnection();
     try {
         const schoolInfoModel = new SchoolInfoModel(connection);
-        const existing = await schoolInfoModel.getSchoolInfo();
-        if (!existing) {
-            throw new NotFoundError("School information not found", 404);
-        }
+        // Self-heal: seed a placeholder row when the table is empty (e.g. after
+        // a settings wipe) instead of failing every save with 404; the admin's
+        // submitted values are applied right after.
+        const existing = await schoolInfoModel.ensureSchoolInfo();
 
         await schoolInfoModel.updateSchoolInfo(existing.id, updates);
 
         const updated = await schoolInfoModel.getSchoolInfo();
         if (!updated) {
-            throw new NotFoundError("School information not found after update", 404);
+            throw new InternalServerError("School information not found after update", 500);
         }
         return updated;
     } finally {

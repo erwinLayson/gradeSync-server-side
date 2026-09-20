@@ -23,6 +23,7 @@ export interface DashboardAcademicProgress {
 export interface DashboardSummary {
     schoolYear: DashboardSchoolYear | null;
     academicQuarter: number;
+    numQuarters: number;
     enrollmentOpen: boolean;
     students: number;
     teachers: number;

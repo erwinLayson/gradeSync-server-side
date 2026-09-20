@@ -25,6 +25,26 @@ export default class GradingWeightDefaults {
         }
     }
 
+    // Return the single defaults row, seeding the DepEd DO 8 s. 2015 default
+    // weights (20/60/20/0 — same values as migrate_all.mjs) when the table is
+    // empty. The migration seeds only on CREATE TABLE, so an emptied table
+    // (e.g. after a settings wipe) would otherwise wedge the weights form on
+    // a 404 forever.
+    async ensureDefaults(): Promise<GradingWeightDefaultsProps> {
+        const existing = await this.getDefaults();
+        if (existing) return existing;
+
+        await this.connection.execute<ResultSetHeader>(
+            "INSERT INTO grading_weight_defaults(writtenWorkWeight, performanceTaskWeight, quarterlyAssessmentWeight, attendanceWeight) VALUES(20.00, 60.00, 20.00, 0.00)"
+        );
+
+        const seeded = await this.getDefaults();
+        if (!seeded) {
+            throw new InternalServerError("Failed to create the default grading weights row", 500);
+        }
+        return seeded;
+    }
+
     // Update the editable weight columns of the defaults row.
     async updateDefaults(id: number, updates: GradingWeightDefaultsUpdateProps): Promise<void> {
         const updateFields: string[] = [];

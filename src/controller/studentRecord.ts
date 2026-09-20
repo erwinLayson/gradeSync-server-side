@@ -11,8 +11,10 @@ import {
 } from "../service/studentRecord.js";
 
 import { getSchoolInfoService } from "../service/schoolInfo.js";
+import { getAcademicSettingsService } from "../service/academicSettings.js";
 import { SuccessResponse } from "../helper/response.js";
 import { BadRequestError } from "../middleware/errors.js";
+import { isValidQuarter } from "../helper/quarterValidation.js";
 import { ROLES } from "../constant/users.js";
 import { HTMLRenderer } from "../helper/HTMLRenderer.js";
 import { pdfFormatter } from "../helper/pdfFormater.js";
@@ -27,10 +29,12 @@ function parseIdParam(value: string, name: string): number {
     return id;
 }
 
-function parseQuarterParam(value: unknown): number {
+async function parseQuarterParam(value: unknown): Promise<number> {
     const quarter = Number(value);
-    if (!Number.isInteger(quarter) || quarter < 1 || quarter > 4) {
-        throw new BadRequestError("quarter must be an integer between 1 and 4");
+    const settings = await getAcademicSettingsService();
+    const numQuarters = settings?.numQuarters ?? 4;
+    if (!isValidQuarter(quarter, numQuarters)) {
+        throw new BadRequestError(`quarter must be an integer between 1 and ${numQuarters}`);
     }
     return quarter;
 }
@@ -47,7 +51,7 @@ async function resolveActorTeacherId(req: Request): Promise<number | null> {
 
 export async function getMyClassRecordsController(req: Request, res: Response, next: NextFunction) {
     try {
-        const quarter = parseQuarterParam(req.query.quarter ?? 1);
+        const quarter = await parseQuarterParam(req.query.quarter ?? 1);
         const teacherId = await resolveActorTeacherId(req);
         const classId = await getAdvisedClassIdService(teacherId!);
 
@@ -76,7 +80,7 @@ export async function getMyClassRecordsController(req: Request, res: Response, n
 export async function getClassRecordsController(req: Request<{ classId: string }>, res: Response, next: NextFunction) {
     try {
         const classId = parseIdParam(req.params.classId, "classId");
-        const quarter = parseQuarterParam(req.query.quarter ?? 1);
+        const quarter = await parseQuarterParam(req.query.quarter ?? 1);
         const teacherId = await resolveActorTeacherId(req);
         const result = await getClassRecordsService(classId, quarter, teacherId);
         return res.status(200).json(
@@ -100,7 +104,7 @@ export async function submitStudentRecordController(
     try {
         const classId = parseIdParam(req.params.classId, "classId");
         const enrollmentId = parseIdParam(req.params.enrollmentId, "enrollmentId");
-        const quarter = parseQuarterParam(req.params.quarter);
+        const quarter = await parseQuarterParam(req.params.quarter);
         const teacherId = await resolveActorTeacherId(req);
         const result = await submitStudentRecordService(classId, enrollmentId, quarter, teacherId);
         return res.status(200).json(
@@ -123,7 +127,7 @@ export async function submitAllStudentRecordsController(
 ) {
     try {
         const classId = parseIdParam(req.params.classId, "classId");
-        const quarter = parseQuarterParam(req.params.quarter);
+        const quarter = await parseQuarterParam(req.params.quarter);
         const teacherId = await resolveActorTeacherId(req);
         const result = await submitAllStudentRecordsService(classId, quarter, teacherId);
         return res.status(200).json(
@@ -147,7 +151,7 @@ export async function reopenStudentRecordController(
     try {
         const classId = parseIdParam(req.params.classId, "classId");
         const enrollmentId = parseIdParam(req.params.enrollmentId, "enrollmentId");
-        const quarter = parseQuarterParam(req.params.quarter);
+        const quarter = await parseQuarterParam(req.params.quarter);
         const teacherId = await resolveActorTeacherId(req);
         const result = await reopenStudentRecordService(classId, enrollmentId, quarter, teacherId);
         return res.status(200).json(
@@ -184,7 +188,7 @@ export async function getSubmissionSummaryController(req: Request, res: Response
 export async function studentRecordController(req: Request<{ id: string }>, res: Response, next: NextFunction) {
     try {
         const {id} = req.params;
-        const { student, academicRecord } = await StudentRecordPDFDetailsService(Number(id));
+        const { student, academicRecord, numQuarters } = await StudentRecordPDFDetailsService(Number(id));
         const schoolInfo = await getSchoolInfoService();
 
         //  ===================== School Year Data ======================
@@ -213,7 +217,8 @@ export async function studentRecordController(req: Request<{ id: string }>, res:
                 semester2
             }, 
             schoolInfo, 
-            certification 
+            certification,
+            numQuarters 
         }
 
         // ==================  PDF FORMAT ==================

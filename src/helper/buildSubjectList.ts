@@ -13,10 +13,12 @@ interface QuarterlyGradeRow {
 /**
  * Builds a list of Subjects from quarterly grade rows and optional
  * sub-component grades (e.g., Music, Arts, PE, Health under MAPEH).
+ * `numQuarters` (default 4) limits which quarters feed the final grade.
  */
 export function buildSubjectList(
     quarterlyGrades: QuarterlyGradeRow[],
-    componentGradesBySubject: Map<string, ComponentGradeRow[]>
+    componentGradesBySubject: Map<string, ComponentGradeRow[]>,
+    numQuarters: number = 4
 ): Subjects[] {
     const subjectMap = new Map<string, Subjects>();
 
@@ -26,7 +28,7 @@ export function buildSubjectList(
             q2: quarterlyGrade.q2 != null ? String(quarterlyGrade.q2) : null,
             q3: quarterlyGrade.q3 != null ? String(quarterlyGrade.q3) : null,
             q4: quarterlyGrade.q4 != null ? String(quarterlyGrade.q4) : null,
-        });
+        }, numQuarters);
 
         subjectMap.set(quarterlyGrade.subjectName, {
             name: quarterlyGrade.subjectName,
