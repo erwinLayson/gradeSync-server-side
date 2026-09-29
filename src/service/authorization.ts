@@ -79,6 +79,56 @@ export async function assertTeacherOwnsClassSubject(
     }
 }
 
+// Assert the actor may READ a class subject's gradebook.
+//
+// This is deliberately looser than assertTeacherOwnsClassSubject (which guards
+// every mutation): a class ADVISER may read the gradebook of any subject in the
+// class they advise, because the adviser's My Class > Graded view summarises the
+// whole class across all subjects — and the same figures are already exposed to
+// advisers through the class-records endpoint (assertAdviserOfClass).
+//   - admin / developer: any class subject (privileged).
+//   - teacher: the subject's assigned teacher, or the adviser of its class.
+// Writes are unaffected: they still go through assertTeacherOwnsClassSubject /
+// assertTeacherOwnsAssessment, so an adviser who does not teach the subject can
+// read its grades but never record or change them.
+export async function assertTeacherCanReadClassSubject(
+    teacherId: number | null,
+    classSubjectId: number,
+): Promise<void> {
+    if (teacherId === null) {
+        return;
+    }
+
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const [rows] = await connection.execute<RowDataPacket[]>(
+            "SELECT teacherId, classId FROM class_subjects WHERE id = ? LIMIT 1",
+            [classSubjectId],
+        );
+        const row = rows[0];
+        if (!row) {
+            throw new NotFoundError(`Class subject ${classSubjectId} not found`, 404);
+        }
+        if (Number(row.teacherId) === teacherId) {
+            return;
+        }
+
+        const [adviserRows] = await connection.execute<RowDataPacket[]>(
+            "SELECT teacherId FROM class_teacher WHERE classId = ? LIMIT 1",
+            [Number(row.classId)],
+        );
+        const adviserRow = adviserRows[0];
+        if (adviserRow && Number(adviserRow.teacherId) === teacherId) {
+            return;
+        }
+
+        throw new ForbiddenError("You are not assigned to this class subject");
+    } finally {
+        connection.release();
+    }
+}
+
 // Resolve an assessment to its class_subject and apply the ownership rule,
 // so the assessment endpoints share the exact same policy as the gradebook.
 export async function assertTeacherOwnsAssessment(
