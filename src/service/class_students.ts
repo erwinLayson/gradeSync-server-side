@@ -4,6 +4,7 @@ import { NotFoundError } from "../middleware/errors.js";
 
 
 import {getStudentByClassroomIdService} from "./students.js"
+import { formatDate } from "../helper/formatDate.js"
 
 export async function getClassStudentsByClassIdService(classId: number) {
     const pool = getDBPoolConnection();
@@ -18,7 +19,8 @@ export async function getClassStudentsByClassIdService(classId: number) {
             ...classrooms,
             students: students.map(s => ({
                 ...s,
-                studentBirthdate: new Intl.DateTimeFormat('en-US', { year: 'numeric', month: 'long', day: '2-digit' }).format(new Date(s.studentBirthdate))
+                // Shared, timezone-safe formatter (was new Date(...) here too).
+                studentBirthdate: formatDate(s.studentBirthdate)
             }))
         }
 

@@ -109,7 +109,7 @@ export async function getAllStudentService(){
             lastname: s.lastname,
             suffix: s.suffix,
             fullname: s.fullname,
-            birthdate: new Date(s.birthdate).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "2-digit" }),
+            birthdate: formatDate(s.birthdate),
             age: s.age,
             sex: s.sex,
             status: s.status
@@ -125,10 +125,9 @@ export async function getStudentByClassroomIdService(id: number, existingConnect
     const connection = existingConnection ?? await pool.getConnection();
     const ownConnection = !existingConnection;
     try {
-        if(ownConnection) {
-            await connection.beginTransaction();
-        }
-
+        // Read-only query: no transaction. This previously called
+        // beginTransaction() with no matching commit/rollback, so the pooled
+        // connection was released while still inside an open transaction.
         const studentModel = new StudentModel(connection);
         const students = await studentModel.getStudentByClassroomId(id);
 

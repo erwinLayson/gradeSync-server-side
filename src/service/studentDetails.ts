@@ -7,15 +7,26 @@ import { NotFoundError } from "../middleware/errors.js";
 
 import type { StudentDetailsUpdateProps } from "../constant/studentDetails.js";
 
-function formatBirthdate(raw: unknown): string {
+function formatBirthdate(raw: unknown): string | null {
+    // students.birthdate is nullable. Guard before any String() coercion, otherwise a
+    // NULL column serializes as the literal text "null", which is not a date.
+    if (raw === null || raw === undefined) {
+        return null;
+    }
+
     if (raw instanceof Date) {
+        if (Number.isNaN(raw.getTime())) {
+            return null;
+        }
         return [
             raw.getFullYear(),
             String(raw.getMonth() + 1).padStart(2, "0"),
             String(raw.getDate()).padStart(2, "0")
         ].join("-");
     }
-    return String(raw).slice(0, 10);
+
+    const value = String(raw).slice(0, 10);
+    return value === "" ? null : value;
 }
 
 function serializeStudentRow(row: any) {
