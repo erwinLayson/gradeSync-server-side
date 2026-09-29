@@ -1,6 +1,8 @@
 import Dashboard from "../model/dashboard.js";
 import { getDBPoolConnection } from "../config/database.js";
 
+import { getQuarterGradeAggregates } from "./gradeAggregates.js";
+
 import type { DashboardSummary } from "../constant/dashboard.js";
 
 export async function getDashboardSummaryService(): Promise<DashboardSummary> {
@@ -17,11 +19,9 @@ export async function getDashboardSummaryService(): Promise<DashboardSummary> {
             students,
             teachers,
             classrooms,
-            averageGrade,
             attendanceToday,
             newStudentsThisWeek,
             enrollmentCount,
-            gradedEnrollments,
         ] = await Promise.all([
             connection.execute("SELECT currentQuarter, numQuarters, enrollmentOpen FROM academic_settings LIMIT 1")
                 .then(([rows]) => {
@@ -33,14 +33,17 @@ export async function getDashboardSummaryService(): Promise<DashboardSummary> {
             model.getStudentCount(schoolYearId),
             model.getTeacherCount(),
             model.getClassroomCount(),
-            model.getAverageGrade(schoolYearId),
             model.getAttendanceToday(schoolYearId),
             model.getNewStudentsThisWeek(schoolYearId),
             model.getEnrollmentCount(schoolYearId),
-            model.getGradedEnrollments(schoolYearId),
         ]);
 
         const quarter = academicSettingsResult.currentQuarter;
+
+        // The average grade and the graded-enrollment count are REAL grades for
+        // the current quarter, produced by the central grading engine (the same
+        // one the gradebook, records and report cards use).
+        const gradeAggregates = await getQuarterGradeAggregates(schoolYearId, quarter);
 
         const [attentionItems, gradeSubmissionProgress] = await Promise.all([
             schoolYearId
@@ -59,10 +62,10 @@ export async function getDashboardSummaryService(): Promise<DashboardSummary> {
             students,
             teachers,
             classrooms,
-            averageGrade,
+            averageGrade: gradeAggregates.averageGrade,
             attendanceToday,
             newStudentsThisWeek,
-            gradedEnrollments,
+            gradedEnrollments: gradeAggregates.gradedEnrollments,
             enrollmentCount,
             attentionItems,
             academicProgress: {

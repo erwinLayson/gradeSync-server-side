@@ -16,6 +16,9 @@ import {
 import type { AssessmentCreateProps, AssessmentType, AssessmentUpdateProps } from "../constant/assessment.js";
 import type { StudentScoreInput } from "../constant/grade.js";
 
+import { getNumQuarters } from "../service/academicSettings.js";
+import { isValidQuarter } from "../helper/quarterValidation.js";
+
 import { SuccessResponse } from "../helper/response.js";
 import Validate from "../helper/validate.js";
 import { BadRequestError } from "../middleware/errors.js";
@@ -38,8 +41,11 @@ export async function createAssessmentController(
         if (Number.isNaN(parsedClassSubjectId)) {
             throw new BadRequestError("Class subject id must be a valid number");
         }
-        if (Number.isNaN(parsedQuarter) || parsedQuarter < 1 || parsedQuarter > 4) {
-            throw new BadRequestError("Quarter must be a number between 1 and 4");
+        // Quarters are validated against the configured grading periods (3 or 4),
+        // exactly like the attendance and student-record endpoints.
+        const numQuarters = await getNumQuarters();
+        if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
+            throw new BadRequestError(`Quarter must be a number between 1 and ${numQuarters}`);
         }
         if (!isValidAssessmentType(type)) {
             throw new BadRequestError("Type must be written_work, performance_task, or quarterly_assessment");
@@ -86,8 +92,11 @@ export async function getAssessmentsController(req: Request, res: Response, next
         }
 
         const parsedQuarter = quarterQuery !== undefined && quarterQuery !== "" ? Number(quarterQuery) : undefined;
-        if (parsedQuarter !== undefined && (Number.isNaN(parsedQuarter) || parsedQuarter < 1 || parsedQuarter > 4)) {
-            throw new BadRequestError("Quarter must be a number between 1 and 4");
+        if (parsedQuarter !== undefined) {
+            const numQuarters = await getNumQuarters();
+            if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
+                throw new BadRequestError(`Quarter must be a number between 1 and ${numQuarters}`);
+            }
         }
 
         // Ownership: only the assigned teacher (or an admin) may read the

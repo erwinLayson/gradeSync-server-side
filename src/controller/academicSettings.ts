@@ -5,6 +5,7 @@ import { SuccessResponse } from "../helper/response.js";
 import { BadRequestError } from "../middleware/errors.js";
 
 import type { AcademicSettingsUpdateProps } from "../constant/academicSettings.js";
+import { isValidQuarter, MAX_QUARTERS } from "../helper/quarterValidation.js";
 
 // GET /api/academic-settings
 // Returns the current quarter, numQuarters, and enrollment status.
@@ -30,8 +31,9 @@ export async function updateAcademicSettingsController(req: Request<{}, {}, Acad
 
         if (updates.currentQuarter !== undefined) {
             const quarter = Number(updates.currentQuarter);
-            if (!Number.isInteger(quarter) || quarter < 1 || quarter > 4) {
-                throw new BadRequestError("currentQuarter must be an integer between 1 and 4");
+            // Shared quarter rule (helper/quarterValidation.ts).
+            if (!isValidQuarter(quarter, MAX_QUARTERS)) {
+                throw new BadRequestError(`currentQuarter must be an integer between 1 and ${MAX_QUARTERS}`);
             }
             updates.currentQuarter = quarter;
         }

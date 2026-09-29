@@ -27,6 +27,12 @@ export async function getNumQuarters(): Promise<number> {
     return settings?.numQuarters ?? 4;
 }
 
+/** Convenience helper — returns the configured current quarter (default 1). */
+export async function getCurrentQuarter(): Promise<number> {
+    const settings = await getAcademicSettingsService();
+    return settings?.currentQuarter ?? 1;
+}
+
 /** Check whether any Quarter 4 data exists in the system. */
 export async function checkQuarter4DataExists(): Promise<{
     hasQuarter4Data: boolean;

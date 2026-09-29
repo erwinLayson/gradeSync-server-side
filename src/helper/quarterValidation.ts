@@ -1,3 +1,6 @@
+/** The largest number of grading periods the system supports. */
+export const MAX_QUARTERS = 4;
+
 /**
  * Validates that a quarter number is within the allowed range for the school's
  * configured number of grading periods.

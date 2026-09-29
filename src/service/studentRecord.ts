@@ -13,8 +13,10 @@ import {getAllEnrollmentRecordByStudentId} from "./enrollments.js";
 
 // Helpers
 import { computeClassGradeMatrix } from "../helper/computeClassGradeMatrix.js";
+import type { ComputedSubjectGrade } from "../helper/computeClassGradeMatrix.js";
 import { resolveSubmitter } from "../helper/resolveSubmitter.js";
 import { calculateFinalGrade } from "../helper/calculateFinalGrade.js";
+import { computeGeneralAverage } from "../helper/computeGeneralAverage.js";
 import { getRemarks } from "../helper/getRemarks.js";
 import { getNumQuarters } from "./academicSettings.js";
 
@@ -79,12 +81,15 @@ async function computeStudentGrades(
     subjects: ClassRecordSubject[],
     enrollmentId: number,
     quarter: number
-): Promise<Map<number, number | null>> {
-    const bySubject = new Map<number, number | null>();
+): Promise<Map<number, ComputedSubjectGrade>> {
+    const bySubject = new Map<number, ComputedSubjectGrade>();
     for (const subject of subjects) {
         const gradebook = await getGradeBookDetailsByClassSubjectIdService(subject.classSubjectId, quarter);
         const row = gradebook.student.find((s) => s.enrollmentId === enrollmentId);
-        bySubject.set(subject.subjectId, row?.quarterGrade ?? null);
+        bySubject.set(subject.subjectId, {
+            grade: row?.quarterGrade ?? null,
+            componentGrades: row?.componentGrades ?? []
+        });
     }
     return bySubject;
 }
@@ -110,12 +115,12 @@ async function freezeRecordWithin(
     classSection: string,
     classGradeLevel: number,
     subjects: ClassRecordSubject[],
-    computed: Map<number, number | null>
+    computed: Map<number, ComputedSubjectGrade>
 ): Promise<void> {
     const recordModel = new StudentRecordModel(connection);
 
     const enrolledSubjectIds = await getEnrolledSubjectIds(recordModel, subjects, enrollmentId);
-    const missingSubjectIds = enrolledSubjectIds.filter((subjectId) => computed.get(subjectId) == null);
+    const missingSubjectIds = enrolledSubjectIds.filter((subjectId) => computed.get(subjectId)?.grade == null);
     if (missingSubjectIds.length > 0) {
         const names = subjects.filter((s) => missingSubjectIds.includes(s.subjectId)).map((s) => s.subjectName);
         throw new ConflictError(`Record cannot be submitted: no grade yet for ${names.join(", ")}`);
@@ -139,15 +144,39 @@ async function freezeRecordWithin(
     }
 
     for (const subjectId of enrolledSubjectIds) {
-        const grade = computed.get(subjectId);
-        if (grade === null || grade === undefined) {
+        const computedSubject = computed.get(subjectId);
+        if (!computedSubject || computedSubject.grade === null) {
             continue;
         }
         const subject = subjects.find((s) => s.subjectId === subjectId);
         if (!subject) {
             continue;
         }
-        await recordModel.upsertSubjectQuarterGrade(record.id, subject.subjectName, subject.subjectCode, quarter, grade);
+        await recordModel.upsertSubjectQuarterGrade(record.id, subject.subjectName, subject.subjectCode, quarter, computedSubject.grade);
+
+        // Composite subjects (e.g. MAPEH): freeze each component's grade for this
+        // quarter as well, so the report card's sub-component rows have official
+        // data to read (student_academic_record_components).
+        if (computedSubject.componentGrades.length === 0) {
+            continue;
+        }
+        const subjectRowId = await recordModel.getSubjectRowId(record.id, subject.subjectName);
+        if (subjectRowId === null) {
+            continue;
+        }
+        for (const componentGrade of computedSubject.componentGrades) {
+            if (componentGrade.grade === null) {
+                continue;
+            }
+            await recordModel.upsertSubjectComponentQuarterGrade(
+                subjectRowId,
+                componentGrade.componentId,
+                componentGrade.componentName,
+                componentGrade.componentCode,
+                quarter,
+                componentGrade.grade
+            );
+        }
     }
 
     await recordModel.upsertQuarterSubmission(record.id, quarter, submittedBy);
@@ -237,7 +266,7 @@ export async function getClassRecordsService(classId: number, quarter: number, t
                     grade = frozen === undefined ? null : frozen;
                     source = "frozen";
                 } else {
-                    grade = computedMatrix.get(student.enrollmentId)?.get(subject.subjectId) ?? null;
+                    grade = computedMatrix.get(student.enrollmentId)?.get(subject.subjectId)?.grade ?? null;
                 }
                 return { subjectId: subject.subjectId, enrolled, grade, source };
             });
@@ -383,7 +412,7 @@ export async function submitAllStudentRecordsService(classId: number, quarter: n
                     if (err instanceof ConflictError) {
                         const enrolledSubjectIds = await getEnrolledSubjectIds(recordModel, subjects, student.enrollmentId);
                         const missingSubjects = enrolledSubjectIds
-                            .filter((subjectId) => computed.get(subjectId) == null)
+                            .filter((subjectId) => computed.get(subjectId)?.grade == null)
                             .map((subjectId) => subjects.find((s) => s.subjectId === subjectId)?.subjectName ?? `Subject #${subjectId}`);
                         blocked.push({ enrollmentId: student.enrollmentId, fullname: student.fullname, missingSubjects });
                     } else {
@@ -564,12 +593,11 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
         const academicRecord: StudentRecordPdfEntry[] = studentEnrollmentRecord.map((enrollment) => {
             const record = recordByEnrollment.get(enrollment.enrollmentId);
             const subjects = record ? (subjectsByRecord.get(record.id) ?? []) : [];
-            const finalRating = subjects.map(sub => sub.finalRating);
-            const validRatings = finalRating.filter((rating): rating is number => rating !== null);
-
-            const generalAverage = validRatings.length > 0
-                ? Number((validRatings.reduce((sum, score) => sum + score, 0) / validRatings.length).toFixed(2))
-                : 0;
+            // Same helper as the SF9 report card, so an ungraded year is null
+            // (rendered blank by the template) instead of a misleading 0.
+            const generalAverage = computeGeneralAverage(
+                subjects.map((subject) => ({ finalGrades: subject.finalRating }))
+            ).score;
 
             return {
                 enrollmentId: enrollment.enrollmentId,

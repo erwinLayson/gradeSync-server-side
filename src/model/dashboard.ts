@@ -56,25 +56,10 @@ export default class Dashboard {
         }
     }
 
-    async getAverageGrade(schoolYearId?: number): Promise<number | null> {
-        try {
-            const query = `
-                SELECT ROUND(AVG((ss.score / a.maxScore) * 100), 2) AS average
-                FROM student_scores ss
-                JOIN assessments a ON a.id = ss.assessmentId
-                ${schoolYearId !== undefined
-                    ? "JOIN enrollments e ON e.id = ss.enrollmentId AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed')"
-                    : ""}
-            `;
-            const params = schoolYearId !== undefined ? [schoolYearId] : [];
-            const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
-            const average = rows[0]?.average;
-            return average === null || average === undefined ? null : Number(average);
-        } catch (err) {
-            throw new InternalServerError("Failed to fetch average grade", 500, err);
-        }
-    }
-
+    // NOTE: the average grade and the graded-enrollment count are NOT computed
+    // here — they come from the central grading engine via
+    // service/gradeAggregates.ts. Do not reintroduce a SQL average: it ignores
+    // assessment type weights, the attendance weight and component weights.
     async getAttendanceToday(schoolYearId?: number): Promise<{ total: number; present: number; rate: number | null }> {
         try {
             const query = `
@@ -133,23 +118,6 @@ export default class Dashboard {
             return Number(rows[0]?.count ?? 0);
         } catch (err) {
             throw new InternalServerError("Failed to fetch enrollment count", 500, err);
-        }
-    }
-
-    async getGradedEnrollments(schoolYearId?: number): Promise<number> {
-        try {
-            const query = `
-                SELECT COUNT(DISTINCT ss.enrollmentId) AS count
-                FROM student_scores ss
-                JOIN assessments a ON a.id = ss.assessmentId
-                JOIN enrollments e ON e.id = ss.enrollmentId AND e.status IN ('enrolled', 'completed')
-                ${schoolYearId !== undefined ? "WHERE e.schoolYearId = ?" : ""}
-            `;
-            const params = schoolYearId !== undefined ? [schoolYearId] : [];
-            const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
-            return Number(rows[0]?.count ?? 0);
-        } catch (err) {
-            throw new InternalServerError("Failed to fetch graded enrollments", 500, err);
         }
     }
 

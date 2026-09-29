@@ -1,5 +1,4 @@
 import { getRemarks } from "./getRemarks.js";
-import type { Subjects } from "../constant/report-card.js";
 
 export interface GeneralAverage {
     score: number | null;
@@ -7,10 +6,22 @@ export interface GeneralAverage {
 }
 
 /**
+ * The only thing the general average needs from a subject: its final rating.
+ * Narrower than the report card's `Subjects` type on purpose, so every caller
+ * (SF9, SF10, academic history) can use this helper instead of re-implementing
+ * the average.
+ */
+export interface GradedSubject {
+    finalGrades: number | null;
+}
+
+/**
  * Computes the general average across all graded subjects.
  * Returns { score: null, remarks: "N/A" } when no subjects have a final grade.
+ *
+ * Single source of truth for the general average across the whole application.
  */
-export function computeGeneralAverage(subjects: Subjects[]): GeneralAverage {
+export function computeGeneralAverage(subjects: GradedSubject[]): GeneralAverage {
     const gradedSubjects = subjects.filter((sub) => sub.finalGrades !== null);
 
     if (gradedSubjects.length === 0) {

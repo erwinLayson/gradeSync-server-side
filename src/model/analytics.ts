@@ -73,23 +73,38 @@ export default class Analytics {
         }
     }
 
-    // Overall average score percentage across every graded assessment.
-    async getAverageGrade(schoolYearId?: number): Promise<number | null> {
+    // Class subjects worth evaluating for the school-wide grade aggregates: those
+    // with at least one assessment or one attendance record. Filtering here keeps
+    // the aggregation from running the grade engine on completely ungraded
+    // subjects. (Attendance is included because a subject can produce a grade
+    // from attendance alone when its attendance weight is non-zero.)
+    //
+    // The grade itself is NEVER computed here: grade aggregates come from the
+    // central engine — see service/gradeAggregates.ts.
+    async getGradedClassSubjects(schoolYearId?: number): Promise<{ classSubjectId: number; subjectName: string }[]> {
         try {
             const query = `
-                SELECT ROUND(AVG((ss.score / a.maxScore) * 100), 2) AS average
-                FROM student_scores ss
-                JOIN assessments a ON a.id = ss.assessmentId
-                ${schoolYearId !== undefined
-                    ? "JOIN enrollments e ON e.id = ss.enrollmentId AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed')"
-                    : ""}
+                SELECT DISTINCT cs.id AS classSubjectId, s.name AS subjectName
+                FROM class_subjects cs
+                JOIN subjects s ON s.id = cs.subjectId
+                JOIN classrooms c ON c.id = cs.classId
+                JOIN enrollments e ON e.classId = c.id AND e.status IN ('enrolled', 'completed')
+                WHERE (c.status IS NULL OR c.status <> 'inactive')
+                ${schoolYearId !== undefined ? "AND e.schoolYearId = ?" : ""}
+                AND (
+                    EXISTS (SELECT 1 FROM assessments a WHERE a.classSubjectId = cs.id)
+                    OR EXISTS (SELECT 1 FROM student_attendance sa WHERE sa.classSubjectId = cs.id)
+                )
+                ORDER BY s.name
             `;
             const params = schoolYearId !== undefined ? [schoolYearId] : [];
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
-            const average = rows[0]?.average;
-            return average === null || average === undefined ? null : Number(average);
+            return rows.map((row) => ({
+                classSubjectId: Number(row.classSubjectId),
+                subjectName: String(row.subjectName)
+            }));
         } catch (err) {
-            throw new InternalServerError("Failed to fetch average grade", 500, err);
+            throw new InternalServerError("Failed to fetch graded class subjects", 500, err);
         }
     }
 
@@ -214,78 +229,6 @@ export default class Analytics {
             return Number(rows[0]?.count ?? 0);
         } catch (err) {
             throw new InternalServerError("Failed to fetch enrollment count", 500, err);
-        }
-    }
-
-    // Per-enrollment average percentages, used to derive passing rate.
-    async getEnrollmentAverages(schoolYearId?: number): Promise<number[]> {
-        try {
-            const query = `
-                SELECT ROUND(AVG((ss.score / a.maxScore) * 100), 2) AS average
-                FROM student_scores ss
-                JOIN assessments a ON a.id = ss.assessmentId
-                JOIN enrollments e ON e.id = ss.enrollmentId AND e.status IN ('enrolled', 'completed')
-                ${schoolYearId !== undefined ? "WHERE e.schoolYearId = ?" : ""}
-                GROUP BY ss.enrollmentId
-            `;
-            const params = schoolYearId !== undefined ? [schoolYearId] : [];
-            const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
-            return rows.map((row) => Number(row.average));
-        } catch (err) {
-            throw new InternalServerError("Failed to fetch enrollment averages", 500, err);
-        }
-    }
-
-    // Average score percentage per subject.
-    async getSubjectPerformance(schoolYearId?: number): Promise<{ subject: string; score: number }[]> {
-        try {
-            const query = `
-                SELECT
-                    s.name AS subject,
-                    ROUND(AVG((ss.score / a.maxScore) * 100), 1) AS score
-                FROM student_scores ss
-                JOIN assessments a ON a.id = ss.assessmentId
-                JOIN class_subjects cs ON cs.id = a.classSubjectId
-                JOIN subjects s ON s.id = cs.subjectId
-                ${schoolYearId !== undefined
-                    ? "JOIN enrollments e ON e.id = ss.enrollmentId AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed')"
-                    : ""}
-                ${schoolYearId === undefined ? "JOIN enrollments e ON e.id = ss.enrollmentId AND e.status IN ('enrolled', 'completed')" : ""}
-                GROUP BY s.id, s.name
-                ORDER BY score DESC
-            `;
-            const params = schoolYearId !== undefined ? [schoolYearId] : [];
-            const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
-            return rows as { subject: string; score: number }[];
-        } catch (err) {
-            throw new InternalServerError("Failed to fetch subject performance", 500, err);
-        }
-    }
-
-    // Top performing students by average score percentage.
-    async getTopPerformers(schoolYearId?: number): Promise<{ studentId: number; fullname: string; section: string; grade: number }[]> {
-        try {
-            const query = `
-                SELECT
-                    st.id AS studentId,
-                    CONCAT_WS(" ", st.firstname, st.middlename, st.lastname, IF(st.suffix IS NOT NULL, CONCAT(" ", st.suffix), "")) AS fullname,
-                    c.section,
-                    ROUND(AVG((ss.score / a.maxScore) * 100), 1) AS grade
-                FROM student_scores ss
-                JOIN assessments a ON a.id = ss.assessmentId
-                JOIN enrollments e ON e.id = ss.enrollmentId AND e.status IN ('enrolled', 'completed')
-                JOIN students st ON st.id = e.studentId
-                JOIN classrooms c ON c.id = e.classId
-                ${schoolYearId !== undefined ? "WHERE e.schoolYearId = ?" : ""}
-                GROUP BY st.id, st.firstname, st.middlename, st.lastname, st.suffix, c.section
-                ORDER BY grade DESC
-                LIMIT 5
-            `;
-            const params = schoolYearId !== undefined ? [schoolYearId] : [];
-            const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
-            return rows as { studentId: number; fullname: string; section: string; grade: number }[];
-        } catch (err) {
-            throw new InternalServerError("Failed to fetch top performers", 500, err);
         }
     }
 

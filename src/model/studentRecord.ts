@@ -7,6 +7,7 @@ import type {
     StudentAcademicRecordRow,
     StudentAcademicRecordSubjectRow
 } from "../constant/studentRecord.js";
+import type { StudentAcademicRecordComponentRow } from "../constant/subjectComponents.js";
 
 type QuarterColumn = "q1" | "q2" | "q3" | "q4";
 const QUARTER_COLUMNS: QuarterColumn[] = ["q1", "q2", "q3", "q4"];
@@ -111,6 +112,85 @@ export default class StudentRecord {
             await this.connection.execute<ResultSetHeader>(query, [recordId, subjectName, subjectCode, grade]);
         } catch (err) {
             throw new InternalServerError("Failed to save record subject grade", 500, err);
+        }
+    }
+
+    // Resolve a frozen subject row so component grades can be attached to it.
+    // (ON DUPLICATE KEY does not report the existing row's id, so the row is
+    // looked up instead of relying on insertId.)
+    async getSubjectRowId(recordId: number, subjectName: string): Promise<number | null> {
+        try {
+            const query = `
+                SELECT id
+                FROM student_academic_record_subjects
+                WHERE recordId = ? AND subjectName = ?
+                LIMIT 1
+            `;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [recordId, subjectName]);
+            const row = rows[0];
+            return row !== undefined ? Number(row.id) : null;
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch record subject row", 500, err);
+        }
+    }
+
+    // ---------------- student_academic_record_components ----------------
+
+    // Freeze one component's grade for one quarter (e.g. Music inside MAPEH).
+    // Idempotent through uq_record_component (subjectRowId, componentId), so
+    // re-freezing after a reopen overwrites. The component's name and code are
+    // snapshotted here for the same reason subject names are.
+    async upsertSubjectComponentQuarterGrade(
+        subjectRowId: number,
+        componentId: number,
+        componentName: string,
+        componentCode: string,
+        quarter: number,
+        grade: number
+    ): Promise<void> {
+        const column = QUARTER_COLUMNS[quarter - 1];
+        if (!column) {
+            throw new InternalServerError(`Invalid quarter: ${quarter}`, 500);
+        }
+        try {
+            const query = `
+                INSERT INTO student_academic_record_components
+                    (subjectRowId, componentId, componentName, componentCode, ${column})
+                VALUES (?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE ${column} = VALUES(${column})
+            `;
+            await this.connection.execute<ResultSetHeader>(query, [
+                subjectRowId,
+                componentId,
+                componentName,
+                componentCode,
+                grade
+            ]);
+        } catch (err) {
+            throw new InternalServerError("Failed to save record component grade", 500, err);
+        }
+    }
+
+    // Frozen component rows for the given academic records (report card
+    // sub-component grades + the frozen academic-history breakdown).
+    async getComponentRowsByRecordIds(recordIds: number[]): Promise<StudentAcademicRecordComponentRow[]> {
+        if (recordIds.length === 0) {
+            return [];
+        }
+        try {
+            const placeholders = recordIds.map(() => "?").join(", ");
+            const query = `
+                SELECT sarc.id, sarc.subjectRowId, sarc.componentId, sarc.componentName,
+                       sarc.componentCode, sarc.q1, sarc.q2, sarc.q3, sarc.q4
+                FROM student_academic_record_components sarc
+                JOIN student_academic_record_subjects sars ON sars.id = sarc.subjectRowId
+                WHERE sars.recordId IN (${placeholders})
+                ORDER BY sars.subjectName, sarc.componentName
+            `;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, recordIds);
+            return rows as StudentAcademicRecordComponentRow[];
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch record component grades", 500, err);
         }
     }
 

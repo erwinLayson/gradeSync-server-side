@@ -20,6 +20,8 @@ import type { SubjectComponent, ComponentGrade } from "../constant/subjectCompon
 // ==================== middleware ============
 import { NotFoundError } from "../middleware/errors.js";
 import { formatDate } from "../helper/formatDate.js";
+import { computeAttendanceRate } from "../helper/attendanceRate.js";
+import { getRemarks } from "../helper/getRemarks.js";
 
 
 export async function getGradeBookDetailsByClassSubjectIdService(classSubjectId: number, quarter: number) {
@@ -131,12 +133,14 @@ function buildStudent(
         // Attendance summary for this student (null when no attendance has been recorded,
         // which keeps classes without attendance data completely unaffected).
         const studentAttendance = attendanceByEnrollmentId.get(sr.enrollmentId) ?? null;
-        const attendance = studentAttendance && studentAttendance.totalDays > 0
+        const attendancePercentage = studentAttendance
+            ? computeAttendanceRate(studentAttendance.presentDays, studentAttendance.totalDays)
+            : null;
+        const attendance = studentAttendance && attendancePercentage !== null
             ? {
                 presentDays: studentAttendance.presentDays,
                 totalDays: studentAttendance.totalDays,
-                // Clamp at 100 in case bad data ever records more presents than total days.
-                percentage: Math.min(100, Math.round((studentAttendance.presentDays / studentAttendance.totalDays) * 10000) / 100)
+                percentage: attendancePercentage
             }
             : null;
 
@@ -316,5 +320,6 @@ export function getRemarksForQuarterGrade(quarterGrade: number | null): string |
     if (quarterGrade === null) {
         return null;
     }
-    return quarterGrade >= 75 ? "Passed" : "Failed";
+    // Delegates to the shared passing mark (helper/getRemarks.ts).
+    return getRemarks(quarterGrade);
 }

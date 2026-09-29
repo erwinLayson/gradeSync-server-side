@@ -10,10 +10,17 @@ import { getAssessmentService } from "./assessment.js";
 import { getStudentScoreService } from "./studentScore.js";
 import { getGradingWeightsService } from "./gradingWeight.js";
 import { getAttendanceHistoryService } from "./studentAttendance.js";
-import { computeQuarterGrade, computeCompositeQuarterGrade, getRemarksForQuarterGrade } from "./gradebook.js";
+import { computeQuarterGrade, computeCompositeQuarterGrade } from "./gradebook.js";
 import { getSubjectComponentsWithConnection } from "./subjectComponents.js";
 import { getNumQuarters } from "./academicSettings.js";
 import { getQuarterArray } from "../helper/quarterValidation.js";
+
+// Grade helpers — the app's single source of truth for subject finals, general
+// averages and remarks. Never re-implement these inline.
+import { calculateFinalGrade } from "../helper/calculateFinalGrade.js";
+import { computeGeneralAverage } from "../helper/computeGeneralAverage.js";
+import { getRemarks } from "../helper/getRemarks.js";
+import { computeAttendanceRate } from "../helper/attendanceRate.js";
 
 // Error handling
 import { NotFoundError } from "../middleware/errors.js";
@@ -21,7 +28,47 @@ import { formatDate } from "../helper/formatDate.js";
 
 import type { GradeWeights } from "../constant/grade.js";
 import type { StudentScoreProps } from "../constant/grade.js";
-import type { ComponentGrade } from "../constant/subjectComponents.js";
+import type { ComponentGrade, StudentAcademicRecordComponentRow } from "../constant/subjectComponents.js";
+
+// calculateFinalGrade takes the raw stored strings (it Number()s them itself);
+// this keeps the call sites readable.
+function toGradeString(grade: number | null | undefined): string | null {
+    return grade === null || grade === undefined ? null : String(grade);
+}
+
+// Frozen component breakdown for a composite subject record. The frozen schema
+// does not snapshot component.weight, so the weight is reported as null instead
+// of showing today's (possibly changed) configuration; the grades and the
+// component's final rating are exact.
+function buildFrozenComponentBreakdown(
+    componentRows: StudentAcademicRecordComponentRow[],
+    numQuarters: number
+) {
+    if (componentRows.length === 0) {
+        return undefined;
+    }
+    return componentRows.map((row) => {
+        const storedQuarters: (number | null)[] = [row.q1, row.q2, row.q3, row.q4].map((q) =>
+            q === null || q === undefined ? null : Number(q)
+        );
+        return {
+            componentId: row.componentId,
+            name: row.componentName,
+            code: row.componentCode,
+            weight: null,
+            grades: storedQuarters.slice(0, numQuarters),
+            final: calculateFinalGrade(
+                {
+                    q1: toGradeString(storedQuarters[0]),
+                    q2: toGradeString(storedQuarters[1]),
+                    q3: toGradeString(storedQuarters[2]),
+                    q4: toGradeString(storedQuarters[3])
+                },
+                numQuarters
+            )
+        };
+    });
+}
 
 function formatStudentRow(row: any) {
     return {
@@ -89,10 +136,7 @@ export async function getStudentClassAttendanceService(userId: number, quarter?:
                     presentDays,
                     totalDays,
                     absentDays: totalDays - presentDays,
-                    percentage:
-                        totalDays > 0
-                            ? Math.min(100, Math.round((presentDays / totalDays) * 10000) / 100)
-                            : null,
+                    percentage: computeAttendanceRate(presentDays, totalDays),
                     records: quarterRecords.map((r) => ({ date: r.date, status: r.status }))
                 };
             });
@@ -153,6 +197,9 @@ export async function getStudentAcademicHistoryService(studentId: number, option
         const enrollments = await model.getEnrollmentsByStudentId(studentId);
 
         const studentRecordModel = new StudentRecordModel(connection);
+        // Configured grading periods (3 or 4), resolved once and reused by both
+        // branches so frozen and live history trim quarters exactly like SF9/SF10.
+        const numQuarters = await getNumQuarters();
         const classes = [];
         for (const enrollment of enrollments) {
             // Frozen-first: a submitted academic record is the official, immutable
@@ -166,19 +213,36 @@ export async function getStudentAcademicHistoryService(studentId: number, option
             if (frozenRecord) {
                 const subjectRows = await studentRecordModel.getSubjectRowsByRecordIds([frozenRecord.id]);
 
-                // Whole-number rounding mirrors the SF10 PDF display (E8); the DB
-                // keeps the exact decimals. Remarks follow the PDF's Passed/Failed
-                // rule at the 75 mark. Frozen rows have no live gradebook data, so
+                // Frozen component grades (composite subjects), keyed by subject row.
+                const componentRows = await studentRecordModel.getComponentRowsByRecordIds([frozenRecord.id]);
+                const componentsByRowId = new Map<number, StudentAcademicRecordComponentRow[]>();
+                for (const componentRow of componentRows) {
+                    const list = componentsByRowId.get(componentRow.subjectRowId) ?? [];
+                    list.push(componentRow);
+                    componentsByRowId.set(componentRow.subjectRowId, list);
+                }
+
+                // The frozen quarter grades are reported exactly as stored (2-dp) —
+                // any whole-number display belongs to the presentation layer.
+                // Quarters beyond the configured grading periods are trimmed, and the
+                // final rating + general average come from the shared helpers, so this
+                // view is numerically identical to the SF9/SF10 for the same record.
+                // Frozen rows have no live gradebook data, so
                 // classSubjectId/teacher/unit/assessments/attendance are null/empty.
                 const subjects = subjectRows.map((row) => {
-                    const quarters: (number | null)[] = [row.q1, row.q2, row.q3, row.q4].map((q) =>
-                        q === null || q === undefined ? null : Math.round(Number(q))
+                    const storedQuarters: (number | null)[] = [row.q1, row.q2, row.q3, row.q4].map((q) =>
+                        q === null || q === undefined ? null : Number(q)
                     );
-                    const present = quarters.filter((q): q is number => q !== null);
-                    const final =
-                        present.length > 0
-                            ? Math.round(present.reduce((sum, g) => sum + g, 0) / present.length)
-                            : null;
+                    const quarters = storedQuarters.slice(0, numQuarters);
+                    const final = calculateFinalGrade(
+                        {
+                            q1: toGradeString(storedQuarters[0]),
+                            q2: toGradeString(storedQuarters[1]),
+                            q3: toGradeString(storedQuarters[2]),
+                            q4: toGradeString(storedQuarters[3])
+                        },
+                        numQuarters
+                    );
                     return {
                         classSubjectId: null,
                         subjectId: null,
@@ -188,19 +252,19 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                         teacher: null,
                         quarters,
                         final,
-                        remarks: final === null ? null : final >= 75 ? "Passed" : "Failed",
+                        remarks: final === null ? null : getRemarks(final),
                         assessments: [],
-                        attendance: []
+                        attendance: [],
+                        componentBreakdown: buildFrozenComponentBreakdown(
+                            componentsByRowId.get(row.id) ?? [],
+                            numQuarters
+                        )
                     };
                 });
 
-                const finals = subjects
-                    .map((subject) => subject.final)
-                    .filter((grade): grade is number => grade !== null);
-                const generalAverage =
-                    finals.length > 0
-                        ? Math.round((finals.reduce((sum, g) => sum + g, 0) / finals.length) * 100) / 100
-                        : null;
+                const generalAverage = computeGeneralAverage(
+                    subjects.map((subject) => ({ finalGrades: subject.final }))
+                ).score;
 
                 classes.push({
                     enrollmentId: enrollment.enrollmentId,
@@ -238,8 +302,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                 );
 
                 // Attendance summary + records grouped per quarter.
-                const numQuarters2 = await getNumQuarters();
-                const attendanceByQuarter = getQuarterArray(numQuarters2).map((quarter) => {
+                const attendanceByQuarter = getQuarterArray(numQuarters).map((quarter) => {
                     const records = attendanceHistory.records.filter((record) => record.quarter === quarter);
                     const presentDays = records.filter((record) => record.status === "present").length;
                     const totalDays = records.length;
@@ -247,10 +310,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                         quarter,
                         presentDays,
                         totalDays,
-                        percentage:
-                            totalDays > 0
-                                ? Math.min(100, Math.round((presentDays / totalDays) * 10000) / 100)
-                                : null,
+                        percentage: computeAttendanceRate(presentDays, totalDays),
                         records: records.map((record) => ({ date: record.date, status: record.status }))
                     };
                 });
@@ -270,8 +330,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     dateGiven: string | null;
                     score: number | null;
                 }[] = [];
-                const numQuartersSubject = await getNumQuarters();
-                for (let quarter = 1; quarter <= numQuartersSubject; quarter++) {
+                for (let quarter = 1; quarter <= numQuarters; quarter++) {
                     // Filter attendance to THIS quarter only — the gradebook
                     // must not bleed attendance from other quarters into this one.
                     const quarterRecords = attendanceHistory.records.filter((r) => r.quarter === quarter);
@@ -337,21 +396,42 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     }
                 }
 
-                const gradedQuarters = quarters.filter((grade): grade is number => grade !== null);
-                const final =
-                    gradedQuarters.length > 0
-                        ? Math.round((gradedQuarters.reduce((sum, g) => sum + g, 0) / gradedQuarters.length) * 100) / 100
-                        : null;
+                // Subject final rating: the same helper the SF9/SF10 use, over the
+                // same quarters (`quarters` has one entry per configured period).
+                const final = calculateFinalGrade(
+                    {
+                        q1: toGradeString(quarters[0] ?? null),
+                        q2: toGradeString(quarters[1] ?? null),
+                        q3: toGradeString(quarters[2] ?? null),
+                        q4: toGradeString(quarters[3] ?? null)
+                    },
+                    numQuarters
+                );
 
-                // Build component grades breakdown for composite subjects
+                // Build component grades breakdown for composite subjects. Each
+                // component's own final rating comes from the same helper, so the
+                // breakdown can never disagree with the composite quarter grades it
+                // is built from.
                 const componentBreakdown = isCompositeSubject && componentGradesByQuarter.length > 0
-                    ? components.map((comp) => ({
-                        componentId: comp.id,
-                        name: comp.name,
-                        code: comp.code,
-                        weight: comp.weight,
-                        grades: componentGradesByQuarter.map((cg) => cg.find(c => c.componentId === comp.id)?.grade ?? null)
-                    }))
+                    ? components.map((comp) => {
+                        const grades = componentGradesByQuarter.map((cg) => cg.find(c => c.componentId === comp.id)?.grade ?? null);
+                        return {
+                            componentId: comp.id,
+                            name: comp.name,
+                            code: comp.code,
+                            weight: comp.weight,
+                            grades,
+                            final: calculateFinalGrade(
+                                {
+                                    q1: toGradeString(grades[0] ?? null),
+                                    q2: toGradeString(grades[1] ?? null),
+                                    q3: toGradeString(grades[2] ?? null),
+                                    q4: toGradeString(grades[3] ?? null)
+                                },
+                                numQuarters
+                            )
+                        };
+                    })
                     : undefined;
 
                 subjects.push({
@@ -363,20 +443,16 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     teacher: subjectRow.teacherFullname,
                     quarters,
                     final,
-                    remarks: getRemarksForQuarterGrade(final),
+                    remarks: final === null ? null : getRemarks(final),
                     assessments,
                     attendance: attendanceByQuarter,
                     componentBreakdown
                 });
             }
 
-            const finals = subjects
-                .map((subject) => subject.final)
-                .filter((grade): grade is number => grade !== null);
-            const generalAverage =
-                finals.length > 0
-                    ? Math.round((finals.reduce((sum, g) => sum + g, 0) / finals.length) * 100) / 100
-                    : null;
+            const generalAverage = computeGeneralAverage(
+                subjects.map((subject) => ({ finalGrades: subject.final }))
+            ).score;
 
             classes.push({
                 enrollmentId: enrollment.enrollmentId,

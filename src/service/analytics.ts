@@ -1,24 +1,30 @@
 import AnalyticsModel from "../model/analytics.js";
 import { getDBPoolConnection } from "../config/database.js";
 
+import { getQuarterGradeAggregates } from "./gradeAggregates.js";
+import { getCurrentQuarter } from "./academicSettings.js";
+
 // Aggregates the admin analytics dashboard data. When the optional
 // schoolYearId is provided every school-year-scoped metric is filtered to it;
 // counts of teachers / classrooms are global (they are not year-scoped).
+//
+// The grade metrics (averageGrade, passingRate, passingCount, gradedEnrollments,
+// subjectPerformance, topPerformers) are REAL grades for the configured current
+// quarter, produced by the central grading engine — see
+// service/gradeAggregates.ts. They are deliberately not SQL score averages.
 export async function getAnalyticsService(schoolYearId?: number) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
         const analyticsModel = new AnalyticsModel(connection);
+        const quarter = await getCurrentQuarter();
 
         const [
             students,
             teachers,
             classrooms,
             enrollmentByGrade,
-            averageGrade,
-            enrollmentAverages,
-            subjectPerformance,
-            topPerformers,
+            gradeAggregates,
             attendanceTrend,
             schoolYearsWithEnrollments,
             studentsPerSchoolYear,
@@ -31,10 +37,7 @@ export async function getAnalyticsService(schoolYearId?: number) {
             analyticsModel.getTeacherCount(),
             analyticsModel.getClassroomCount(),
             analyticsModel.getEnrollmentByGradeLevel(schoolYearId),
-            analyticsModel.getAverageGrade(schoolYearId),
-            analyticsModel.getEnrollmentAverages(schoolYearId),
-            analyticsModel.getSubjectPerformance(schoolYearId),
-            analyticsModel.getTopPerformers(schoolYearId),
+            getQuarterGradeAggregates(schoolYearId, quarter),
             analyticsModel.getAttendanceTrend(schoolYearId),
             analyticsModel.getSchoolYearsWithEnrollments(),
             analyticsModel.getEnrollmentPerSchoolYear(),
@@ -44,23 +47,19 @@ export async function getAnalyticsService(schoolYearId?: number) {
             analyticsModel.getEnrollmentCount(schoolYearId)
         ]);
 
-        // Passing rate = share of graded enrollments averaging >= 75.
-        const passing = enrollmentAverages.filter((average) => average >= 75).length;
-        const passingRate = enrollmentAverages.length > 0
-            ? Math.round((passing / enrollmentAverages.length) * 1000) / 10
-            : null;
-
         return {
             students,
             teachers,
             classrooms,
-            averageGrade,
-            passingRate,
-            passingCount: passing,
-            gradedEnrollments: enrollmentAverages.length,
+            // The quarter the grade metrics below are scoped to.
+            quarter,
+            averageGrade: gradeAggregates.averageGrade,
+            passingRate: gradeAggregates.passingRate,
+            passingCount: gradeAggregates.passingCount,
+            gradedEnrollments: gradeAggregates.gradedEnrollments,
             enrollmentByGrade,
-            subjectPerformance,
-            topPerformers,
+            subjectPerformance: gradeAggregates.subjectPerformance,
+            topPerformers: gradeAggregates.topPerformers,
             attendanceTrend,
             schoolYearsWithEnrollments,
             studentsPerSchoolYear,
