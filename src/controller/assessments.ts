@@ -7,6 +7,11 @@ import {
     deleteAssessmentService
 } from "../service/assessment.js";
 import { saveAssessmentScoresService } from "../service/studentScore.js";
+import {
+    assertTeacherOwnsAssessment,
+    assertTeacherOwnsClassSubject,
+    resolveActorTeacherId,
+} from "../service/authorization.js";
 
 import type { AssessmentCreateProps, AssessmentType, AssessmentUpdateProps } from "../constant/assessment.js";
 import type { StudentScoreInput } from "../constant/grade.js";
@@ -42,6 +47,11 @@ export async function createAssessmentController(
         if (Number.isNaN(parsedMaxScore) || parsedMaxScore <= 0) {
             throw new BadRequestError("Max score must be a number greater than 0");
         }
+
+        // Ownership: only the teacher assigned to this class subject (or an admin)
+        // may create assessments for it.
+        const teacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsClassSubject(teacherId, parsedClassSubjectId);
 
         const assessmentData: AssessmentCreateProps = {
             classSubjectId: parsedClassSubjectId,
@@ -80,6 +90,11 @@ export async function getAssessmentsController(req: Request, res: Response, next
             throw new BadRequestError("Quarter must be a number between 1 and 4");
         }
 
+        // Ownership: only the assigned teacher (or an admin) may read the
+        // assessments of a class subject.
+        const teacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsClassSubject(teacherId, classSubjectId);
+
         const assessments = parsedQuarter === undefined
             ? await getAssessmentService({ classSubjectId })
             : await getAssessmentService({ classSubjectId, quarter: parsedQuarter });
@@ -106,6 +121,11 @@ export async function updateAssessmentController(
         const { title, type, maxScore, dateGiven } = req.body;
 
         Validate({ id });
+
+        // Ownership: resolve the assessment to its class subject and enforce the
+        // shared rule (403 for another teacher's assessment).
+        const teacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsAssessment(teacherId, Number(id));
 
         const updateData: AssessmentUpdateProps = {};
         if (title !== undefined) updateData.title = title.trim();
@@ -144,6 +164,9 @@ export async function deleteAssessmentController(req: Request<{ id: number }>, r
         const { id } = req.params;
         Validate({ id });
 
+        const teacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsAssessment(teacherId, Number(id));
+
         await deleteAssessmentService(Number(id));
 
         res.status(200).json(
@@ -167,6 +190,9 @@ export async function saveAssessmentScoresController(
         const { scores } = req.body;
 
         Validate({ id });
+
+        const teacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsAssessment(teacherId, Number(id));
 
         // An empty array is allowed: it clears every recorded score of the
         // assessment (the submitted sheet is treated as authoritative).

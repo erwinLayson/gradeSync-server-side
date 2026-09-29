@@ -21,6 +21,7 @@ import {
     getGradingWeightsForClassSubjectService,
     upsertGradingWeightsService
 } from "../service/gradingWeight.js";
+import { assertTeacherOwnsClassSubject, resolveActorTeacherId } from "../service/authorization.js";
 
 
 // This function is exported to classrooms routes to create new class subjects
@@ -119,6 +120,11 @@ export async function getClassSubjectWeightsController(req: Request<{classSubjec
             throw new BadRequestError("Invalid class subject id");
         }
 
+        // Ownership: a teacher may only read the weights of a class subject
+        // they are assigned to (403 otherwise). Admins bypass.
+        const teacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsClassSubject(teacherId, parsedClassSubjectId);
+
         const weights = await getGradingWeightsForClassSubjectService(parsedClassSubjectId);
 
         res.status(200).json(
@@ -144,6 +150,11 @@ export async function updateClassSubjectWeightsController(req: Request<{classSub
         if (Number.isNaN(parsedClassSubjectId)) {
             throw new BadRequestError("Invalid class subject id");
         }
+
+        // Ownership: a teacher may only change the weights of a class subject
+        // they are assigned to (403 otherwise). Admins bypass.
+        const teacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsClassSubject(teacherId, parsedClassSubjectId);
 
         const weights = parseGradeWeightsPayload(req.body);
 

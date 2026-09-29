@@ -6,6 +6,7 @@ import {
     saveAttendanceByClassSubjectAndDateService,
 } from "../service/studentAttendance.js";
 import { getAcademicSettingsService } from "../service/academicSettings.js";
+import { assertTeacherOwnsClassSubject, resolveActorTeacherId } from "../service/authorization.js";
 import { isValidQuarter } from "../helper/quarterValidation.js";
 
 import type { AttendanceInput } from "../constant/grade.js";
@@ -33,6 +34,11 @@ export async function getAttendanceByClassSubjectAndDateController(
         if (!date) {
             throw new BadRequestError("date query parameter is required (YYYY-MM-DD)");
         }
+
+        // Ownership: only the teacher assigned to this class subject (or an
+        // admin) may read its attendance.
+        const teacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsClassSubject(teacherId, classSubjectId);
 
         const attendance = await getAttendanceByClassSubjectAndDateService(classSubjectId, date);
 
@@ -94,6 +100,11 @@ export async function getAttendanceHistoryController(
             }
         }
 
+        // Ownership: only the assigned teacher (or an admin) may read a
+        // student's attendance history for this class subject.
+        const teacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsClassSubject(teacherId, classSubjectId);
+
         const history = await getAttendanceHistoryService(
             classSubjectId,
             parsedEnrollmentId,
@@ -145,6 +156,12 @@ export async function saveAttendanceController(
         if (!Array.isArray(entries)) {
             throw new BadRequestError("entries must be an array of { enrollmentId, status }");
         }
+
+        // Ownership: only the teacher assigned to this class subject (or an
+        // admin) may save attendance for it. (teacherUserId below is a USER id
+        // used for adviser detection; this is the TEACHER id used for ownership.)
+        const actorTeacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsClassSubject(actorTeacherId, parsedClassSubjectId);
 
         const normalizedEntries: AttendanceInput[] = entries.map((entry) => {
             const enrollmentId = Number(entry?.enrollmentId);

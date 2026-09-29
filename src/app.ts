@@ -45,12 +45,17 @@ import getEnv from "./helper/getEnv.js";
 
 const app: Express = express();
 
+// Normalize the CORS allowlist: a browser Origin header never carries a
+// trailing slash, so an env value like "https://app.example.com/" would
+// silently never match. Trim whitespace and strip trailing slashes once here.
+const corsOrigins = [
+    getEnv("LOCAL_CLIENT_ORG"),
+    getEnv("DEPLOY_CLIENT_ORG")
+].map((origin) => origin.trim().replace(/\/+$/, ""));
+
 app.use(express.json());
 app.use(cors({
-    origin: [
-        getEnv("LOCAL_CLIENT_ORG"),
-        getEnv("DEPLOY_CLIENT_ORG")
-    ],
+    origin: corsOrigins,
     credentials: true,
 }));
 app.use(cookieParser());

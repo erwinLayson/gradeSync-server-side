@@ -5,14 +5,23 @@ import { pdfFormatter } from "../helper/pdfFormater.js";
 // Service functions 
 import {getStudentReportCardService} from "../service/studentsReportCard.js";
 
-export async function studentReportCardController(req: Request<{enrollmentId: number}>, res: Response, next: NextFunction)  {
-    const {enrollmentId} = req.params;
+// Ownership authorization (admin/developer any; teacher only their advised class)
+import { assertCanAccessEnrollment } from "../service/authorization.js";
+import { BadRequestError } from "../middleware/errors.js";
 
-    if(!enrollmentId || isNaN(enrollmentId)) {
-        throw new Error("Invalid ID")
+export async function studentReportCardController(req: Request<{enrollmentId: string}>, res: Response, next: NextFunction)  {
+    const enrollmentId = Number(req.params.enrollmentId);
+
+    if(req.params.enrollmentId === undefined || Number.isNaN(enrollmentId) || enrollmentId <= 0) {
+        return next(new BadRequestError("Invalid enrollment ID"))
     }
 
     try {
+        // Authorization before any data is read or rendered: an authenticated
+        // caller must not be able to fetch an arbitrary student's report card by
+        // changing the enrollmentId. 403 when authenticated but not entitled.
+        await assertCanAccessEnrollment(req.user!, enrollmentId);
+
         const {students, schoolInfo, subjects, generalAverages, attendance, numQuarters} = await getStudentReportCardService(enrollmentId)
 
         console.log(attendance)
