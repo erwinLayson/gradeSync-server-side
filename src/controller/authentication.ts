@@ -19,13 +19,13 @@ export async function LoginUserController(req: Request<{}, {}, LoginCredentials>
         Validate({ email, password });
 
         const user = await LoginUserService({ email, password });
-        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, getEnv("JWT_SECRET"), { expiresIn: "1h" });
+        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, getEnv("JWT_SECRET"), { expiresIn: "24h" });
         
         res.cookie("login_token", token, {
-            httpOnly: true,
+            httpOnly: true, 
             secure: getEnv("NODE_ENV") === "production",
             sameSite: getEnv("NODE_ENV") === "production" ? "none" : "strict",
-            maxAge: 3600000 // 1 hour
+            maxAge: 3600000 * 24 // 24 hours
         });
 
         res.status(200).json(
