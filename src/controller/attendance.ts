@@ -3,9 +3,10 @@ import type { Request, Response, NextFunction } from "express";
 import {
     getAttendanceByClassSubjectAndDateService,
     getAttendanceHistoryService,
+    getAttendanceRangeService,
     saveAttendanceByClassSubjectAndDateService,
 } from "../service/studentAttendance.js";
-import { getAcademicSettingsService } from "../service/academicSettings.js";
+import { getNumQuarters } from "../service/academicSettings.js";
 import { assertTeacherOwnsClassSubject, resolveActorTeacherId } from "../service/authorization.js";
 import { isValidQuarter } from "../helper/quarterValidation.js";
 
@@ -53,6 +54,79 @@ export async function getAttendanceByClassSubjectAndDateController(
     }
 }
 
+// GET /api/attendance/range?classSubjectId=&schoolYearId=&quarter=&dateFrom=&dateTo=
+// The class-wide attendance matrix that powers the teacher's spreadsheet view:
+// the class roster (rows), every recorded date in the selected slice (columns)
+// and the cells in between. All filters are optional and combine; the columns
+// are derived from the returned rows, so a column can never be a date with no
+// matching record.
+export async function getAttendanceRangeController(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const classSubjectId = Number(req.query.classSubjectId);
+        if (Number.isNaN(classSubjectId)) {
+            throw new BadRequestError(
+                "classSubjectId query parameter is required and must be a number"
+            );
+        }
+
+        // Optional school year filter (resolved through the enrollment).
+        const schoolYearRaw = req.query.schoolYearId;
+        let parsedSchoolYearId: number | undefined;
+        if (schoolYearRaw !== undefined && schoolYearRaw !== "") {
+            parsedSchoolYearId = Number(schoolYearRaw);
+            if (Number.isNaN(parsedSchoolYearId) || !Number.isInteger(parsedSchoolYearId)) {
+                throw new BadRequestError("schoolYearId query parameter must be a number");
+            }
+        }
+
+        // Optional quarter filter (1-numQuarters). Absent/empty = all quarters.
+        const quarterRaw = req.query.quarter;
+        let parsedQuarter: number | undefined;
+        if (quarterRaw !== undefined && quarterRaw !== "") {
+            parsedQuarter = Number(quarterRaw);
+            const numQuarters = await getNumQuarters();
+            if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
+                throw new BadRequestError(
+                    `quarter query parameter must be a number between 1 and ${numQuarters}`
+                );
+            }
+        }
+
+        // Optional date range (inclusive). Bounds are validated in the service.
+        const dateFrom = req.query.dateFrom === undefined || req.query.dateFrom === ""
+            ? undefined
+            : String(req.query.dateFrom);
+        const dateTo = req.query.dateTo === undefined || req.query.dateTo === ""
+            ? undefined
+            : String(req.query.dateTo);
+
+        // Ownership: only the assigned teacher (or an admin) may read a class
+        // subject's attendance, matching the other attendance reads.
+        const teacherId = await resolveActorTeacherId(req.user!);
+        await assertTeacherOwnsClassSubject(teacherId, classSubjectId);
+
+        const matrix = await getAttendanceRangeService(classSubjectId, {
+            schoolYearId: parsedSchoolYearId,
+            quarter: parsedQuarter,
+            dateFrom,
+            dateTo,
+        });
+
+        res.status(200).json(
+            SuccessResponse({
+                message: "Attendance range retrieved successfully",
+                data: matrix,
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
 // GET /api/attendance/:enrollmentId/history?classSubjectId=:classSubjectId&quarter=1&schoolYearId=3
 // Returns one student's full attendance history for one subject with a summary.
 // The optional quarter (1-4) and schoolYearId query parameters scope both the
@@ -81,8 +155,7 @@ export async function getAttendanceHistoryController(
         let parsedQuarter: number | undefined;
         if (quarterRaw !== undefined && quarterRaw !== "") {
             parsedQuarter = Number(quarterRaw);
-            const settings = await getAcademicSettingsService();
-            const numQuarters = settings?.numQuarters ?? 4;
+            const numQuarters = await getNumQuarters();
             if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
                 throw new BadRequestError(
                     `quarter query parameter must be a number between 1 and ${numQuarters}`
@@ -148,8 +221,7 @@ export async function saveAttendanceController(
             throw new BadRequestError("date is required (YYYY-MM-DD)");
         }
         const parsedQuarter = Number(quarter);
-        const settings = await getAcademicSettingsService();
-        const numQuarters = settings?.numQuarters ?? 4;
+        const numQuarters = await getNumQuarters();
         if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
             throw new BadRequestError(`quarter is required and must be a number between 1 and ${numQuarters}`);
         }

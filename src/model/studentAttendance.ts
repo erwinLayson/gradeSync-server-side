@@ -1,7 +1,35 @@
 import { PoolConnection, type RowDataPacket, type ResultSetHeader } from "mysql2/promise";
 import { InternalServerError } from "../middleware/errors.js";
 
-import type { StudentAttendanceProps, AttendanceRecord, AttendanceInput } from "../constant/grade.js";
+import type { StudentAttendanceProps, AttendanceRecord, AttendanceInput, AttendanceStatus } from "../constant/grade.js";
+
+// One roster row of the class-wide attendance matrix (a student in a column-grid row).
+export interface AttendanceRosterRow {
+  enrollmentId: number;
+  studentId: number;
+  studentLrn: string;
+  fullname: string;
+}
+
+// One cell of the class-wide attendance matrix (one student on one date).
+export interface AttendanceRangeRow {
+  enrollmentId: number;
+  status: AttendanceStatus | null;
+  date: string | Date;
+  quarter: number | null;
+}
+
+// Optional slicing for the matrix read: every field is independent, and they
+// combine (school year via the enrollment, quarter and date range on the row).
+// (`| undefined` is required alongside `?` because the compiler runs with
+// exactOptionalPropertyTypes: callers build the object from nullable query
+// params and pass the field explicitly as undefined to mean "no filter".)
+export interface AttendanceRangeFilters {
+  schoolYearId?: number | undefined;
+  quarter?: number | undefined;
+  dateFrom?: string | undefined;
+  dateTo?: string | undefined;
+}
 
 export default class StudentAttendance {
   constructor(private connection: PoolConnection) {}
@@ -120,6 +148,88 @@ export default class StudentAttendance {
       return rows.map((row) => Number((row as { id: number }).id));
     } catch (err) {
       throw new InternalServerError("Failed to fetch class enrollments", 500, err);
+    }
+  }
+
+  // The roster rows of the class-wide attendance matrix: every active student
+  // enrolled in the SUBJECT's class, oldest name first. When schoolYearId is
+  // given, only that school year's enrollments are returned — so switching year
+  // can never mix another year's students (or their attendance) into the grid.
+  async getAttendanceRosterByClassSubject(
+    classSubjectId: number,
+    schoolYearId?: number,
+  ): Promise<AttendanceRosterRow[]> {
+    try {
+      let query = `
+        SELECT
+          e.id AS enrollmentId,
+          s.id AS studentId,
+          s.lrn AS studentLrn,
+          CONCAT_WS(' ', s.firstname, s.middlename, s.lastname, s.suffix) AS fullname
+        FROM class_subjects cs
+        JOIN enrollments e ON e.classId = cs.classId
+        JOIN students s ON s.id = e.studentId
+        WHERE cs.id = ?
+          -- Hide soft-deleted students, exactly like the other attendance reads
+          AND (s.status IS NULL OR s.status <> 'inactive')
+          AND e.status IN ('enrolled', 'completed')
+      `;
+      const params: (string | number)[] = [classSubjectId];
+      if (schoolYearId !== undefined) {
+        query += " AND e.schoolYearId = ?";
+        params.push(schoolYearId);
+      }
+      query += " ORDER BY s.lastname ASC, s.firstname ASC, s.id ASC";
+
+      const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
+      return rows as AttendanceRosterRow[];
+    } catch (err) {
+      throw new InternalServerError("Failed to fetch attendance roster", 500, err);
+    }
+  }
+
+  // Every recorded cell of the class-wide attendance matrix for ONE SUBJECT,
+  // scoped by the supplied filters. The matrix columns are the distinct dates
+  // returned here, so a teacher only ever sees dates that actually have records
+  // for the selected school year / quarter / date range.
+  async getAttendanceRangeByClassSubject(
+    classSubjectId: number,
+    filters: AttendanceRangeFilters = {},
+  ): Promise<AttendanceRangeRow[]> {
+    try {
+      let query = `
+        SELECT sa.enrollmentId, sa.status, sa.date, sa.quarter
+        FROM student_attendance sa
+        JOIN enrollments e ON e.id = sa.enrollmentId
+        JOIN students s ON s.id = e.studentId
+        WHERE sa.classSubjectId = ?
+          AND (s.status IS NULL OR s.status <> 'inactive')
+          AND e.status IN ('enrolled', 'completed')
+      `;
+      const params: (string | number)[] = [classSubjectId];
+
+      if (filters.schoolYearId !== undefined) {
+        query += " AND e.schoolYearId = ?";
+        params.push(filters.schoolYearId);
+      }
+      if (filters.quarter !== undefined) {
+        query += " AND sa.quarter = ?";
+        params.push(filters.quarter);
+      }
+      if (filters.dateFrom !== undefined) {
+        query += " AND sa.date >= ?";
+        params.push(filters.dateFrom);
+      }
+      if (filters.dateTo !== undefined) {
+        query += " AND sa.date <= ?";
+        params.push(filters.dateTo);
+      }
+      query += " ORDER BY sa.date ASC, s.lastname ASC, s.firstname ASC";
+
+      const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
+      return rows as AttendanceRangeRow[];
+    } catch (err) {
+      throw new InternalServerError("Failed to fetch attendance range", 500, err);
     }
   }
 

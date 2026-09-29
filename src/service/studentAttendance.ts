@@ -9,6 +9,10 @@ import type { RowDataPacket } from "mysql2/promise";
 import type { AttendanceInput, AttendanceRecord, AttendanceStatus } from "../constant/grade.js";
 import { getNumQuarters } from "./academicSettings.js";
 
+// Shared helpers — never re-implement quarter bounds or the present rate here.
+import { isValidQuarter } from "../helper/quarterValidation.js";
+import { computeAttendanceRate } from "../helper/attendanceRate.js";
+
 // One student's attendance history for a subject with a computed summary.
 export interface AttendanceHistory {
     classSubjectId: number;
@@ -17,6 +21,43 @@ export interface AttendanceHistory {
     totalDays: number;
     percentage: number | null;
     records: AttendanceRecord[];
+}
+
+// One row of the class-wide attendance matrix.
+export interface AttendanceMatrixStudent {
+    enrollmentId: number;
+    studentId: number;
+    studentLrn: string;
+    fullname: string;
+}
+
+// One cell of the class-wide attendance matrix: a student on a date.
+export interface AttendanceMatrixCell {
+    enrollmentId: number;
+    date: string;
+    status: AttendanceStatus | null;
+    quarter: number | null;
+}
+
+// The class-wide "spreadsheet" payload: students as rows, recorded dates as
+// columns, and the cells that fill the grid.
+export interface AttendanceRangeMatrix {
+    classSubjectId: number;
+    students: AttendanceMatrixStudent[];
+    dates: string[];
+    records: AttendanceMatrixCell[];
+}
+
+// Filters accepted by the matrix read. Every field is independent and they
+// combine (school year is resolved through the enrollment, quarter and date
+// range on the attendance row itself).
+// (`| undefined` alongside `?` keeps callers able to pass a nullable query
+// param straight through under exactOptionalPropertyTypes.)
+export interface AttendanceRangeQuery {
+    schoolYearId?: number | undefined;
+    quarter?: number | undefined;
+    dateFrom?: string | undefined;
+    dateTo?: string | undefined;
 }
 
 
@@ -41,10 +82,6 @@ async function getAdviserUserIdOfClass(
 
 function isValidAttendanceStatus(status: string): status is AttendanceStatus {
   return status === "present" || status === "absent";
-}
-
-function isValidQuarter(quarter: number, numQuarters: number = 4): boolean {
-  return Number.isInteger(quarter) && quarter >= 1 && quarter <= numQuarters;
 }
 
 // Reject malformed/impossible date strings early so the DB never sees garbage.
@@ -217,6 +254,88 @@ export async function saveAttendanceByClassSubjectAndDateService(
   }
 }
 
+// The class-wide attendance matrix for one subject: the roster (rows), the
+// distinct recorded dates (columns) and every cell in between. All three
+// filters are applied in SQL (model.getAttendanceRangeByClassSubject), so the
+// client never has to trim a large dataset — and because the columns are
+// derived from the returned rows, a filter can never surface a date that has no
+// matching record.
+export async function getAttendanceRangeService(
+    classSubjectId: number,
+    query: AttendanceRangeQuery = {},
+    conn?: PoolConnection,
+): Promise<AttendanceRangeMatrix> {
+    const { schoolYearId, quarter, dateFrom, dateTo } = query;
+    const pool = getDBPoolConnection();
+    const connection = conn ?? await pool.getConnection();
+    const ownConn = !conn;
+    try {
+        // Reuse the shared quarter rule; never hardcode 4.
+        if (quarter !== undefined) {
+            const numQuarters = await getNumQuarters();
+            if (!isValidQuarter(quarter, numQuarters)) {
+                throw new BadRequestError(
+                    `quarter query parameter must be a number between 1 and ${numQuarters}`,
+                );
+            }
+        }
+        if (schoolYearId !== undefined && (Number.isNaN(schoolYearId) || !Number.isInteger(schoolYearId))) {
+            throw new BadRequestError("schoolYearId query parameter must be a number");
+        }
+        if (dateFrom !== undefined && !isValidDate(dateFrom)) {
+            throw new BadRequestError("dateFrom must be a valid YYYY-MM-DD string");
+        }
+        if (dateTo !== undefined && !isValidDate(dateTo)) {
+            throw new BadRequestError("dateTo must be a valid YYYY-MM-DD string");
+        }
+        // Compare the ISO strings directly — yyyy-mm-dd sorts chronologically.
+        if (dateFrom !== undefined && dateTo !== undefined && dateFrom > dateTo) {
+            throw new BadRequestError("dateFrom must not be after dateTo");
+        }
+
+        const studentAttendanceModel = new StudentAttendanceModel(connection);
+        const [students, rows] = await Promise.all([
+            studentAttendanceModel.getAttendanceRosterByClassSubject(classSubjectId, schoolYearId),
+            studentAttendanceModel.getAttendanceRangeByClassSubject(classSubjectId, {
+                schoolYearId,
+                quarter,
+                dateFrom,
+                dateTo,
+            }),
+        ]);
+
+        // DATE columns arrive as JS Date objects (UTC midnight rendered locally);
+        // normalize to the local yyyy-mm-dd so the client never shifts a day.
+        const records: AttendanceMatrixCell[] = [];
+        const dates = new Set<string>();
+        for (const row of rows) {
+            const date = toDateOnly(row.date);
+            if (!date) continue;
+            dates.add(date);
+            records.push({
+                enrollmentId: row.enrollmentId,
+                date,
+                status: row.status,
+                quarter: row.quarter ?? null,
+            });
+        }
+
+        return {
+            classSubjectId,
+            students: students.map((student) => ({
+                enrollmentId: Number(student.enrollmentId),
+                studentId: Number(student.studentId),
+                studentLrn: student.studentLrn,
+                fullname: student.fullname,
+            })),
+            dates: [...dates].sort(),
+            records,
+        };
+    } finally {
+        if (ownConn) connection.release();
+    }
+}
+
 // One student's full attendance history for one subject (every recorded day +
 // status) with present/total days and the attendance percentage. When a
 // quarter and/or school year is provided, the records AND the summary are
@@ -264,8 +383,7 @@ export async function getAttendanceHistoryService(
 
     const presentDays = records.filter((row) => row.status === "present").length;
     const totalDays = records.length;
-    const percentage =
-      totalDays > 0 ? Math.min(100, Math.round((presentDays / totalDays) * 10000) / 100) : null;
+    const percentage = computeAttendanceRate(presentDays, totalDays);
 
     return {
       classSubjectId,
