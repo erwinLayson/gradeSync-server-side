@@ -224,7 +224,7 @@ export default class StudentAttendance {
         query += " AND sa.date <= ?";
         params.push(filters.dateTo);
       }
-      query += " ORDER BY sa.date ASC, s.lastname ASC, s.firstname ASC";
+      query += " ORDER BY sa.date DESC, s.lastname ASC, s.firstname ASC";
 
       const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
       return rows as AttendanceRangeRow[];
@@ -261,7 +261,7 @@ export default class StudentAttendance {
           " AND EXISTS (SELECT 1 FROM enrollments e WHERE e.id = sa.enrollmentId AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed'))";
         params.push(schoolYearId);
       }
-      query += " ORDER BY sa.date ASC";
+      query += " ORDER BY sa.date DESC";
 
       const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
       return rows as AttendanceRecord[];
