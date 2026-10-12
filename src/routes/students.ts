@@ -14,6 +14,8 @@ import { getAcademicSettingsController } from "../controller/academicSettings.js
 
 import { getMyClassesController, getStudentProspectusController, getStudentClassAttendanceController, getStudentAcademicHistoryController } from "../controller/studentClasses.js";
 
+import { getPastSubmittedGradesController } from "../controller/pastGrades.js";
+
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
 import { ValidateToken } from "../middleware/validateToken.js";
@@ -47,5 +49,9 @@ route.get("/students/not-enrolled", adminOnly, getAllNotEnrolledStudentsControll
 route.get("/students", adminTeacher, getAllStudentController)
 route.get("/students/:id/students", adminTeacherWithId, getStudentByIdController)
 route.get("/students/:id/academic-history", adminTeacherWithId, getStudentAcademicHistoryController)
+
+// Admin-only, curated view used during enrollment so the admin can inspect a
+// candidate student's already-submitted past grades before enrolling them.
+route.get("/students/:id/past-submitted-grades", adminOnlyWithId, getPastSubmittedGradesController)
 
 export default route
