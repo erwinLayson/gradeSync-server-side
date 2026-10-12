@@ -50,7 +50,8 @@ const app: Express = express();
 // silently never match. Trim whitespace and strip trailing slashes once here.
 const corsOrigins = [
     getEnv("LOCAL_CLIENT_ORG"),
-    getEnv("DEPLOY_CLIENT_ORG")
+    getEnv("DEPLOY_CLIENT_ORG_1"),
+    getEnv("DEPLOY_CLIENT_ORG_2")
 ].map((origin) => origin.trim().replace(/\/+$/, ""));
 
 app.use(express.json());
