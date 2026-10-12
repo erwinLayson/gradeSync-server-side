@@ -1,0 +1,26 @@
+{
+  // The single TypeScript project for the test suite — consumed by both the
+  // editor and `npm run typecheck:test` (tsc -p test/tsconfig.json).
+  //
+  // It has to sit here, named `tsconfig.json`, because tooling only auto-loads
+  // configs with that name. The build project (../tsconfig.json) excludes
+  // `test/`, since tests live outside its `rootDir` of ../src — so without this
+  // file the editor hands test files to its *inferred* project: no `nodenext`
+  // resolution (the `./x.js` relative imports don't resolve) and no @types/node
+  // (it isn't linked into node_modules/@types). That produced red squiggles on
+  // `process`, `node:*` imports, etc.
+  //
+  // Tests are type-checked, never emitted, so they stay out of `dist/`.
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "outDir": "../dist-test",
+    "noEmit": true,
+    "declaration": false,
+    "declarationMap": false
+  },
+  // Paths are relative to this folder. `../vitest.config.ts` is covered here
+  // too; loose root-level utility scripts (e.g. seed_pdf_history.ts) stay out.
+  "include": ["./**/*.ts", "../src/**/*.ts", "../vitest.config.ts"],
+  "exclude": ["../node_modules", "../dist", "../dist-test"]
+}

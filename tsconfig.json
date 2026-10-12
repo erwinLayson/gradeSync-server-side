@@ -43,5 +43,10 @@
   },
   // Loose utility scripts at the repo root (e.g. seed_pdf_history.ts) are run
   // with tsx, not compiled — keep them out of the tsc/build program.
-  "exclude": ["node_modules", "dist", "*.ts"]
+  // The test suite lives outside rootDir (./src) and is type-checked
+  // separately by its own project, test/tsconfig.json
+  // (`npm run typecheck:test`). That folder owns its config because tooling
+  // only auto-loads configs named `tsconfig.json` — keep it excluded here or
+  // the build would try to emit it into dist/.
+  "exclude": ["node_modules", "dist", "*.ts", "test", "vitest.config.ts"]
 }
