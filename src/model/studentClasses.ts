@@ -46,6 +46,15 @@ export default class StudentClassesModel {
     }
 
     // Every enrollment of the student (all school years), newest first.
+    //
+    // History readers use this, so it must include 'completed' enrollments
+    // (audit F-2): a year that has been cleared at semester end is finished
+    // history, not a deleted year. Filtering to 'enrolled' only made a cleared
+    // school year vanish from the prospectus / academic-history views even
+    // though its frozen record was intact (the SF10 PDF, which uses a separate
+    // unfiltered query, still showed it). Active-roster queries elsewhere keep
+    // their own `status = 'enrolled'` restriction — this is the history reader
+    // only, and 'unenrolled'/'dropped' years remain excluded.
     async getEnrollmentsByStudentId(studentId: number): Promise<StudentEnrollmentRow[]> {
         try {
             const query = `
@@ -53,7 +62,7 @@ export default class StudentClassesModel {
                        sy.startYear, sy.endYear
                 FROM enrollments e
                 JOIN schoolyear sy ON sy.id = e.schoolYearId
-                WHERE e.studentId = ? AND e.status = 'enrolled'
+                WHERE e.studentId = ? AND e.status IN ('enrolled', 'completed')
                 ORDER BY e.schoolYearId DESC
             `;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [studentId]);
