@@ -11,30 +11,49 @@ export default class StudentReportCard {
 
     async getStudentsReportCard(enrollmentId: number):Promise<ReportCard | null> {
         try {
+            // Historical-first (audit F-1). A submitted academic record is the
+            // official, immutable snapshot of the student's section, grade level
+            // and adviser for that school year, so it wins whenever it exists.
+            // The live classroom / adviser joins are FALLBACKS only (a current,
+            // not-yet-frozen school year) and are LEFT JOINs: archiving a class
+            // clears its class_teacher row, and a hard-deleted classroom would
+            // otherwise make a finalized report card unreadable (404). A live
+            // value is never substituted for an available frozen value.
             const query =  `
-                SELECT 
+                SELECT
                 CONCAT_WS(" ", s.firstname, s.middlename, s.lastname, s.suffix) AS studentFullName,
                 TIMESTAMPDIFF(YEAR, s.birthdate, CURDATE()) AS studentAge,
                 s.lrn AS studentLrn,
                 s.sex AS studentSex,
-                CONCAT(sy.startYear, "-", sy.endYear) AS schoolYear,
-                c.section AS classSection,
-                c.gradeLevel AS classGradeLevel,
-                CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, t.suffix) AS classAdviser
-                FROM 
+                COALESCE(CONCAT(sy.startYear, "-", sy.endYear), "") AS schoolYear,
+                COALESCE(sar.classSection, c.section, "") AS classSection,
+                COALESCE(sar.classGradeLevel, c.gradeLevel, 0) AS classGradeLevel,
+                COALESCE(
+                    NULLIF(sar.adviserName, ""),
+                    NULLIF(CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, t.suffix), ""),
+                    ""
+                ) AS classAdviser
+                FROM
                     enrollments e
-                JOIN 
+                JOIN
                     students s ON s.id = e.studentId
-                JOIN 
+                LEFT JOIN
                     schoolYear sy ON sy.id = e.schoolYearId
-                JOIN 
+                LEFT JOIN
+                    student_academic_records sar ON sar.enrollmentId = e.id
+                LEFT JOIN
                     classrooms c ON c.id = e.classId
-                JOIN 
+                LEFT JOIN
                     class_teacher ct ON ct.classId = c.id
-                JOIN 
+                LEFT JOIN
                     teachers t ON ct.teacherId = t.id
                 WHERE e.id = ?
-
+                -- There must be SOMETHING to render: a frozen record or a live
+                -- classroom. An enrollment whose classroom was deleted and that
+                -- was never finalized stays a 404 (the original contract)
+                -- instead of producing a fabricated blank card.
+                AND (sar.id IS NOT NULL OR c.id IS NOT NULL)
+                LIMIT 1
             `;
             const [row] = await this.connection.execute<RowDataPacket[]>(query, [enrollmentId]);
             
