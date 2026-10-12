@@ -3,6 +3,18 @@ import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/prom
 // Error
 import { InternalServerError } from "../middleware/errors.js";
 
+// One row of the semester-end cleanup precondition check (audit F-4).
+// `recordId === null` means the enrollment was never finalized at all.
+export interface SnapshotCompletenessRow {
+    enrollmentId: number;
+    fullname: string;
+    recordId: number | null;
+    requiredSubjects: number;
+    frozenSubjects: number;
+    subjectsMissingGrades: number;
+    submittedQuarters: number;
+}
+
 export default class Enrollments {
     constructor(private connection: PoolConnection) {}
 
@@ -210,6 +222,122 @@ export default class Enrollments {
             throw new InternalServerError("Failed to get active enrollment IDs", 500, err);
         }
     }
+
+    // ---------------------------------------------------------------------
+    // Semester-end cleanup precondition support (audit F-4).
+    // ---------------------------------------------------------------------
+
+    // Active (status='enrolled') enrollment ids for a classroom, row-locked for
+    // the rest of the caller's transaction. Locking the enrollment rows stops a
+    // concurrent enrollment change (transfer / unenroll / re-enroll) from
+    // slipping past the snapshot-completeness check below.
+    async lockActiveEnrollmentIdsByClassId(classId: number): Promise<number[]> {
+        try {
+            const query = "SELECT id FROM enrollments WHERE classId = ? AND status = 'enrolled' FOR UPDATE";
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [classId]);
+            return rows.map((row) => Number(row.id));
+        } catch (err) {
+            throw new InternalServerError("Failed to lock active enrollment IDs", 500, err);
+        }
+    }
+
+    // Row-lock the frozen academic records for these enrollments and return
+    // their ids. Locking them serialises cleanup against a concurrent grade
+    // finalization (freezeRecordWithin writes these same rows).
+    async lockAcademicRecordIdsByEnrollmentIds(enrollmentIds: number[]): Promise<number[]> {
+        if (enrollmentIds.length === 0) {
+            return [];
+        }
+        try {
+            const placeholders = enrollmentIds.map(() => "?").join(", ");
+            const query = `SELECT id FROM student_academic_records WHERE enrollmentId IN (${placeholders}) FOR UPDATE`;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, enrollmentIds);
+            return rows.map((row) => Number(row.id));
+        } catch (err) {
+            throw new InternalServerError("Failed to lock academic record IDs", 500, err);
+        }
+    }
+
+    // Row-lock the per-quarter submission ledger rows for these records.
+    async lockRecordQuarterIdsByRecordIds(recordIds: number[]): Promise<number[]> {
+        if (recordIds.length === 0) {
+            return [];
+        }
+        try {
+            const placeholders = recordIds.map(() => "?").join(", ");
+            const query = `SELECT id FROM student_academic_record_quarters WHERE recordId IN (${placeholders}) FOR UPDATE`;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, recordIds);
+            return rows.map((row) => Number(row.id));
+        } catch (err) {
+            throw new InternalServerError("Failed to lock record quarter IDs", 500, err);
+        }
+    }
+
+    // Per-enrollment snapshot completeness for the active enrollments of a
+    // classroom, measured against the configured grading periods:
+    //   - recordId:            the frozen record (null when never submitted)
+    //   - requiredSubjects:    enrollment_details ∩ class_subjects for this class
+    //   - frozenSubjects:      frozen subject grade rows on the record
+    //   - subjectsMissingGrades: frozen subject rows with a NULL grade in any
+    //                            configured quarter (a row alone is not enough)
+    //   - submittedQuarters:   'submitted' ledger rows within 1..numQuarters
+    async getSnapshotCompletenessByClassId(classId: number, numQuarters: number): Promise<SnapshotCompletenessRow[]> {
+        try {
+            const quarterColumns = (["q1", "q2", "q3", "q4"] as const)
+                .slice(0, Math.max(1, Math.min(4, numQuarters)));
+            const missingGradeExpr = quarterColumns.map((column) => `sars.${column} IS NULL`).join(" OR ");
+
+            const query = `
+                SELECT
+                    e.id AS enrollmentId,
+                    CONCAT_WS(" ", s.firstname, s.middlename, s.lastname,
+                              IF(s.suffix IS NOT NULL, s.suffix, "")) AS fullname,
+                    sar.id AS recordId,
+                    (
+                        SELECT COUNT(*)
+                        FROM enrollment_details ed
+                        JOIN class_subjects cs ON cs.subjectId = ed.subjectId AND cs.classId = e.classId
+                        WHERE ed.enrollmentId = e.id
+                    ) AS requiredSubjects,
+                    (
+                        SELECT COUNT(*)
+                        FROM student_academic_record_subjects sars
+                        WHERE sars.recordId = sar.id
+                    ) AS frozenSubjects,
+                    (
+                        SELECT COUNT(*)
+                        FROM student_academic_record_subjects sars
+                        WHERE sars.recordId = sar.id AND (${missingGradeExpr})
+                    ) AS subjectsMissingGrades,
+                    (
+                        SELECT COUNT(*)
+                        FROM student_academic_record_quarters sarq
+                        WHERE sarq.recordId = sar.id
+                          AND sarq.status = 'submitted'
+                          AND sarq.quarter BETWEEN 1 AND ?
+                    ) AS submittedQuarters
+                FROM enrollments e
+                JOIN students s ON s.id = e.studentId
+                LEFT JOIN student_academic_records sar ON sar.enrollmentId = e.id
+                WHERE e.classId = ? AND e.status = 'enrolled'
+            `;
+
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [numQuarters, classId]);
+            return rows.map((row) => ({
+                enrollmentId: Number(row.enrollmentId),
+                fullname: String(row.fullname ?? ""),
+                recordId: row.recordId === null || row.recordId === undefined ? null : Number(row.recordId),
+                requiredSubjects: Number(row.requiredSubjects ?? 0),
+                frozenSubjects: Number(row.frozenSubjects ?? 0),
+                subjectsMissingGrades: Number(row.subjectsMissingGrades ?? 0),
+                submittedQuarters: Number(row.submittedQuarters ?? 0)
+            }));
+        } catch (err) {
+            throw new InternalServerError("Failed to check snapshot completeness", 500, err);
+        }
+    }
+
+    // ---------------------------------------------------------------------
 
     // Get the student_academic_records ID for an enrollment
     async getRecordIdByEnrollmentId(enrollmentId: number): Promise<number | null> {

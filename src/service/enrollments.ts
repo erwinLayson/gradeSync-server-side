@@ -7,7 +7,7 @@ import { ConflictError, ForbiddenError, NotFoundError, BadRequestError } from ".
 
 // Service function to create a new enrollment
 import {updateStudentByIdService} from "./students.js"
-import { getAcademicSettingsService } from "./academicSettings.js";
+import { getAcademicSettingsService, getNumQuarters } from "./academicSettings.js";
 
 
 // Create a new enrollment: enrollments + class_students + enrollment_details
@@ -210,58 +210,125 @@ export async function bulkRemoveStudentsFromClassService(classId: number, enroll
 }
 
 
-// Clear all students from a single classroom
-// Deletes scores, attendance, enrollment details, class links, and submission records.
-// Marks enrollment as 'completed'.
+// The cleanup precondition (audit F-4): the operational rows this cleanup
+// deletes (scores, per-subject attendance, enrollment links, assessments) are
+// only recoverable from the frozen student academic record. So before ANY row
+// is removed, every active enrollment of the class must already hold a COMPLETE
+// snapshot for ALL configured grading periods.
+//
+// A record row alone is NOT sufficient — the check also requires the required
+// subject rows (enrollment_details ∩ the class's class_subjects), a non-null
+// grade in every configured quarter on each of those rows, and a 'submitted'
+// ledger row per configured quarter. `numQuarters` comes from the admin's
+// academic settings (3 or 4), so a 3-quarter school is measured against 3.
+async function assertClassSnapshotsComplete(
+    connection: PoolConnection,
+    classId: number,
+    numQuarters: number
+): Promise<void> {
+    const enrollmentModel = new Enrollments(connection);
+    const rows = await enrollmentModel.getSnapshotCompletenessByClassId(classId, numQuarters);
+
+    const problems: string[] = [];
+    for (const row of rows) {
+        const reasons: string[] = [];
+        if (row.recordId === null) {
+            reasons.push("no submitted academic record");
+        } else {
+            if (row.submittedQuarters < numQuarters) {
+                reasons.push(`${row.submittedQuarters} of ${numQuarters} quarter(s) submitted`);
+            }
+            if (row.requiredSubjects > 0 && row.frozenSubjects < row.requiredSubjects) {
+                reasons.push(`${row.frozenSubjects} of ${row.requiredSubjects} subject row(s) frozen`);
+            }
+            if (row.subjectsMissingGrades > 0) {
+                reasons.push(`${row.subjectsMissingGrades} subject row(s) missing a grade in a required quarter`);
+            }
+        }
+        if (reasons.length > 0) {
+            problems.push(`${row.fullname} (${reasons.join("; ")})`);
+        }
+    }
+
+    if (problems.length > 0) {
+        const shown = problems.slice(0, 5).join(", ");
+        const more = problems.length > 5 ? ` and ${problems.length - 5} more` : "";
+        throw new ConflictError(
+            `Cannot clear this classroom: ${problems.length} student record(s) are missing the finalized grade ` +
+            `history this cleanup would delete — ${shown}${more}. Submit every required quarter for all students ` +
+            `(each with a grade) before clearing. No data was deleted.`
+        );
+    }
+}
+
+// Clear all students from a single classroom.
+// Deletes scores, attendance, enrollment details, class links, and the class's
+// assessments. Marks each enrollment as 'completed'.
+//
+// The frozen history is deliberately PRESERVED: student_academic_records, its
+// subject/component rows and the per-quarter submission ledger all stay intact
+// (the ledger is the audit trail of who finalized what and when — audit F-4).
+// The precondition above guarantees nothing unrecoverable is deleted, and both
+// the check and the deletes run in ONE transaction after row-locking the
+// enrollments and records, so a concurrent grade finalization cannot interleave.
 export async function clearAllFromClassService(classId: number): Promise<number> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
         const enrollmentModel = new Enrollments(connection);
-        const enrollmentIds = await enrollmentModel.getActiveEnrollmentIdsByClassId(classId);
-
-        if (enrollmentIds.length === 0) {
-            return 0;
-        }
+        const numQuarters = await getNumQuarters();
 
         await connection.beginTransaction();
         try {
+            // 1. Lock the affected enrollments (FOR UPDATE) so an enrollment
+            //    change cannot land between the completeness check and the deletes.
+            const enrollmentIds = await enrollmentModel.lockActiveEnrollmentIdsByClassId(classId);
+
+            if (enrollmentIds.length === 0) {
+                await connection.commit();
+                return 0;
+            }
+
+            // 2. Lock the frozen records + submission ledger we are about to read,
+            //    serialising against a concurrent freezeRecordWithin() submit.
+            const recordIds = await enrollmentModel.lockAcademicRecordIdsByEnrollmentIds(enrollmentIds);
+            await enrollmentModel.lockRecordQuarterIdsByRecordIds(recordIds);
+
+            // 3. Reject the whole cleanup when any required snapshot is missing.
+            await assertClassSnapshotsComplete(connection, classId, numQuarters);
+
             for (const enrollmentId of enrollmentIds) {
-                // 1. Delete student scores
+                // Delete student scores
                 await enrollmentModel.deleteStudentScoresByEnrollmentId(enrollmentId);
 
-                // 2. Delete student attendance
+                // Delete student attendance
                 await enrollmentModel.deleteStudentAttendanceByEnrollmentId(enrollmentId);
 
-                // 3. Delete enrollment details (subject links)
+                // Delete enrollment details (subject links)
                 await enrollmentModel.deleteEnrollmentDetailsByEnrollmentId(enrollmentId);
 
-                // 4. Delete class_students (class-enrollment link)
+                // Delete class_students (class-enrollment link)
                 await enrollmentModel.deleteClassStudentByEnrollmentId(enrollmentId);
 
-                // 5. Delete student_academic_record_quarters (submission status)
-                const recordId = await enrollmentModel.getRecordIdByEnrollmentId(enrollmentId);
-                if (recordId) {
-                    await enrollmentModel.deleteRecordQuartersByRecordId(recordId);
-                }
+                // NOTE: student_academic_record_quarters is intentionally NOT
+                // deleted here — the submission ledger is historical audit data.
 
-                // 6. Mark enrollment as completed
+                // Mark enrollment as completed (history, not a deleted year)
                 await enrollmentModel.updateEnrollmentStatus(enrollmentId, "completed");
             }
 
-            // 7. Clear assessments for all class subjects in this classroom
+            // Clear assessments for all class subjects in this classroom
             const classSubjectIds = await enrollmentModel.getClassSubjectIdsByClassId(classId);
             for (const csId of classSubjectIds) {
                 await enrollmentModel.deleteAssessmentsByClassSubjectId(csId);
             }
 
             await connection.commit();
+            return enrollmentIds.length;
         } catch (err) {
             await connection.rollback();
             throw err;
         }
-
-        return enrollmentIds.length;
     } finally {
         connection.release();
     }
@@ -285,6 +352,15 @@ export async function clearAllClassroomsService(): Promise<{ totalCleared: numbe
 
         // Get all active classroom IDs for this school year
         const classIds = await enrollmentModel.getActiveClassIdsBySchoolYear(schoolYearId);
+
+        // Pre-flight the precondition for EVERY classroom before clearing any of
+        // them. clearAllFromClassService re-checks under row locks, but that is
+        // per-class and each class commits on its own — without this pass a
+        // failure on the 3rd class would leave classes 1-2 already cleared.
+        const numQuarters = await getNumQuarters();
+        for (const classId of classIds) {
+            await assertClassSnapshotsComplete(connection, classId, numQuarters);
+        }
 
         let totalCleared = 0;
         let classroomsCleared = 0;
