@@ -5,7 +5,7 @@ import { SuccessResponse } from "../helper/response.js";
 import { BadRequestError } from "../middleware/errors.js";
 
 import type { AcademicSettingsUpdateProps } from "../constant/academicSettings.js";
-import { isValidQuarter, MAX_QUARTERS } from "../helper/quarterValidation.js";
+import { isValidQuarter, MAX_QUARTERS, MIN_QUARTERS, parseQuarterInput } from "../helper/quarterValidation.js";
 
 // GET /api/academic-settings
 // Returns the current quarter, numQuarters, and enrollment status.
@@ -29,19 +29,23 @@ export async function updateAcademicSettingsController(req: Request<{}, {}, Acad
     try {
         const { confirmForce, ...updates } = req.body;
 
+        // Quarter parsing is strict (no Number() coercion): booleans, null,
+        // fractions, and non-numeric strings are rejected rather than being
+        // silently turned into a "valid" quarter. The upper bound here is the
+        // system maximum — the service additionally enforces the school's
+        // configured numQuarters, which the controller cannot know.
         if (updates.currentQuarter !== undefined) {
-            const quarter = Number(updates.currentQuarter);
-            // Shared quarter rule (helper/quarterValidation.ts).
-            if (!isValidQuarter(quarter, MAX_QUARTERS)) {
+            const quarter = parseQuarterInput(updates.currentQuarter);
+            if (quarter === null || !isValidQuarter(quarter, MAX_QUARTERS)) {
                 throw new BadRequestError(`currentQuarter must be an integer between 1 and ${MAX_QUARTERS}`);
             }
             updates.currentQuarter = quarter;
         }
 
         if (updates.numQuarters !== undefined) {
-            const num = Number(updates.numQuarters);
-            if (num !== 3 && num !== 4) {
-                throw new BadRequestError("numQuarters must be 3 or 4");
+            const num = parseQuarterInput(updates.numQuarters);
+            if (num !== MIN_QUARTERS && num !== MAX_QUARTERS) {
+                throw new BadRequestError(`numQuarters must be ${MIN_QUARTERS} or ${MAX_QUARTERS}`);
             }
             updates.numQuarters = num;
         }

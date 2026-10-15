@@ -40,6 +40,21 @@ export default class AcademicSettings {
         return seeded;
     }
 
+    // Locking read of the single settings row, for the quarter-advancement
+    // transaction. `FOR UPDATE` takes an exclusive row lock so a second
+    // advancement request waits here and then re-reads the quarter this one
+    // committed, instead of validating against the stale value it read before.
+    // Must be called inside a transaction (the lock is held until COMMIT).
+    async getSettingsForUpdate(): Promise<AcademicSettingsProps | null> {
+        try {
+            const query = "SELECT id, currentQuarter, numQuarters, enrollmentOpen, submissionsLocked FROM academic_settings LIMIT 1 FOR UPDATE";
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query);
+            return rows.length > 0 ? (rows[0] as AcademicSettingsProps) : null;
+        } catch (err) {
+            throw new InternalServerError("Internal Server Error", 500, err);
+        }
+    }
+
     async updateSettings(id: number, updates: AcademicSettingsUpdateProps): Promise<void> {
         const updateFields: string[] = [];
         const values: (string | number)[] = [];

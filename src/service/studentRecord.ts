@@ -514,14 +514,26 @@ export async function assertQuarterCompleteService(quarter: number, existingConn
     const ownConnection = !existingConnection;
     try {
         const recordModel = new StudentRecordModel(connection);
+
+        // The completeness rules are defined per ACTIVE school year (the only
+        // year the gradebook and submission workflow operate on). Without one
+        // there is nothing meaningful to validate, so a forward advancement is
+        // refused instead of silently passing with no checks at all.
         const schoolYearId = await recordModel.getActiveSchoolYearId();
         if (schoolYearId === null) {
-            return;
+            throw new ConflictError(
+                "Cannot advance the quarter: no active school year is set. Activate a school year first."
+            );
         }
 
         const withoutAdviser = await recordModel.getClassesWithoutAdviser(schoolYearId);
         const incomplete = await recordModel.getIncompleteClasses(quarter, schoolYearId);
 
+        // EMPTY-CLASS POLICY (explicit): a year whose classes all have advisers
+        // and no outstanding submissions has nothing blocking it — including the
+        // case where the active year has zero eligible classes. Both blocker
+        // lists being empty is the single success condition; there is no
+        // separate "must have at least one class" rule.
         if (withoutAdviser.length === 0 && incomplete.length === 0) {
             return;
         }
