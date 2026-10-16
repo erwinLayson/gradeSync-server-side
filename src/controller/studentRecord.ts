@@ -11,6 +11,7 @@ import {
 } from "../service/studentRecord.js";
 
 import { getSchoolInfoService } from "../service/schoolInfo.js";
+import { getSchoolSignatureService } from "../service/schoolSignature.js";
 import { getAcademicSettingsService } from "../service/academicSettings.js";
 import { SuccessResponse } from "../helper/response.js";
 import { BadRequestError } from "../middleware/errors.js";
@@ -190,6 +191,7 @@ export async function studentRecordController(req: Request<{ id: string }>, res:
         const {id} = req.params;
         const { student, academicRecord, numQuarters } = await StudentRecordPDFDetailsService(Number(id));
         const schoolInfo = await getSchoolInfoService();
+        const signature = await getSchoolSignatureService();
 
         //  ===================== School Year Data ======================
         const {semester1, semester2} = academicRecord;
@@ -218,6 +220,7 @@ export async function studentRecordController(req: Request<{ id: string }>, res:
             }, 
             schoolInfo, 
             certification,
+            signature: signature?.dataUrl ?? null,
             numQuarters 
         }
 

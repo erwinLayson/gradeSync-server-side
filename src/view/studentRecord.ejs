@@ -42,6 +42,28 @@
     .remedial-classes-tr td {
         padding: 10px 0;
     }
+
+    /* SF10: overlay the saved signature above the printed principal/school-head
+       name without taking part in normal flow, so the certification layout is
+       byte-for-byte unchanged whether or not a signature exists. */
+    .school-head-signature-area {
+        position: relative;
+    }
+
+    .school-head-signature-image {
+        position: absolute;
+        left: 50%;
+        bottom: 100%;
+        /* Dip the overlay down so the handwritten strokes naturally cross the
+           printed principal name / signature line, instead of floating in the
+           certification text above it. */
+        transform: translate(-50%, 55%);
+        width: 42mm;
+        height: 15mm;
+        object-fit: contain;
+        object-position: center bottom;
+        pointer-events: none;
+    }
 </style>
 <body>
     <main class="px-5 py-10">
@@ -417,7 +439,10 @@
                         <span class="text-xxs text-center min-w-30">Date</span>
                     </div>
 
-                    <div class="grid">
+                    <div class="grid school-head-signature-area">
+                        <% if (signature) { %>
+                            <img src="<%= signature %>" alt="" class="school-head-signature-image" />
+                        <% } %>
                         <span class="text-center inline-block min-w-30 text-xxs font-semibold">
                            <%= certification.schoolPrincipal %>
                         </span>
@@ -634,7 +659,10 @@
                                 <span class="text-xxs text-center min-w-30">Date</span>
                             </div>
 
-                            <div class="grid">
+                            <div class="grid school-head-signature-area">
+                                <% if (signature) { %>
+                                    <img src="<%= signature %>" alt="" class="school-head-signature-image" />
+                                <% } %>
                                 <span class="text-center inline-block min-w-30 text-xxs font-semibold">
                                 <%= certification.schoolPrincipal ?? "Erwin B. Layson" %>
                                 </span>

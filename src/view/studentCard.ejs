@@ -57,6 +57,28 @@
         width: 100%;
         table-layout: fixed;
       }
+
+      /* SF9: overlay the saved signature above each printed school-head name
+         without taking part in normal flow, so the report-card layout is
+         unchanged whether or not a signature exists. */
+      .school-head-signature-area {
+        position: relative;
+      }
+
+      .school-head-signature-image {
+        position: absolute;
+        left: 50%;
+        bottom: 100%;
+        /* Dip the overlay down so the handwritten strokes naturally cross the
+           printed school-head name / signature line, instead of covering the
+           certificate text above it. */
+        transform: translate(-50%, 60%);
+        width: 38mm;
+        height: 13mm;
+        object-fit: contain;
+        object-position: center bottom;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
@@ -599,7 +621,10 @@
               </div>
 
               <div class="w-full">
-                <div class="flex flex-col items-center float-left">
+                <div class="flex flex-col items-center float-left school-head-signature-area">
+                  <% if (signature) { %>
+                    <img src="<%= signature %>" alt="" class="school-head-signature-image" />
+                  <% } %>
                   <span
                     class="text-sm font-semibold border-b inline-block px-5 text-center"
                   >
@@ -652,7 +677,10 @@
               </div>
 
               <div class="w-full mt-5">
-                <div class="float-left flex flex-col items-center">
+                <div class="float-left flex flex-col items-center school-head-signature-area">
+                  <% if (signature) { %>
+                    <img src="<%= signature %>" alt="" class="school-head-signature-image" />
+                  <% } %>
                   <span class="inline-block font-semibold text-sm border-b px-4"
                     ><%= schoolInfo.principal.toUpperCase() %></span
                   >
@@ -691,7 +719,10 @@
                     ></span>
                   </div>
 
-                  <div class="flex flex-col items-center">
+                  <div class="flex flex-col items-center school-head-signature-area">
+                    <% if (signature) { %>
+                      <img src="<%= signature %>" alt="" class="school-head-signature-image" />
+                    <% } %>
                     <span
                       class="text-sm font-semibold inline-block border-b min-w-40 text-center"
                       ><%= schoolInfo.principal.toUpperCase() %></span
