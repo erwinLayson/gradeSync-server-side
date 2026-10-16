@@ -75,14 +75,14 @@ describe("PATCH /academic-settings request validation", () => {
             if (rows.length === 0) {
                 throw new Error("academic_settings is unexpectedly empty");
             }
-            originalSettings = rows[0];
+            originalSettings = rows[0] ?? null;
         }
     }
 
     it("rejects invalid quarter values sent by the controller", async () => {
         stampCurrentSettings();
 
-        const invalid: unknown[] = [
+        const invalid: Array<{ value: unknown; message: RegExp }> = [
             { value: null as unknown, message: /currentQuarter must be/ },
             { value: true as unknown, message: /currentQuarter must be/ },
             { value: false as unknown, message: /currentQuarter must be/ },
@@ -96,8 +96,8 @@ describe("PATCH /academic-settings request validation", () => {
             { value: 5 as unknown, message: /currentQuarter must be/ },
         ];
 
-        for (const { value, message } of invalid) {
-            await expect(updateAcademicSettingsService({ currentQuarter: value })).rejects.toThrow(message);
+        for (const entry of invalid) {
+            await expect(updateAcademicSettingsService({ currentQuarter: entry.value as unknown as number })).rejects.toThrow(entry.message);
         }
     });
 

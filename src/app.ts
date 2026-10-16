@@ -19,7 +19,7 @@ import SystemWipeRoutes from "./routes/systemWipe.js";
 import StudentRoutes from "./routes/students.js"
 import AuthRoutes from "./routes/auth.js"
 import ClassroomRoutes from "./routes/classrooms.js"
-import TeacherRoutes from "./routes/teachers.js"
+import FacultyRoutes from "./routes/faculties.js"
 import SubjectRoutes from "./routes/subjects.js"
 import ClassStudentsRoutes from "./routes/class_students.js"
 import ClassSubjectsRoutes from "./routes/class_subjects.js"
@@ -66,7 +66,7 @@ app.use("/api", AuthRoutes);
 app.use("/api", UserRoutes);
 app.use("/api", StudentRoutes);
 app.use("/api", ClassroomRoutes);
-app.use("/api", TeacherRoutes);
+app.use("/api", FacultyRoutes);
 app.use("/api", SubjectRoutes);
 app.use("/api", ClassStudentsRoutes);
 app.use("/api", ClassSubjectsRoutes);

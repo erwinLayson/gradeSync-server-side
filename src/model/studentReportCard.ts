@@ -16,7 +16,7 @@ export default class StudentReportCard {
             // and adviser for that school year, so it wins whenever it exists.
             // The live classroom / adviser joins are FALLBACKS only (a current,
             // not-yet-frozen school year) and are LEFT JOINs: archiving a class
-            // clears its class_teacher row, and a hard-deleted classroom would
+            // clears its class_adviser row, and a hard-deleted classroom would
             // otherwise make a finalized report card unreadable (404). A live
             // value is never substituted for an available frozen value.
             const query =  `
@@ -44,9 +44,9 @@ export default class StudentReportCard {
                 LEFT JOIN
                     classrooms c ON c.id = e.classId
                 LEFT JOIN
-                    class_teacher ct ON ct.classId = c.id
+                    class_adviser ct ON ct.classId = c.id
                 LEFT JOIN
-                    teachers t ON ct.teacherId = t.id
+                    faculties t ON ct.facultyId = t.id
                 WHERE e.id = ?
                 -- There must be SOMETHING to render: a frozen record or a live
                 -- classroom. An enrollment whose classroom was deleted and that

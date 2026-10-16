@@ -9,11 +9,11 @@ export interface ClassroomResponse {
     status?: string;
 }
 
-export interface ClassroomTeachersWithSubjectProps  {
-    teacherId: number;
+export interface ClassroomFacultiesWithSubjectProps  {
+    facultyId: number;
     unit: number,
     code: string;
-    teacherFullname: string;
+    facultyFullname: string;
     subjectId: number;
     subjectName: string;
 }
@@ -21,5 +21,5 @@ export interface ClassroomTeachersWithSubjectProps  {
 export interface NewClassroomSubject {
     classId: number;
     subjectId: number;
-    teacherId: number;
+    facultyId: number;
 }

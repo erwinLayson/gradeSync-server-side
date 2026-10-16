@@ -5,7 +5,7 @@ import StudentDetailsModel from "../model/studentDetails.js";
 import StudentRecordModel from "../model/studentRecord.js";
 import ClassDailyAttendanceModel from "../model/classDailyAttendance.js";
 
-// Grade computation building blocks (reused from the teacher gradebook)
+// Grade computation building blocks (reused from the faculty gradebook)
 import { getAssessmentService } from "./assessment.js";
 import { getStudentScoreService } from "./studentScore.js";
 import { getGradingWeightsService } from "./gradingWeight.js";
@@ -228,7 +228,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                 // final rating + general average come from the shared helpers, so this
                 // view is numerically identical to the SF9/SF10 for the same record.
                 // Frozen rows have no live gradebook data, so
-                // classSubjectId/teacher/unit/assessments/attendance are null/empty.
+                // classSubjectId/faculty/unit/assessments/attendance are null/empty.
                 const subjects = subjectRows.map((row) => {
                     const storedQuarters: (number | null)[] = [row.q1, row.q2, row.q3, row.q4].map((q) =>
                         q === null || q === undefined ? null : Number(q)
@@ -249,7 +249,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                         name: row.subjectName,
                         code: row.subjectCode,
                         unit: null,
-                        teacher: null,
+                        faculty: null,
                         quarters,
                         final,
                         remarks: final === null ? null : getRemarks(final),
@@ -440,7 +440,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     name: subjectRow.name,
                     code: subjectRow.code,
                     unit: subjectRow.unit !== null && subjectRow.unit !== undefined ? Number(subjectRow.unit) : null,
-                    teacher: subjectRow.teacherFullname,
+                    faculty: subjectRow.facultyFullname,
                     quarters,
                     final,
                     remarks: final === null ? null : getRemarks(final),

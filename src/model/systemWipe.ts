@@ -51,8 +51,8 @@ const ACADEMICS: WipeStep[] = [
     { table: "subject_components", sql: "DELETE FROM subject_components" },
     { table: "grading_weights", sql: "DELETE FROM grading_weights" },
     { table: "class_subjects", sql: "DELETE FROM class_subjects" },
-    { table: "teacher_subject_assignment", sql: "DELETE FROM teacher_subject_assignment" },
-    { table: "class_teacher", sql: "DELETE FROM class_teacher" },
+    { table: "faculty_subject_assignment", sql: "DELETE FROM faculty_subject_assignment" },
+    { table: "class_adviser", sql: "DELETE FROM class_adviser" },
 ];
 
 const ATTENDANCE: WipeStep[] = [
@@ -68,20 +68,20 @@ const ENROLLMENTS: WipeStep[] = [
 
 const USERS_STEPS: WipeStep[] = [
     // A STANDALONE users wipe runs while classrooms/subjects/enrollments may
-    // still exist, so every RESTRICT reference into users/teachers/students
+    // still exist, so every RESTRICT reference into users/faculties/students
     // must be cleared first (the master "all" scope already removed most of
     // these; DELETEs are idempotent so the extra steps are harmless there).
-    { table: "class_teacher", sql: "DELETE FROM class_teacher" },
-    { table: "teacher_subject_assignment", sql: "DELETE FROM teacher_subject_assignment" },
+    { table: "class_adviser", sql: "DELETE FROM class_adviser" },
+    { table: "faculty_subject_assignment", sql: "DELETE FROM faculty_subject_assignment" },
     // students.userId → users is ON DELETE CASCADE, so removing the users rows
     // deletes students (→ student_details, enrollments via RESTRICT rows must
     // already be gone — enrollments wiped before USERS in the master scope).
-    { table: "teachers", sql: "DELETE FROM teachers" },
+    { table: "faculties", sql: "DELETE FROM faculties" },
     {
-        // Every SCHOOL role is removed here — teacher, student, and register
+        // Every SCHOOL role is removed here — faculty, student, and register
         // (registration staff) — while the platform roles (admin, developer)
         // survive. Keep this list and the label in sync when roles are added.
-        table: "users (teacher/student/register)",
+        table: "users (faculty/student/register)",
         sql: "DELETE FROM users WHERE role NOT IN ('admin', 'developer')",
     },
 ];
@@ -98,11 +98,11 @@ const SETTINGS: WipeStep[] = [
     { table: "schoolyear", sql: "DELETE FROM schoolyear" },
 ];
 
-// Single-row config tables that migrate_all.mjs seeds only when it first
-// CREATES the table. The settings/master wipes DELETE them, so without a
-// re-seed the admin Settings page could never save again (every PATCH
-// failed with "Academic settings not found"). executeWipe restores the
-// migration defaults for these scopes (see the re-seed step below).
+// Single-row config tables that the schema migration creates empty. The
+// settings/master wipes DELETE them, so without a re-seed the admin Settings
+// page could never save again (every PATCH failed with "Academic settings not
+// found"). executeWipe restores the application defaults for these scopes (see
+// the re-seed step below).
 const RESEED_DEFAULTS: { table: string; sql: string }[] = [
     {
         table: "academic_settings",
@@ -187,7 +187,7 @@ export async function executeWipe(scope: WipeScope, requesterId: number): Promis
         }
 
         // Merge duplicates: a step can legitimately run twice (e.g.
-        // class_teacher is cleared in both the academics chain and the users
+        // class_adviser is cleared in both the academics chain and the users
         // pre-clean), and the receipt should show one honest total per table.
         const byTable = new Map<string, WipeTableReceipt>();
         for (const batch of wipeStepsFor(scope)) {
@@ -250,7 +250,7 @@ export async function getWipeStatus(): Promise<{ table: string; rows: number }[]
         const statusTables = [
             "students",
             "student_details",
-            "teachers",
+            "faculties",
             "classrooms",
             "subjects",
             "class_subjects",

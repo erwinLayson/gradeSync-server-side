@@ -18,8 +18,10 @@ import { getPastSubmittedGradesController } from "../controller/pastGrades.js";
 
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
+import { allowedFacultyRoles } from "../middleware/allowedFacultyRoles.js";
 import { ValidateToken } from "../middleware/validateToken.js";
 import { ROLES } from "../constant/users.js";
+import { FACULTY_ROLES } from "../constant/faculties.js";
 
 const route: Router = Router();
 
@@ -31,12 +33,39 @@ const studentOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.STUDEN
 // workflow — it manages the student registry (list, create, edit, delete),
 // reads student detail/academic history during enrollment, and enrols students.
 // The past-submitted-grades view stays Admin-only.
-const adminRegister: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.REGISTER])];
+//
+// After the migration there is no user-level `register` role. Register-staff
+// access is therefore authorized through the authenticated user's verified
+// faculty record (`faculties.role === "register"`), via the combined guard below.
+// Admins still pass through the role guard and skip the faculty-guard allow-list;
+// register faculty members pass through both guards; teacher faculty members and
+// accounts without a linked faculty record are refused.
+const adminRegister: RequestHandler[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.REGISTER], { allowAdmin: true }),
+];
 // Update/delete controllers are typed with a string `:id` param (matching the
 // original adminOnlyWithId group), so this guard keeps the same param type.
-const adminRegisterWithId: RequestHandler<{id: string}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.REGISTER])];
-const adminTeacherRegister: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.TEACHER, ROLES.REGISTER])];
-const adminTeacherRegisterWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.TEACHER, ROLES.REGISTER])];
+const adminRegisterWithId: RequestHandler<{id: string}>[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.REGISTER], { allowAdmin: true }),
+];
+
+// Read-side shared view: admins and teaching faculty may read the student list and
+// detail/academic-history during enrollment, and register staff may too. This is
+// the combined guard for the teaching + register read surface.
+const adminFacultyRegister: RequestHandler[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.TEACHER, FACULTY_ROLES.REGISTER], { allowAdmin: true }),
+];
+const adminFacultyRegisterWithId: RequestHandler<{id: number}>[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.TEACHER, FACULTY_ROLES.REGISTER], { allowAdmin: true }),
+];
 
 // ==================== STUDENT ONLY (self-service profile) ====================
 // Registered BEFORE the parameterized /students/:id routes so that
@@ -59,9 +88,9 @@ route.delete("/students/:id", adminRegisterWithId, deleteStudentController)
 route.get("/students/not-enrolled", adminRegister, getAllNotEnrolledStudentsController)
 
 // ==================== ADMIN + TEACHER + REGISTER ====================
-route.get("/students", adminTeacherRegister, getAllStudentController)
-route.get("/students/:id/students", adminTeacherRegisterWithId, getStudentByIdController)
-route.get("/students/:id/academic-history", adminTeacherRegisterWithId, getStudentAcademicHistoryController)
+route.get("/students", adminFacultyRegister, getAllStudentController)
+route.get("/students/:id/students", adminFacultyRegisterWithId, getStudentByIdController)
+route.get("/students/:id/academic-history", adminFacultyRegisterWithId, getStudentAcademicHistoryController)
 
 // Admin-only, curated view of a candidate's already-submitted past grades.
 // Intentionally NOT shared with Register (docs/register-role-implementation-plan.md §3).

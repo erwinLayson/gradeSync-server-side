@@ -12,7 +12,7 @@ import {
 
 const router: Router = Router();
 
-// READ side — admin, teacher, and register all need the live grading config.
+// READ side — admin, faculty, and register all need the live grading config.
 // The register role depends on `enrollmentOpen` while printing SF10 / Form-137
 // records, so it is intentionally on the read side (docs/register-role-implementation-plan.md §6.2).
 const readAcademicSettings: RequestHandler[] = [
@@ -25,7 +25,7 @@ const editAcademicSettings: RequestHandler[] = [
     ValidateToken,
     allowedRoles([...ALLOWED_TO_EDIT_ACADEMIC_SETTINGS]),
 ];// ==================== READ ====================
-// Admin, teacher, and register consumers all read the live grading config.
+// Admin, faculty, and register consumers all read the live grading config.
 router.get("/academic-settings", readAcademicSettings, getAcademicSettingsController);
 
 // ==================== WRITE ====================

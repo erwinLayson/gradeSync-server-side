@@ -6,7 +6,7 @@ import { getCurrentQuarter } from "./academicSettings.js";
 
 // Aggregates the admin analytics dashboard data. When the optional
 // schoolYearId is provided every school-year-scoped metric is filtered to it;
-// counts of teachers / classrooms are global (they are not year-scoped).
+// counts of faculties / classrooms are global (they are not year-scoped).
 //
 // The grade metrics (averageGrade, passingRate, passingCount, gradedEnrollments,
 // subjectPerformance, topPerformers) are REAL grades for the configured current
@@ -21,7 +21,7 @@ export async function getAnalyticsService(schoolYearId?: number) {
 
         const [
             students,
-            teachers,
+            faculties,
             classrooms,
             enrollmentByGrade,
             gradeAggregates,
@@ -34,7 +34,7 @@ export async function getAnalyticsService(schoolYearId?: number) {
             enrollmentCount
         ] = await Promise.all([
             analyticsModel.getStudentCount(schoolYearId),
-            analyticsModel.getTeacherCount(),
+            analyticsModel.getFacultyCount(),
             analyticsModel.getClassroomCount(),
             analyticsModel.getEnrollmentByGradeLevel(schoolYearId),
             getQuarterGradeAggregates(schoolYearId, quarter),
@@ -49,7 +49,7 @@ export async function getAnalyticsService(schoolYearId?: number) {
 
         return {
             students,
-            teachers,
+            faculties,
             classrooms,
             // The quarter the grade metrics below are scoped to.
             quarter,

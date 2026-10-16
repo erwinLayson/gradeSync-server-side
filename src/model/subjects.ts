@@ -2,8 +2,8 @@ import {PoolConnection} from "mysql2/promise";
 import type{ResultSetHeader, RowDataPacket} from "mysql2/promise";
 import { InternalServerError } from "../middleware/errors.js";
 
-import type {Subject, AssignTeacherProps, SubjectWithTeachersNotAssignedToClass} from "../constant/subjects.js";
-import type{TeacherResponse} from "../constant/teachers.js";
+import type {Subject, AssignFacultyProps, SubjectWithFacultiesNotAssignedToClass} from "../constant/subjects.js";
+import type{FacultyResponse} from "../constant/faculties.js";
 
 export default class Subjects {
     constructor(private connection: PoolConnection) {}
@@ -82,24 +82,24 @@ export default class Subjects {
 
     // How many LIVE references point at this subject. Deleting is only allowed
     // when every count is 0 — otherwise the cascade would wipe class teaching /
-    // teacher pool / enrollment rows. Frozen student records no longer count:
+    // faculty pool / enrollment rows. Frozen student records no longer count:
     // they keep their own name/code snapshot (migration step 12), so a subject
     // frozen in old records can be deleted safely (see docs/classroom-subject-management.md).
-    async getSubjectUsage(subjectId: number): Promise<{ classes: number; teachers: number; enrollments: number }> {
+    async getSubjectUsage(subjectId: number): Promise<{ classes: number; faculties: number; enrollments: number }> {
         try {
             const [rows] = await this.connection.execute<RowDataPacket[]>(
                 `
                 SELECT
                     (SELECT COUNT(*) FROM class_subjects WHERE subjectId = ?) AS classes,
-                    (SELECT COUNT(*) FROM teacher_subject_assignment WHERE subjectId = ?) AS teachers,
+                    (SELECT COUNT(*) FROM faculty_subject_assignment WHERE subjectId = ?) AS faculties,
                     (SELECT COUNT(*) FROM enrollment_details WHERE subjectId = ?) AS enrollments
                 `,
                 [subjectId, subjectId, subjectId]
             );
-            const row = rows[0] as { classes?: unknown; teachers?: unknown; enrollments?: unknown } | undefined;
+            const row = rows[0] as { classes?: unknown; faculties?: unknown; enrollments?: unknown } | undefined;
             return {
                 classes: Number(row?.classes ?? 0),
-                teachers: Number(row?.teachers ?? 0),
+                faculties: Number(row?.faculties ?? 0),
                 enrollments: Number(row?.enrollments ?? 0)
             };
         } catch (err) {
@@ -118,22 +118,27 @@ export default class Subjects {
         }
     }
 
-    // Get teachers Unassigned to a specific subject
-    async getTeachersUnassignedToSubject(subjectId: number): Promise<Omit<TeacherResponse, "userId">[]> {
+    // Get faculties Unassigned to a specific subject
+    // Candidate pool for "assign a faculty to this subject". Register faculty
+    // are filtered out HERE (server-side), so they can never be offered as a
+    // teaching candidate even if the client renders its own list (plan §6.2).
+    async getFacultiesUnassignedToSubject(subjectId: number): Promise<Omit<FacultyResponse, "userId">[]> {
         try {
             const query = `
                 SELECT 
                     t.id,
+                    t.role,
                     CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS fullname,
                     t.email
                 FROM 
-                    teachers t
+                    faculties t
                 WHERE 
-                    t.id NOT IN (
+                    t.role = 'teacher'
+                    AND t.id NOT IN (
                         SELECT 
-                            tsa.teacherId
+                            tsa.facultyId
                         FROM 
-                            teacher_subject_assignment tsa
+                            faculty_subject_assignment tsa
                         WHERE 
                             tsa.subjectId = ?
                     )
@@ -142,58 +147,58 @@ export default class Subjects {
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [subjectId]);
             return rows as any[];
         } catch (err) {
-            throw new InternalServerError("Failed to fetch unassigned teachers", 500, err);
+            throw new InternalServerError("Failed to fetch unassigned faculties", 500, err);
         }
     }
 
-    // Assign teachers to a specific subject
-    async assignTeachersToSubject({subjectId, teachersId}: AssignTeacherProps): Promise<void> {
+    // Assign faculties to a specific subject
+    async assignFacultiesToSubject({subjectId, facultiesId}: AssignFacultyProps): Promise<void> {
         try {
             const query = `
-                INSERT INTO teacher_subject_assignment (subjectId, teacherId)
+                INSERT INTO faculty_subject_assignment (subjectId, facultyId)
                 VALUES (?, ?)
             `;
 
-            for (const teacherId of teachersId) {
-                await this.connection.execute(query, [subjectId, teacherId]);
+            for (const facultyId of facultiesId) {
+                await this.connection.execute(query, [subjectId, facultyId]);
             }
         } catch (err) {
-            throw new InternalServerError("Failed to assign teachers to subject", 500, err);
+            throw new InternalServerError("Failed to assign faculties to subject", 500, err);
         }
     }
 
-    // Whether the teacher still teaches this subject in an active class assignment.
-    // The class_subjects rows are NOT deleted when the teacher leaves the subject
+    // Whether the faculty still teaches this subject in an active class assignment.
+    // The class_subjects rows are NOT deleted when the faculty leaves the subject
     // pool — the client is warned and can reassign/clean those separately.
-    async isTeacherTeachingSubjectInClass(subjectId: number, teacherId: number): Promise<boolean> {
+    async isFacultyTeachingSubjectInClass(subjectId: number, facultyId: number): Promise<boolean> {
         try {
             const query = `
                 SELECT cs.id
                 FROM class_subjects cs
-                WHERE cs.subjectId = ? AND cs.teacherId = ?
+                WHERE cs.subjectId = ? AND cs.facultyId = ?
                 LIMIT 1
             `;
-            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [subjectId, teacherId]);
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [subjectId, facultyId]);
             return rows.length > 0;
         } catch (err) {
-            throw new InternalServerError("Failed to check teacher class assignments", 500, err);
+            throw new InternalServerError("Failed to check faculty class assignments", 500, err);
         }
     }
 
-    // Remove a teacher from a subject's teacher pool (teacher_subject_assignment).
+    // Remove a faculty from a subject's faculty pool (faculty_subject_assignment).
     // Returns the number of rows deleted so the service can 404 when nothing matched.
-    async unassignTeacherFromSubject(subjectId: number, teacherId: number): Promise<number> {
+    async unassignFacultyFromSubject(subjectId: number, facultyId: number): Promise<number> {
         try {
-            const query = "DELETE FROM teacher_subject_assignment WHERE subjectId = ? AND teacherId = ?";
-            const [result] = await this.connection.execute<ResultSetHeader>(query, [subjectId, teacherId]);
+            const query = "DELETE FROM faculty_subject_assignment WHERE subjectId = ? AND facultyId = ?";
+            const [result] = await this.connection.execute<ResultSetHeader>(query, [subjectId, facultyId]);
             return result.affectedRows;
         } catch (err) {
-            throw new InternalServerError("Failed to remove teacher from subject", 500, err);
+            throw new InternalServerError("Failed to remove faculty from subject", 500, err);
         }
     }
 
-    // get subjects assigned with assigned teachers but not asssigned to this this class
-    async getSubjectsWithAssignedTeachersNotInClass(classId: number, subjectId: number): Promise<SubjectWithTeachersNotAssignedToClass[]> {
+    // get subjects assigned with assigned faculties but not asssigned to this this class
+    async getSubjectsWithAssignedFacultiesNotInClass(classId: number, subjectId: number): Promise<SubjectWithFacultiesNotAssignedToClass[]> {
         try {
             const query = `
                 SELECT 
@@ -201,18 +206,18 @@ export default class Subjects {
                     s.name AS subjectName,
                     s.code AS subjectCode,
                     s.unit AS subjectUnit,
-                    t.id AS teacherId,
-                    CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS teacherFullname
+                    t.id AS facultyId,
+                    CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS facultyFullname
                 FROM 
-                    teachers t
+                    faculties t
                 JOIN 
-                    teacher_subject_assignment tsa ON t.id = tsa.teacherId
+                    faculty_subject_assignment tsa ON t.id = tsa.facultyId
                 JOIN 
                     subjects s ON tsa.subjectId = s.id
                 WHERE tsa.subjectId = ? 
                 AND t.id NOT IN (
                     SELECT 
-                        cs.teacherId
+                        cs.facultyId
                         FROM 
                         class_subjects cs
                         WHERE cs.classId = ? AND cs.subjectId = ?
@@ -220,14 +225,14 @@ export default class Subjects {
             `;
 
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [ subjectId, classId, subjectId]);
-            return rows as SubjectWithTeachersNotAssignedToClass[];
+            return rows as SubjectWithFacultiesNotAssignedToClass[];
         } catch (err) {
-            throw new InternalServerError("Failed to fetch subjects with assigned teachers not in class", 500, err);
+            throw new InternalServerError("Failed to fetch subjects with assigned faculties not in class", 500, err);
         }
     }
 
-    // get Subjects with teachers that are not assigned to this classroom
-    async getSubjectsNotInClass(classId: number): Promise<SubjectWithTeachersNotAssignedToClass[]> {
+    // get Subjects with faculties that are not assigned to this classroom
+    async getSubjectsNotInClass(classId: number): Promise<SubjectWithFacultiesNotAssignedToClass[]> {
         try {
             const query = `
                 SELECT 
@@ -235,14 +240,14 @@ export default class Subjects {
                 s.name AS subjectName,
                 s.code AS subjectCode,
                 s.unit AS subjectUnit,
-                t.id AS teacherId,
-                CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS teacherFullname
+                t.id AS facultyId,
+                CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS facultyFullname
                 FROM 
                     subjects s
                 JOIN 
-                    teacher_subject_assignment tsa ON s.id = tsa.subjectId
+                    faculty_subject_assignment tsa ON s.id = tsa.subjectId
                 JOIN 
-                    teachers t ON tsa.teacherId = t.id
+                    faculties t ON tsa.facultyId = t.id
                 WHERE s.id NOT IN (
                     SELECT cs.subjectId
                     FROM class_subjects cs
@@ -252,7 +257,7 @@ export default class Subjects {
             `;
 
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [classId]);
-            return rows as SubjectWithTeachersNotAssignedToClass[];
+            return rows as SubjectWithFacultiesNotAssignedToClass[];
         } catch (err) {
             throw new InternalServerError("Failed to fetch subjects not in class", 500, err);
         }

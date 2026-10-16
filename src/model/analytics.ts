@@ -28,14 +28,14 @@ export default class Analytics {
         }
     }
 
-    // Teachers / active classrooms are not school-year scoped.
-    async getTeacherCount(): Promise<number> {
+    // Faculties / active classrooms are not school-year scoped.
+    async getFacultyCount(): Promise<number> {
         try {
-            const query = `SELECT COUNT(*) AS count FROM teachers`;
+            const query = `SELECT COUNT(*) AS count FROM faculties`;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query);
             return Number(rows[0]?.count ?? 0);
         } catch (err) {
-            throw new InternalServerError("Failed to fetch teacher count", 500, err);
+            throw new InternalServerError("Failed to fetch faculty count", 500, err);
         }
     }
 

@@ -4,7 +4,7 @@ import {
     getClassRecordsService,
     getSubmissionSummaryService,
     reopenStudentRecordService,
-    resolveTeacherIdByUserIdService,
+    resolveFacultyIdByUserIdService,
     submitAllStudentRecordsService,
     submitStudentRecordService,
     StudentRecordPDFDetailsService
@@ -39,12 +39,12 @@ async function parseQuarterParam(value: unknown): Promise<number> {
     return quarter;
 }
 
-// The acting teacher's id for ownership checks; null when the caller is an admin.
-async function resolveActorTeacherId(req: Request): Promise<number | null> {
+// The acting faculty's id for ownership checks; null when the caller is an admin.
+async function resolveActorFacultyId(req: Request): Promise<number | null> {
     if (req.user?.role === ROLES.ADMIN) {
         return null;
     }
-    return resolveTeacherIdByUserIdService(req.user!.id);
+    return resolveFacultyIdByUserIdService(req.user!.id);
 }
 
 // ==================== GET /api/student-records/my-class ====================
@@ -52,11 +52,11 @@ async function resolveActorTeacherId(req: Request): Promise<number | null> {
 export async function getMyClassRecordsController(req: Request, res: Response, next: NextFunction) {
     try {
         const quarter = await parseQuarterParam(req.query.quarter ?? 1);
-        const teacherId = await resolveActorTeacherId(req);
-        const classId = await getAdvisedClassIdService(teacherId!);
+        const facultyId = await resolveActorFacultyId(req);
+        const classId = await getAdvisedClassIdService(facultyId!);
 
         if(classId) {
-            const result = await getClassRecordsService(classId, quarter, teacherId);
+            const result = await getClassRecordsService(classId, quarter, facultyId);
             return res.status(200).json(
                 SuccessResponse({
                     message: "Retrieved successfully",
@@ -81,8 +81,8 @@ export async function getClassRecordsController(req: Request<{ classId: string }
     try {
         const classId = parseIdParam(req.params.classId, "classId");
         const quarter = await parseQuarterParam(req.query.quarter ?? 1);
-        const teacherId = await resolveActorTeacherId(req);
-        const result = await getClassRecordsService(classId, quarter, teacherId);
+        const facultyId = await resolveActorFacultyId(req);
+        const result = await getClassRecordsService(classId, quarter, facultyId);
         return res.status(200).json(
             SuccessResponse({
                 message: "Retrieved successfully",
@@ -105,8 +105,8 @@ export async function submitStudentRecordController(
         const classId = parseIdParam(req.params.classId, "classId");
         const enrollmentId = parseIdParam(req.params.enrollmentId, "enrollmentId");
         const quarter = await parseQuarterParam(req.params.quarter);
-        const teacherId = await resolveActorTeacherId(req);
-        const result = await submitStudentRecordService(classId, enrollmentId, quarter, teacherId);
+        const facultyId = await resolveActorFacultyId(req);
+        const result = await submitStudentRecordService(classId, enrollmentId, quarter, facultyId);
         return res.status(200).json(
             SuccessResponse({
                 message: "Student record submitted successfully",
@@ -128,8 +128,8 @@ export async function submitAllStudentRecordsController(
     try {
         const classId = parseIdParam(req.params.classId, "classId");
         const quarter = await parseQuarterParam(req.params.quarter);
-        const teacherId = await resolveActorTeacherId(req);
-        const result = await submitAllStudentRecordsService(classId, quarter, teacherId);
+        const facultyId = await resolveActorFacultyId(req);
+        const result = await submitAllStudentRecordsService(classId, quarter, facultyId);
         return res.status(200).json(
             SuccessResponse({
                 message: "Student records submitted",
@@ -152,8 +152,8 @@ export async function reopenStudentRecordController(
         const classId = parseIdParam(req.params.classId, "classId");
         const enrollmentId = parseIdParam(req.params.enrollmentId, "enrollmentId");
         const quarter = await parseQuarterParam(req.params.quarter);
-        const teacherId = await resolveActorTeacherId(req);
-        const result = await reopenStudentRecordService(classId, enrollmentId, quarter, teacherId);
+        const facultyId = await resolveActorFacultyId(req);
+        const result = await reopenStudentRecordService(classId, enrollmentId, quarter, facultyId);
         return res.status(200).json(
             SuccessResponse({
                 message: "Student record reopened",

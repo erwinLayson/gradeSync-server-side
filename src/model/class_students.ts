@@ -15,12 +15,12 @@ export default class ClassStudents {
                 c.id,
                 c.section,
                 c.gradeLevel,
-                -- Class adviser (class_teacher holds at most one adviser per class)
+                -- Class adviser (class_adviser holds at most one adviser per class)
                 t.id AS adviserId,
                 CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS adviserFullname
                 FROM classrooms c
-                LEFT JOIN class_teacher ct ON ct.classId = c.id
-                LEFT JOIN teachers t ON t.id = ct.teacherId
+                LEFT JOIN class_adviser ct ON ct.classId = c.id
+                LEFT JOIN faculties t ON t.id = ct.facultyId
                 WHERE c.id = ?
             `;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [classId]);

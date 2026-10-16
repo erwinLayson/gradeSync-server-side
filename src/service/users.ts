@@ -2,10 +2,16 @@ import bcrypt from "bcrypt";
 import { PoolConnection } from "mysql2/promise";
 
 import UserModel from "../model/users.js";
+import FacultyModel from "../model/faculties.js";
 import { getDBPoolConnection } from "../config/database.js";
 
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "../middleware/errors.js";
 import { ROLES, type CreateUserProps, type UpdateUserCredentialsProps, type UserRoles } from "../constant/users.js";
+import { FACULTY_ROLES } from "../constant/faculties.js";
+
+// Shared school-year gate: a faculty role change reached through the account
+// role endpoint is held to the same rule as PATCH /faculties/:id (plan §7).
+import { assertSchoolYearAllowsRoleChange } from "./schoolYear.js";
 
 export async function createUserService(user: CreateUserProps, existingConnection?: PoolConnection): Promise<number> {
     const pool = getDBPoolConnection();
@@ -62,7 +68,7 @@ export async function getUserByIdService(id: number) {
 // A user changing their OWN password must supply the current password
 // (isOwnAccount = true), which is verified before the new one is applied.
 // Admins acting on another user (and internal flows that sync a linked
-// user's email when a teacher/student record changes) pass isOwnAccount = false
+// user's email when a faculty/student record changes) pass isOwnAccount = false
 // and skip that check.
 export async function updateUserByUserIdService(userId: number, newUserCredentials: UpdateUserCredentialsProps, isOwnAccount = false, existingConnection?: PoolConnection) {
     const pool = getDBPoolConnection();
@@ -220,9 +226,39 @@ export async function updateUserRoleService(
     const pool2 = getDBPoolConnection();
     const connection = await pool2.getConnection();
     try {
+        await connection.beginTransaction();
         const userModel = new UserModel(connection);
+
+        // --- Faculty role changes share ONE gate (plan §7) -------------------
+        // The developer account-role endpoint used to flip `users.role` between
+        // `teacher` and `register`. That is no longer a supported transition, because
+        // `register` is a faculty role, not a user role. The only supported path for
+        // changing a faculty member's role is PATCH /faculties/:id, which is gated on
+        // school-year completion and enforces the teaching-assignments cleanup.
+        //
+        // We keep the faculty lookup here so the endpoint can refuse to silently drop
+        // a faculty record if someone attempts the old transition, but it does not map
+        // a new user-role value onto `faculties.role`.
+        const facultyModel = new FacultyModel(connection);
+        const faculty = await facultyModel.getFacultyByUserId(target.id);
+        const facultyRole = null;
+
+        if (faculty && facultyRole !== null && facultyRole !== faculty.role) {
+            await assertSchoolYearAllowsRoleChange(connection);
+            await facultyModel.updateFaculty(faculty.id, { role: facultyRole });
+        }
+
+        // Remove the no-longer-valid register branch so the service cannot map a
+        // user-role value of `register` onto a faculty record. Any caller still
+        // attempting PATCH /users/:id/role with `role = "register"` is rejected at
+        // the controller whitelist before this point.
         await userModel.updateUserRole(target.id, role);
-        return await userModel.getUserById(target.id);
+        const updated = await userModel.getUserById(target.id);
+        await connection.commit();
+        return updated;
+    } catch (error) {
+        await connection.rollback();
+        throw error;
     } finally {
         connection.release();
     }

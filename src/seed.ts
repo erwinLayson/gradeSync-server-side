@@ -8,7 +8,7 @@ import { getDBPoolConnection } from "./config/database.js";
 import type { AssessmentType } from "./constant/assessment.js";
 
 // Reused to freeze the demo submissions so the frozen grades match exactly what
-// the teacher page computes (no hand-rolled constants to drift).
+// the faculty page computes (no hand-rolled constants to drift).
 import { submitStudentRecordService } from "./service/studentRecord.js";
 
 // Landing page content seed (docs/landing-content-plan.md Phase 2) —
@@ -31,7 +31,7 @@ async function seed() {
     // 1. Clear existing data (reverse dependency order)
     // ──────────────────────────────────────────────────────
     console.log("Clearing existing data...");
-    // Student records first — they reference enrollments, class_subjects, teachers, subjects.
+    // Student records first — they reference enrollments, class_subjects, faculties, subjects.
     await connection.execute("DELETE FROM student_academic_record_quarters");
     await connection.execute("DELETE FROM student_academic_record_subjects");
     await connection.execute("DELETE FROM student_academic_records");
@@ -45,12 +45,12 @@ async function seed() {
     await connection.execute("DELETE FROM enrollment_details");
     await connection.execute("DELETE FROM class_students");
     await connection.execute("DELETE FROM enrollments");
-    await connection.execute("DELETE FROM teacher_subject_assignment");
-    await connection.execute("DELETE FROM class_teacher");
+    await connection.execute("DELETE FROM faculty_subject_assignment");
+    await connection.execute("DELETE FROM class_adviser");
     await connection.execute("DELETE FROM classrooms");
     await connection.execute("DELETE FROM subjects");
     await connection.execute("DELETE FROM students");
-    await connection.execute("DELETE FROM teachers");
+    await connection.execute("DELETE FROM faculties");
     await connection.execute("DELETE FROM users");
     await connection.execute("DELETE FROM schoolyear");
     await connection.execute("DELETE FROM school_info");
@@ -64,7 +64,7 @@ async function seed() {
     await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id > 0 ORDER BY id DESC LIMIT 1");
 
     // ──────────────────────────────────────────────────────
-    // 2. Users (1 admin + 1 developer + 1 register + 10 teachers + 10 students = 23)
+    // 2. Users (1 admin + 1 developer + 1 register + 10 faculties + 10 students = 23)
     // ──────────────────────────────────────────────────────
     console.log("Seeding users...");
     const hash = await bcrypt.hash("password123", 10);
@@ -81,13 +81,16 @@ async function seed() {
     );
 
     // Register account — registration/enrollment staff who enroll students and
-    // print SF10 records (docs/register-role-implementation-plan.md).
-    await connection.execute(
+    // print SF10 records (docs/register-role-implementation-plan.md). `register`
+    // is a FACULTY role, so the login account uses the shared faculty user role
+    // "teacher"; the distinction lives on the faculties row inserted in section 3.
+    const [registerUserResult] = await connection.execute<ResultSetHeader>(
       "INSERT INTO users(email, password, role) VALUES(?,?,?)",
-      sql("register@gradesync.edu", hash, "register")
+      sql("register@gradesync.edu", hash, "teacher")
     );
+    const registerUserId = registerUserResult.insertId;
 
-    const teacherEmails: string[] = [
+    const facultyEmails: string[] = [
       "juan.delacruz@gradesync.edu",
       "maria.santos@gradesync.edu",
       "carlos.reyes@gradesync.edu",
@@ -99,13 +102,13 @@ async function seed() {
       "antonio.flores@gradesync.edu",
       "elena.garcia@gradesync.edu",
     ];
-    const teacherUserIds: number[] = [];
-    for (const email of teacherEmails) {
+    const facultyUserIds: number[] = [];
+    for (const email of facultyEmails) {
       const [result] = await connection.execute<ResultSetHeader>(
         "INSERT INTO users(email, password, role) VALUES(?,?,?)",
         sql(email, hash, "teacher")
       );
-      teacherUserIds.push(result.insertId);
+      facultyUserIds.push(result.insertId);
     }
 
     const studentEmails: string[] = [
@@ -130,10 +133,10 @@ async function seed() {
     }
 
     // ──────────────────────────────────────────────────────
-    // 3. Teachers (10)
+    // 3. Faculties (10)
     // ──────────────────────────────────────────────────────
-    console.log("Seeding teachers...");
-    const teacherData = [
+    console.log("Seeding faculties...");
+    const facultyData = [
       { firstname: "Juan", middlename: "M.", lastname: "Dela Cruz", suffix: null },
       { firstname: "Maria", middlename: "L.", lastname: "Santos", suffix: null },
       { firstname: "Carlos", middlename: "R.", lastname: "Reyes", suffix: "Jr." },
@@ -145,15 +148,24 @@ async function seed() {
       { firstname: "Antonio", middlename: "B.", lastname: "Flores", suffix: null },
       { firstname: "Elena", middlename: "G.", lastname: "Garcia", suffix: null },
     ];
-    const teacherIds: number[] = [];
-    for (let i = 0; i < teacherData.length; i++) {
-      const t = teacherData[i]!;
+    const facultyIds: number[] = [];
+    for (let i = 0; i < facultyData.length; i++) {
+      const t = facultyData[i]!;
       const [result] = await connection.execute<ResultSetHeader>(
-        "INSERT INTO teachers(email, firstname, middlename, lastname, suffix, userId) VALUES(?,?,?,?,?,?)",
-        sql(teacherEmails[i]!, t.firstname, t.middlename, t.lastname, t.suffix, teacherUserIds[i]!)
+        "INSERT INTO faculties(email, firstname, middlename, lastname, suffix, role, userId) VALUES(?,?,?,?,?,?,?)",
+        sql(facultyEmails[i]!, t.firstname, t.middlename, t.lastname, t.suffix, "teacher", facultyUserIds[i]!)
       );
-      teacherIds.push(result.insertId);
+      facultyIds.push(result.insertId);
     }
+
+    // The register staff member is also a FACULTY record, carrying role='register'
+    // (docs/faculty-role-implementation-plan.md §2): they appear in the faculty
+    // list, and every teaching-assignment endpoint refuses them by that role.
+    // Deliberately NOT pushed into `facultyIds` — that array seeds teaching work.
+    await connection.execute<ResultSetHeader>(
+      "INSERT INTO faculties(email, firstname, middlename, lastname, suffix, role, userId) VALUES(?,?,?,?,?,?,?)",
+      sql("register@gradesync.edu", "Rosario", "M.", "Dizon", null, "register", registerUserId)
+    );
 
     // ──────────────────────────────────────────────────────
     // 4. Students (10)
@@ -276,20 +288,20 @@ async function seed() {
     }
 
     // ──────────────────────────────────────────────────────
-    // 8. class_teacher (10 — assign each teacher to a classroom)
+    // 8. class_adviser (10 — assign each faculty to a classroom)
     // ──────────────────────────────────────────────────────
-    console.log("Seeding class_teacher (advisers)...");
-    for (let i = 0; i < Math.min(teacherIds.length, classroomIds.length); i++) {
+    console.log("Seeding class_adviser (advisers)...");
+    for (let i = 0; i < Math.min(facultyIds.length, classroomIds.length); i++) {
       await connection.execute(
-        "INSERT INTO class_teacher(teacherId, classId) VALUES(?,?)",
-        sql(teacherIds[i]!, classroomIds[i]!)
+        "INSERT INTO class_adviser(facultyId, classId) VALUES(?,?)",
+        sql(facultyIds[i]!, classroomIds[i]!)
       );
     }
 
     // ──────────────────────────────────────────────────────
-    // 9. teacher_subject_assignment (15 assignments)
+    // 9. faculty_subject_assignment (15 assignments)
     // ──────────────────────────────────────────────────────
-    console.log("Seeding teacher_subject_assignment...");
+    console.log("Seeding faculty_subject_assignment...");
     const tsaPlan: [number, number[]][] = [
       [0, [0, 1]],   // Math → Juan, Maria
       [1, [1, 2]],   // English → Maria, Carlos
@@ -306,11 +318,11 @@ async function seed() {
     ];
     // tsaIds maps [subjectIndex] → array of TSA insertIds
     const tsaIds: number[][] = subjectIds.map(() => []);
-    for (const [subjIdx, teacherIdxs] of tsaPlan) {
-      for (const teachIdx of teacherIdxs) {
+    for (const [subjIdx, facultyIdxs] of tsaPlan) {
+      for (const teachIdx of facultyIdxs) {
         const [result] = await connection.execute<ResultSetHeader>(
-          "INSERT INTO teacher_subject_assignment(teacherId, subjectId) VALUES(?,?)",
-          sql(teacherIds[teachIdx]!, subjectIds[subjIdx]!)
+          "INSERT INTO faculty_subject_assignment(facultyId, subjectId) VALUES(?,?)",
+          sql(facultyIds[teachIdx]!, subjectIds[subjIdx]!)
         );
         const list = tsaIds[subjIdx];
         if (list) list.push(result.insertId);
@@ -345,24 +357,24 @@ async function seed() {
     }
 
     // ──────────────────────────────────────────────────────
-    // 12. class_subjects — assign teachers+subjects to classrooms
-    //     Columns: classId, teacherId, subjectId
-    //     UNIQUE constraint on (subjectId, teacherId) — each
-    //     teacher can only teach a specific subject once.
-    //     So we assign one unique (subjectId,teacherId) per classroom.
+    // 12. class_subjects — assign faculties+subjects to classrooms
+    //     Columns: classId, facultyId, subjectId
+    //     UNIQUE constraint on (subjectId, facultyId) — each
+    //     faculty can only teach a specific subject once.
+    //     So we assign one unique (subjectId,facultyId) per classroom.
     // ──────────────────────────────────────────────────────
     console.log("Seeding class_subjects...");
-    // Build map: subjectIndex → list of teacherIds for that subject
-    const subjectTeachers: number[][] = subjectIds.map(() => []);
-    for (const [subjIdx, teacherIdxs] of tsaPlan) {
-      const list = subjectTeachers[subjIdx];
+    // Build map: subjectIndex → list of facultyIds for that subject
+    const subjectFaculties: number[][] = subjectIds.map(() => []);
+    for (const [subjIdx, facultyIdxs] of tsaPlan) {
+      const list = subjectFaculties[subjIdx];
       if (list) {
-        for (const teachIdx of teacherIdxs) {
-          list.push(teacherIds[teachIdx]!);
+        for (const teachIdx of facultyIdxs) {
+          list.push(facultyIds[teachIdx]!);
         }
       }
     }
-    // Track which (subjectId, teacherId) pairs have been used
+    // Track which (subjectId, facultyId) pairs have been used
     const usedPairs = new Set<string>();
 
     // Plan: classroom index → [subject indices to assign]
@@ -385,19 +397,19 @@ async function seed() {
     const csByClassSubject = new Map<string, number>();
     for (const [classIdx, subjIdxs] of csPlan) {
       for (const subjIdx of subjIdxs) {
-        const availableTeachers = subjectTeachers[subjIdx];
-        if (!availableTeachers || availableTeachers.length === 0) continue;
+        const availableFaculties = subjectFaculties[subjIdx];
+        if (!availableFaculties || availableFaculties.length === 0) continue;
 
         const sid = subjectIds[subjIdx]!;
-        // Find the first teacher for this subject whose (subjectId, teacherId) pair
+        // Find the first faculty for this subject whose (subjectId, facultyId) pair
         // hasn't been used yet
         let assigned = false;
-        for (const tid of availableTeachers) {
+        for (const tid of availableFaculties) {
           const key = `${sid}-${tid}`;
           if (!usedPairs.has(key)) {
             usedPairs.add(key);
             const [result] = await connection.execute<ResultSetHeader>(
-              "INSERT INTO class_subjects(classId, teacherId, subjectId) VALUES(?,?,?)",
+              "INSERT INTO class_subjects(classId, facultyId, subjectId) VALUES(?,?,?)",
               sql(classroomIds[classIdx]!, tid, sid)
             );
             csByClassSubject.set(`${classIdx}-${subjIdx}`, result.insertId);
@@ -406,10 +418,10 @@ async function seed() {
             break;
           }
         }
-        // If no unique (subjectId, teacherId) pair is available,
+        // If no unique (subjectId, facultyId) pair is available,
         // this subject simply can't be assigned to more classrooms
         if (!assigned) {
-          console.log(`  ↳ Skipping subjectIdx ${subjIdx} for classroom ${classIdx} (no unused teacher-subject pair left)`);
+          console.log(`  ↳ Skipping subjectIdx ${subjIdx} for classroom ${classIdx} (no unused faculty-subject pair left)`);
         }
       }
     }
@@ -445,8 +457,8 @@ async function seed() {
     const recordIds: number[] = [];
     for (let i = 0; i < enrollmentIds.length; i++) {
       const ci = i % 5;
-      const t = teacherData[ci]!;
-      // Same shape as the teachers model's fullname (first, middle, last, suffix).
+      const t = facultyData[ci]!;
+      // Same shape as the faculties model's fullname (first, middle, last, suffix).
       const adviserName = `${t.firstname} ${t.middlename} ${t.lastname}${t.suffix ? " " + t.suffix : ""}`;
       const [result] = await connection.execute<ResultSetHeader>(
         "INSERT INTO student_academic_records(enrollmentId, classSection, classGradeLevel, adviserName) VALUES(?,?,?,?)",
@@ -465,7 +477,7 @@ async function seed() {
 
     // DepEd DO 8 s. 2015 component weights for the demo class subjects in
     // Section A - G7 (classroom index 0) and Section B - G7 (classroom index 1).
-    // Weights are per CLASS SUBJECT so each teacher's assignment gets its own
+    // Weights are per CLASS SUBJECT so each faculty's assignment gets its own
     // configuration. The four weights must total EXACTLY 100 (enforced by the
     // chk_weights_total CHECK constraint): attendance 5 is carved out of the
     // academic share, e.g. Mathematics 19/57/19 academic + 5 attendance = 100.
@@ -763,7 +775,7 @@ async function seed() {
     //     exactly what the app itself would write.
     //
     //     Section A - G7: Alex submitted (frozen grades demo), Francesca left
-    //       pending — she is fully graded, so the teacher page shows her live
+    //       pending — she is fully graded, so the faculty page shows her live
     //       grades and "Review & Submit" works (partial/amber in the tracker).
     //     Section B - G7: Beatriz + Gabriel both submitted — a COMPLETE class
     //       (green in the tracker).
@@ -772,9 +784,9 @@ async function seed() {
     // ──────────────────────────────────────────────────────
     console.log("Seeding student-record submissions (via submit service)...");
     const submissionStates: { classId: number; enrollmentId: number; quarter: number; adviserId: number }[] = [
-      { classId: classroomIds[0]!, enrollmentId: enrollmentIds[0]!, quarter: 1, adviserId: teacherIds[0]! }, // Alex — Section A
-      { classId: classroomIds[1]!, enrollmentId: enrollmentIds[1]!, quarter: 1, adviserId: teacherIds[1]! }, // Beatriz — Section B
-      { classId: classroomIds[1]!, enrollmentId: enrollmentIds[6]!, quarter: 1, adviserId: teacherIds[1]! }, // Gabriel — Section B
+      { classId: classroomIds[0]!, enrollmentId: enrollmentIds[0]!, quarter: 1, adviserId: facultyIds[0]! }, // Alex — Section A
+      { classId: classroomIds[1]!, enrollmentId: enrollmentIds[1]!, quarter: 1, adviserId: facultyIds[1]! }, // Beatriz — Section B
+      { classId: classroomIds[1]!, enrollmentId: enrollmentIds[6]!, quarter: 1, adviserId: facultyIds[1]! }, // Gabriel — Section B
     ];
     for (const sub of submissionStates) {
       await submitStudentRecordService(sub.classId, sub.enrollmentId, sub.quarter, sub.adviserId);
@@ -786,14 +798,14 @@ async function seed() {
     console.log("\n==========================================");
     console.log("  SEED COMPLETE!");
     console.log("==========================================");
-    console.log(`  Users:              23 (1 admin + 1 developer + 1 register + 10 teachers + 10 students)`);
-    console.log(`  Teachers:           ${teacherIds.length}`);
+    console.log(`  Users:              23 (1 admin + 1 developer + 1 register + 10 teacher faculties + 10 students)`);
+    console.log(`  Faculties:           ${facultyIds.length + 1} (${facultyIds.length} teachers + 1 register)`);
     console.log(`  Students:           ${studentIds.length}`);
     console.log(`  Subjects:           ${subjectIds.length}`);
     console.log(`  Classrooms:         ${classroomIds.length}`);
     console.log(`  Schoolyears:        ${schoolYearIds.length}`);
-    console.log(`  class_teacher:      ${Math.min(teacherIds.length, classroomIds.length)} (adviser assignments)`);
-    console.log(`  TSA:                ${tsaIds.flat().length} (teacher-subject assignments)`);
+    console.log(`  class_adviser:      ${Math.min(facultyIds.length, classroomIds.length)} (adviser assignments)`);
+    console.log(`  TSA:                ${tsaIds.flat().length} (faculty-subject assignments)`);
     console.log(`  Enrollments:        ${enrollmentIds.length}`);
     console.log(`  class_students:     ${enrollmentIds.length}`);
     console.log(`  class_subjects:     ${csCount} (${csPlan.reduce((sum, [, idxs]) => sum + idxs.length, 0)} planned, ${csPlan.reduce((sum, [, idxs]) => sum + idxs.length, 0) - csCount} skipped due to unique constraint)`);

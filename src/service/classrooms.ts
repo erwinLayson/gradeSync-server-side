@@ -7,6 +7,9 @@ import type {ClassroomResponse} from "../constant/classrooms.js";
 import { ConflictError, NotFoundError } from "../middleware/errors.js";
 import type { PoolConnection } from "mysql2/promise";
 
+// Backend guard: only teaching faculty may be a class adviser (plan §6.2).
+import { assertOnlyTeachingFaculty } from "./faculties.js";
+
 
 // Create new classroom
 export async function createClassroomService(classrooms: Omit<ClassroomResponse, "id">){
@@ -61,14 +64,14 @@ export async function getClassroomByIdService(id: number, existingConnection?: P
     }
 }
 
-// Get classroom teachers with subject
-export async function getClassroomTeachersWithSubjectService(classroomId: number) {
+// Get classroom faculties with subject
+export async function getClassroomFacultiesWithSubjectService(classroomId: number) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
         const classroomModel = new ClassroomModel(connection);
-        const classroomTeachersWithSubject = await classroomModel.getClassroomTeachersWithSubject(classroomId);
-        return classroomTeachersWithSubject;
+        const classroomFacultiesWithSubject = await classroomModel.getClassroomFacultiesWithSubject(classroomId);
+        return classroomFacultiesWithSubject;
     }finally {
         connection.release();
     }
@@ -109,7 +112,7 @@ export async function updateClassroomService(id: number, data: { section: string
 
 // Archive a classroom (soft delete): hidden from lists forever, history preserved.
 // Blocked while the class still has students enrolled in the ACTIVE school year.
-// The adviser assignment is cleared so the teacher isn't trapped on a hidden class.
+// The adviser assignment is cleared so the faculty isn't trapped on a hidden class.
 export async function archiveClassroomService(id: number) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
@@ -129,7 +132,7 @@ export async function archiveClassroomService(id: number) {
             );
         }
 
-        // Free the adviser so the one-class-per-teacher rule doesn't trap them.
+        // Free the adviser so the one-class-per-faculty rule doesn't trap them.
         await classroomModel.clearClassAdviserAssignment(id);
 
         const archived = await classroomModel.archiveClassroom(id);
@@ -169,22 +172,22 @@ export async function getClassAdviserService(classId: number) {
     }
 }
 
-// Get the full details of the class a teacher advises:
-// classroom info + students roster + all teachers with subjects.
-export async function getMyAdvisedClassService(teacherId: number) {
+// Get the full details of the class a faculty advises:
+// classroom info + students roster + all faculties with subjects.
+export async function getMyAdvisedClassService(facultyId: number) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
         const classroomModel = new ClassroomModel(connection);
-        const classId = await classroomModel.getClassIdByAdviser(teacherId);
+        const classId = await classroomModel.getClassIdByAdviser(facultyId);
         if (classId === null) {
             return null;
         }
         const classroom = await classroomModel.getClassroomById(classId);
-        const teachersWithSubjects = await classroomModel.getClassroomTeachersWithSubject(classId);
+        const facultiesWithSubjects = await classroomModel.getClassroomFacultiesWithSubject(classId);
         return {
             classroom,
-            teachersWithSubjects
+            facultiesWithSubjects
         };
     } finally {
         connection.release();
@@ -192,9 +195,9 @@ export async function getMyAdvisedClassService(teacherId: number) {
 }
 
 // Assign (or clear) the class adviser for a classroom.
-// teacherId = null clears the adviser. A teacher may advise at most one class,
-// so assigning a teacher who already advises a DIFFERENT class is rejected.
-export async function setClassAdviserService(classId: number, teacherId: number | null) {
+// facultyId = null clears the adviser. A faculty may advise at most one class,
+// so assigning a faculty who already advises a DIFFERENT class is rejected.
+export async function setClassAdviserService(classId: number, facultyId: number | null) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
@@ -206,15 +209,18 @@ export async function setClassAdviserService(classId: number, teacherId: number 
             throw new NotFoundError("Classroom not found", 404);
         }
 
-        if (teacherId !== null) {
-            // One class per teacher: the teacher must not already advise another class.
-            const existingClassId = await classroomModel.getClassIdByAdviser(teacherId);
+        if (facultyId !== null) {
+            // A register faculty member must never become a class adviser —
+            // enforced here, not only in the dropdown (plan §6.2).
+            await assertOnlyTeachingFaculty(connection, facultyId);
+            // One class per faculty: the faculty must not already advise another class.
+            const existingClassId = await classroomModel.getClassIdByAdviser(facultyId);
             if (existingClassId !== null && existingClassId !== classId) {
-                throw new ConflictError("Teacher is already the class adviser of another classroom. Reassign that class first.");
+                throw new ConflictError("Faculty is already the class adviser of another classroom. Reassign that class first.");
             }
         }
 
-        await classroomModel.setClassAdviser(classId, teacherId);
+        await classroomModel.setClassAdviser(classId, facultyId);
         await connection.commit();
     } catch (error) {
         await connection.rollback();

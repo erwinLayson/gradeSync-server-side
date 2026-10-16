@@ -10,10 +10,10 @@ export default class ClassSubject {
     // create a new class subject
     async createClassSubject(classSubject: Omit<ClassSubjectProps, "id">[]): Promise<void> {
         try {
-            const query = `INSERT INTO class_subjects (classId, subjectId, teacherId) VALUES (?, ?, ?)`;
+            const query = `INSERT INTO class_subjects (classId, subjectId, facultyId) VALUES (?, ?, ?)`;
 
             for(const s of classSubject) {
-                const values = [s.classId, s.subjectId, s.teacherId];
+                const values = [s.classId, s.subjectId, s.facultyId];
                 await this.connection.execute<ResultSetHeader>(query, values);
             }
         }catch(err) {
@@ -32,11 +32,11 @@ export default class ClassSubject {
         }
     }
 
-    // update the teacher of a subject in a class by classId and subjectId
-    async updateSubjectTeacherByClassId(classId: number, newTeacherId: Omit<ClassSubjectProps, "id" | "classId"> ) {
+    // update the faculty of a subject in a class by classId and subjectId
+    async updateSubjectFacultyByClassId(classId: number, newFacultyId: Omit<ClassSubjectProps, "id" | "classId"> ) {
         try {
-            const query = `UPDATE class_subjects SET teacherId = ? WHERE classId = ? AND subjectId = ?`;
-            const values = [newTeacherId.teacherId, classId, newTeacherId.subjectId];
+            const query = `UPDATE class_subjects SET facultyId = ? WHERE classId = ? AND subjectId = ?`;
+            const values = [newFacultyId.facultyId, classId, newFacultyId.subjectId];
             const [response] = await this.connection.execute<ResultSetHeader>(query, values);
 
             return response.affectedRows;
@@ -45,10 +45,10 @@ export default class ClassSubject {
         }
     }
 
-    async deleteSubjectFromClass(classId: number, subjectId: number, teacherId: number): Promise<void> {
+    async deleteSubjectFromClass(classId: number, subjectId: number, facultyId: number): Promise<void> {
         try {
-            const query = `DELETE FROM class_subjects WHERE classId = ? AND subjectId = ? AND teacherId = ?`;
-            const values = [classId, subjectId, teacherId];
+            const query = `DELETE FROM class_subjects WHERE classId = ? AND subjectId = ? AND facultyId = ?`;
+            const values = [classId, subjectId, facultyId];
             await this.connection.execute<ResultSetHeader>(query, values);
         } catch(err) {
             throw new InternalServerError(`Internal Server error`, 500, err);

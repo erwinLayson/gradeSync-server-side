@@ -1,9 +1,7 @@
 // Seed content for landing_content — mirrors DEFAULT_LANDING_CONTENT in
 // client/src/constant/landingContent.ts so the DB starts in sync with the
-// hardcoded page. Shared by migrate_all.mjs (step 18) and seed.ts.
-//
-// NOTE: migrate_all.mjs is plain .mjs (no TS imports), so it inlines this
-// data. Keep the two in sync, or move the runner to a TS entry later.
+// hardcoded page. Consumed by seed.ts (the landing_content table itself is
+// created empty by the schema migration).
 
 import type {
     AboutContent,
@@ -53,7 +51,7 @@ export const LANDING_CONTENT_SEED: Record<string, LandingSectionContent> = {
             {
                 iconKey: "FaClipboardCheck",
                 title: "Grading & Attendance",
-                text: "Quarter grades computed automatically from teacher-entered scores and attendance.",
+                text: "Quarter grades computed automatically from faculty-entered scores and attendance.",
             },
             {
                 iconKey: "FaBookOpen",
@@ -63,7 +61,7 @@ export const LANDING_CONTENT_SEED: Record<string, LandingSectionContent> = {
             {
                 iconKey: "FaChartLine",
                 title: "Reports & Analytics",
-                text: "Dashboards for admins, report cards for teachers and prospects for students.",
+                text: "Dashboards for admins, report cards for faculties and prospects for students.",
             },
         ],
     } satisfies AboutContent,
@@ -82,7 +80,7 @@ export const LANDING_CONTENT_SEED: Record<string, LandingSectionContent> = {
             {
                 step: "02",
                 title: "Record daily progress",
-                text: "Teachers take attendance and encode scores in the gradebook as classes happen.",
+                text: "Faculties take attendance and encode scores in the gradebook as classes happen.",
             },
             {
                 step: "03",
@@ -115,7 +113,7 @@ export const LANDING_CONTENT_SEED: Record<string, LandingSectionContent> = {
             },
             {
                 iconKey: "FaChalkboardTeacher",
-                title: "For Teachers",
+                title: "For Faculties",
                 text: "Spend less time on paperwork, more time teaching.",
                 points: [
                     "Fast attendance taking",
@@ -162,6 +160,6 @@ export const LANDING_CONTENT_SEED: Record<string, LandingSectionContent> = {
     } satisfies ContactContent,
     cta: {
         title: "Ready to simplify school records?",
-        text: "Sign in with your school account — admins, teachers and students all use the same door.",
+        text: "Sign in with your school account — admins, faculties and students all use the same door.",
     } satisfies CtaContent,
 };

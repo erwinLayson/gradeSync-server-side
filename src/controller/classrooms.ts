@@ -5,7 +5,7 @@ import {
     createClassroomService, 
     getAllClassroomsService, 
     getClassroomByIdService,
-    getClassroomTeachersWithSubjectService,
+    getClassroomFacultiesWithSubjectService,
     getClassAdviserService,
     setClassAdviserService,
     updateClassroomService,
@@ -18,7 +18,7 @@ import type { ClassroomResponse } from "../constant/classrooms.js";
 import { SuccessResponse } from "../helper/response.js";
 import Validate from "../helper/validate.js";
 import NormalizedData from "../helper/normalizedData.js";
-import { resolveTeacherIdByUserIdService } from "../service/studentRecord.js";
+import { resolveFacultyIdByUserIdService } from "../service/studentRecord.js";
 
 // Controller Functions
 export async function CreateClassroomController(req: Request<{}, {}, Omit<ClassroomResponse, "id">>, res: Response, next: NextFunction) {
@@ -121,16 +121,16 @@ export async function getClassroomByIdController(req: Request<{id: string}>, res
     }
 }
 
-// get classroom teachers with subject
-export async function getClassroomTeachersWithSubjectController(req: Request<{classroomId: string}>, res: Response, next: NextFunction) {
+// get classroom faculties with subject
+export async function getClassroomFacultiesWithSubjectController(req: Request<{classroomId: string}>, res: Response, next: NextFunction) {
     const {classroomId} = req.params;
     try {
-        const classroomTeachersWithSubject = await getClassroomTeachersWithSubjectService(Number(classroomId));
+        const classroomFacultiesWithSubject = await getClassroomFacultiesWithSubjectService(Number(classroomId));
         res.status(200).json(
             SuccessResponse(
                 {
-                    message: "Classroom teachers with subject retrieved successfully",
-                    data: classroomTeachersWithSubject
+                    message: "Classroom faculties with subject retrieved successfully",
+                    data: classroomFacultiesWithSubject
                 }
             )
         );
@@ -156,7 +156,7 @@ export async function getClassAdviserController(req: Request<{id: string}>, res:
     }
 }
 
-// get the class the logged-in teacher advises
+// get the class the logged-in faculty advises
 // GET /api/classrooms/my-advised-class
 export async function getMyAdvisedClassController(req: Request, res: Response, next: NextFunction) {
     try {
@@ -165,8 +165,8 @@ export async function getMyAdvisedClassController(req: Request, res: Response, n
             res.status(401).json({ success: false, message: "Unauthorized" });
             return;
         }
-        const teacherId = await resolveTeacherIdByUserIdService(userId);
-        const result = await getMyAdvisedClassService(teacherId);
+        const facultyId = await resolveFacultyIdByUserIdService(userId);
+        const result = await getMyAdvisedClassService(facultyId);
         res.status(200).json(
             SuccessResponse({
                 message: "Advised class retrieved successfully",
@@ -179,23 +179,23 @@ export async function getMyAdvisedClassController(req: Request, res: Response, n
 }
 
 // assign (or clear) class adviser
-// PUT /api/classrooms/:id/adviser  body: { teacherId: number | null }
-export async function setClassAdviserController(req: Request<{id: string}, {}, { teacherId: number | null }>, res: Response, next: NextFunction) {
+// PUT /api/classrooms/:id/adviser  body: { facultyId: number | null }
+export async function setClassAdviserController(req: Request<{id: string}, {}, { facultyId: number | null }>, res: Response, next: NextFunction) {
     const { id } = req.params;
-    const { teacherId } = req.body;
+    const { facultyId } = req.body;
 
-    // teacherId may be null (clear adviser); otherwise it must be a positive integer.
-    const parsedTeacherId = teacherId === null || teacherId === undefined ? null : Number(teacherId);
-    if (parsedTeacherId !== null && (Number.isNaN(parsedTeacherId) || parsedTeacherId <= 0)) {
-        res.status(400).json({ success: false, message: "teacherId must be a positive number or null" });
+    // facultyId may be null (clear adviser); otherwise it must be a positive integer.
+    const parsedFacultyId = facultyId === null || facultyId === undefined ? null : Number(facultyId);
+    if (parsedFacultyId !== null && (Number.isNaN(parsedFacultyId) || parsedFacultyId <= 0)) {
+        res.status(400).json({ success: false, message: "facultyId must be a positive number or null" });
         return;
     }
 
     try {
-        await setClassAdviserService(Number(id), parsedTeacherId);
+        await setClassAdviserService(Number(id), parsedFacultyId);
         res.status(200).json(
             SuccessResponse({
-                message: parsedTeacherId === null ? "Class adviser removed successfully" : "Class adviser assigned successfully"
+                message: parsedFacultyId === null ? "Class adviser removed successfully" : "Class adviser assigned successfully"
             })
         );
     } catch (err) {

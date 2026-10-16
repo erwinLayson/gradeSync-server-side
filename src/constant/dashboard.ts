@@ -26,7 +26,7 @@ export interface DashboardSummary {
     numQuarters: number;
     enrollmentOpen: boolean;
     students: number;
-    teachers: number;
+    faculties: number;
     classrooms: number;
     averageGrade: number | null;
     attendanceToday: { total: number; present: number; rate: number | null } | null;

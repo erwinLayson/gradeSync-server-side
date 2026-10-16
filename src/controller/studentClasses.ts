@@ -84,7 +84,7 @@ export async function getStudentClassAttendanceController(
     }
 }
 
-// GET /students/:id/academic-history — an admin/teacher view of one student's
+// GET /students/:id/academic-history — an admin/faculty view of one student's
 // academic history (all enrolled school years) with grades and attendance.
 export async function getStudentAcademicHistoryController(
     req: Request<{ id: number }>,

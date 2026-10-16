@@ -15,13 +15,17 @@ import {
     createClassSubjectService,
     deleteSubjectFromClassService,
     getClasssSubjectDetailsByIdService,
-    updateSubjectTeacherByClassIdService
+    updateSubjectFacultyByClassIdService
 } from "../service/class_subjects.js";
 import {
     getGradingWeightsForClassSubjectService,
     upsertGradingWeightsService
 } from "../service/gradingWeight.js";
-import { assertTeacherOwnsClassSubject, resolveActorTeacherId } from "../service/authorization.js";
+import {
+    assertFacultyOwnsClassSubject,
+    resolveActorFacultyId,
+    resolveTeachingFacultyId,
+} from "../service/authorization.js";
 
 
 // This function is exported to classrooms routes to create new class subjects
@@ -67,22 +71,22 @@ export async function getClassSubjectDetailsByIdController(req: Request<{id: num
     }
 }
 
-// update the teacher of a subject in a class by classId and subjectId
-export async function updateSubjectTeacherByClassIdController(req: Request<{classId: number}, {},  Omit<ClassSubjectProps, "id" | "classId">>, res: Response, next: NextFunction) {
+// update the faculty of a subject in a class by classId and subjectId
+export async function updateSubjectFacultyByClassIdController(req: Request<{classId: number}, {},  Omit<ClassSubjectProps, "id" | "classId">>, res: Response, next: NextFunction) {
     try {
         const { classId } = req.params;
-        const { subjectId, teacherId } = req.body;
+        const { subjectId, facultyId } = req.body;
 
 
 
-        // Validate the classId and newTeacherId
-        Validate({classId, ...{subjectId, teacherId}});
+        // Validate the classId and newFacultyId
+        Validate({classId, ...{subjectId, facultyId}});
 
-        await updateSubjectTeacherByClassIdService(classId, {subjectId, teacherId});
+        await updateSubjectFacultyByClassIdService(classId, {subjectId, facultyId});
 
         res.status(200).json(
             SuccessResponse({
-                message: `Subject teacher updated successfully`,
+                message: `Subject faculty updated successfully`,
             })
         );
     } catch (err) {
@@ -90,14 +94,14 @@ export async function updateSubjectTeacherByClassIdController(req: Request<{clas
     }
 }
 
-export async function deleteSubjectFromClassController(req: Request<{classId: number, subjectId: number, teacherId: number}>, res: Response, next: NextFunction) {
+export async function deleteSubjectFromClassController(req: Request<{classId: number, subjectId: number, facultyId: number}>, res: Response, next: NextFunction) {
     try {
-        const { classId, subjectId, teacherId } = req.params;  
+        const { classId, subjectId, facultyId } = req.params;  
 
-        // Validate the classId, subjectId, and teacherId
-        Validate({classId, subjectId, teacherId});
+        // Validate the classId, subjectId, and facultyId
+        Validate({classId, subjectId, facultyId});
 
-        await deleteSubjectFromClassService(classId, subjectId, teacherId);
+        await deleteSubjectFromClassService(classId, subjectId, facultyId);
         res.status(200).json(
             SuccessResponse({
                 message: `Subject deleted from class successfully`,
@@ -120,10 +124,10 @@ export async function getClassSubjectWeightsController(req: Request<{classSubjec
             throw new BadRequestError("Invalid class subject id");
         }
 
-        // Ownership: a teacher may only read the weights of a class subject
+        // Ownership: a faculty may only read the weights of a class subject
         // they are assigned to (403 otherwise). Admins bypass.
-        const teacherId = await resolveActorTeacherId(req.user!);
-        await assertTeacherOwnsClassSubject(teacherId, parsedClassSubjectId);
+        const facultyId = await resolveTeachingFacultyId(req.user!);
+        await assertFacultyOwnsClassSubject(facultyId, parsedClassSubjectId);
 
         const weights = await getGradingWeightsForClassSubjectService(parsedClassSubjectId);
 
@@ -151,10 +155,10 @@ export async function updateClassSubjectWeightsController(req: Request<{classSub
             throw new BadRequestError("Invalid class subject id");
         }
 
-        // Ownership: a teacher may only change the weights of a class subject
+        // Ownership: a faculty may only change the weights of a class subject
         // they are assigned to (403 otherwise). Admins bypass.
-        const teacherId = await resolveActorTeacherId(req.user!);
-        await assertTeacherOwnsClassSubject(teacherId, parsedClassSubjectId);
+        const facultyId = await resolveTeachingFacultyId(req.user!);
+        await assertFacultyOwnsClassSubject(facultyId, parsedClassSubjectId);
 
         const weights = parseGradeWeightsPayload(req.body);
 

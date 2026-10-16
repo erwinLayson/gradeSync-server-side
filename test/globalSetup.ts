@@ -1,26 +1,27 @@
 // `dotenv/config` first — see test/setupEnv.ts for why import order matters.
 import "dotenv/config";
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import mysql from "mysql2/promise";
 import type { Connection, RowDataPacket } from "mysql2/promise";
 
+import { runMigrations } from "../src/migrations/runner.js";
 import { assertSafeTestDatabase, getDbConnectionOptions, getTestDbName } from "./helpers/testConfig.js";
 
 /**
  * Vitest globalSetup — provisions the disposable test database ONCE per run:
  *   1. CREATE DATABASE IF NOT EXISTS <test db>
  *   2. apply the base schema dump (server/gradesync.sql) when not provisioned
- *   3. run the project's consolidated migration runner (server/migrate_all.mjs)
+ *   3. run the project's file-based migration runner (src/migrations/runner.ts)
  *      against the test DB so the schema matches a migrated production database
  *      (academic_settings.numQuarters, student_academic_records, ...).
  *
  * Steps 2/3 are skipped when the DB is already provisioned, so repeat runs are
- * fast. migrate_all.mjs is idempotent, but the raw dump is not (no
- * IF NOT EXISTS), hence the guard.
+ * fast. The runner tracks applied files in schema_migrations, and its migration
+ * files are guarded, so the dump + runner is safe to apply to any state.
  */
 export default async function globalSetup(): Promise<void> {
     assertSafeTestDatabase();
@@ -57,12 +58,12 @@ export default async function globalSetup(): Promise<void> {
         return;
     }
 
-    // 3. Migrations. Run as a child process so migrate_all.mjs' own
-    //    `dotenv/config` cannot re-point the connection at the dev database.
-    execFileSync(process.execPath, ["migrate_all.mjs"], {
-        cwd: serverDir,
-        env: { ...process.env, DB_NAME: dbName, NODE_ENV: "development" },
-        stdio: process.env.VITEST_DEBUG_MIGRATE ? "inherit" : "pipe",
+    // 3. Migrations. The runner is called in-process with an explicit database
+    //    name, so it can never re-point at the dev database configured in .env.
+    await runMigrations({
+        database: dbName,
+        migrationsDir: join(serverDir, "migrations"),
+        logger: process.env.VITEST_DEBUG_MIGRATE ? (line) => console.log(line) : () => {},
     });
 
     const verify = await mysql.createConnection({ ...options, database: dbName });
@@ -82,7 +83,7 @@ export default async function globalSetup(): Promise<void> {
 /**
  * A database is "provisioned" when the base tables exist AND the migrations have
  * run far enough to provide the columns the fixes depend on
- * (academic_settings.numQuarters is added by migrate_all step 8).
+ * (academic_settings.numQuarters is part of the base schema / migrations).
  */
 async function isProvisioned(connection: Connection): Promise<boolean> {
     const [tables] = await connection.execute<RowDataPacket[]>(

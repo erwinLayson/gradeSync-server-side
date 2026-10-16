@@ -32,7 +32,9 @@ CREATE TABLE `academic_settings` (
   `currentQuarter` tinyint(1) NOT NULL DEFAULT 1,
   `enrollmentOpen` tinyint(1) NOT NULL DEFAULT 1,
   `submissionsLocked` tinyint(1) NOT NULL DEFAULT 0,
-  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
+  `numQuarters` tinyint(1) NOT NULL DEFAULT 4,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  CONSTRAINT `chk_num_quarters` CHECK (`numQuarters` in (3,4))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -182,7 +184,7 @@ INSERT INTO `class_students` (`id`, `classId`, `enrollmentId`) VALUES
 CREATE TABLE `class_subjects` (
   `id` bigint(20) NOT NULL,
   `classId` int(11) NOT NULL,
-  `teacherId` bigint(20) NOT NULL,
+  `facultyId` bigint(20) NOT NULL,
   `subjectId` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -190,7 +192,7 @@ CREATE TABLE `class_subjects` (
 -- Dumping data for table `class_subjects`
 --
 
-INSERT INTO `class_subjects` (`id`, `classId`, `teacherId`, `subjectId`) VALUES
+INSERT INTO `class_subjects` (`id`, `classId`, `facultyId`, `subjectId`) VALUES
 (153, 102, 103, 121),
 (154, 102, 104, 122),
 (155, 102, 106, 123),
@@ -210,20 +212,20 @@ INSERT INTO `class_subjects` (`id`, `classId`, `teacherId`, `subjectId`) VALUES
 -- --------------------------------------------------------
 
 --
--- Table structure for table `class_teacher`
+-- Table structure for table `class_adviser`
 --
 
-CREATE TABLE `class_teacher` (
+CREATE TABLE `class_adviser` (
   `id` bigint(20) NOT NULL,
   `classId` int(11) NOT NULL,
-  `teacherId` bigint(20) DEFAULT NULL
+  `facultyId` bigint(20) DEFAULT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `class_teacher`
+-- Dumping data for table `class_adviser`
 --
 
-INSERT INTO `class_teacher` (`id`, `classId`, `teacherId`) VALUES
+INSERT INTO `class_adviser` (`id`, `classId`, `facultyId`) VALUES
 (107, 102, 103),
 (108, 103, 104),
 (109, 104, 105),
@@ -362,7 +364,8 @@ CREATE TABLE `schoolyear` (
   `id` int(11) NOT NULL,
   `startYear` varchar(20) NOT NULL,
   `endYear` varchar(20) NOT NULL,
-  `isActive` tinyint(1) NOT NULL DEFAULT 0
+  `isActive` tinyint(1) NOT NULL DEFAULT 0,
+  `status` enum('ongoing','completed') NOT NULL DEFAULT 'ongoing'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
@@ -773,24 +776,25 @@ INSERT INTO `subject_components` (`id`, `parentSubjectId`, `name`, `code`, `weig
 -- --------------------------------------------------------
 
 --
--- Table structure for table `teachers`
+-- Table structure for table `faculties`
 --
 
-CREATE TABLE `teachers` (
+CREATE TABLE `faculties` (
   `id` bigint(20) NOT NULL,
   `email` varchar(255) NOT NULL,
   `firstname` varchar(50) NOT NULL,
   `middlename` varchar(20) NOT NULL,
   `lastname` varchar(50) NOT NULL,
   `suffix` varchar(10) DEFAULT NULL,
-  `userId` bigint(20) NOT NULL
+  `userId` bigint(20) NOT NULL,
+  `role` enum('teacher','register') NOT NULL DEFAULT 'teacher'
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `teachers`
+-- Dumping data for table `faculties`
 --
 
-INSERT INTO `teachers` (`id`, `email`, `firstname`, `middlename`, `lastname`, `suffix`, `userId`) VALUES
+INSERT INTO `faculties` (`id`, `email`, `firstname`, `middlename`, `lastname`, `suffix`, `userId`) VALUES
 (103, 'juan.delacruz@gradesync.edu', 'Juan', 'M.', 'Dela Cruz', NULL, 253),
 (104, 'maria.santos@gradesync.edu', 'Maria', 'L.', 'Santos', NULL, 254),
 (105, 'carlos.reyes@gradesync.edu', 'Carlos', 'R.', 'Reyes', 'Jr.', 255),
@@ -805,20 +809,20 @@ INSERT INTO `teachers` (`id`, `email`, `firstname`, `middlename`, `lastname`, `s
 -- --------------------------------------------------------
 
 --
--- Table structure for table `teacher_subject_assignment`
+-- Table structure for table `faculty_subject_assignment`
 --
 
-CREATE TABLE `teacher_subject_assignment` (
+CREATE TABLE `faculty_subject_assignment` (
   `id` bigint(20) NOT NULL,
-  `teacherId` bigint(20) NOT NULL,
+  `facultyId` bigint(20) NOT NULL,
   `subjectId` int(11) NOT NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
 --
--- Dumping data for table `teacher_subject_assignment`
+-- Dumping data for table `faculty_subject_assignment`
 --
 
-INSERT INTO `teacher_subject_assignment` (`id`, `teacherId`, `subjectId`) VALUES
+INSERT INTO `faculty_subject_assignment` (`id`, `facultyId`, `subjectId`) VALUES
 (233, 103, 121),
 (234, 104, 121),
 (235, 104, 122),
@@ -926,17 +930,17 @@ ALTER TABLE `class_students`
 --
 ALTER TABLE `class_subjects`
   ADD PRIMARY KEY (`id`),
-  ADD UNIQUE KEY `uq_class_subjects` (`classId`,`teacherId`,`subjectId`),
-  ADD KEY `FK_teacherId` (`teacherId`),
+  ADD UNIQUE KEY `uq_class_subjects` (`classId`,`facultyId`,`subjectId`),
+  ADD KEY `FK_facultyId` (`facultyId`),
   ADD KEY `fk_subjectId` (`subjectId`);
 
 --
--- Indexes for table `class_teacher`
+-- Indexes for table `class_adviser`
 --
-ALTER TABLE `class_teacher`
+ALTER TABLE `class_adviser`
   ADD PRIMARY KEY (`id`),
   ADD KEY `classId` (`classId`),
-  ADD KEY `teacherId` (`teacherId`);
+  ADD KEY `facultyId` (`facultyId`);
 
 --
 -- Indexes for table `enrollments`
@@ -1053,19 +1057,19 @@ ALTER TABLE `subject_components`
   ADD UNIQUE KEY `uq_component_code` (`parentSubjectId`,`code`);
 
 --
--- Indexes for table `teachers`
+-- Indexes for table `faculties`
 --
-ALTER TABLE `teachers`
+ALTER TABLE `faculties`
   ADD PRIMARY KEY (`id`),
   ADD UNIQUE KEY `email` (`email`),
-  ADD KEY `fk_teacher1` (`userId`);
+  ADD KEY `fk_faculty1` (`userId`);
 
 --
--- Indexes for table `teacher_subject_assignment`
+-- Indexes for table `faculty_subject_assignment`
 --
-ALTER TABLE `teacher_subject_assignment`
+ALTER TABLE `faculty_subject_assignment`
   ADD PRIMARY KEY (`id`),
-  ADD KEY `fk_tsa_1` (`teacherId`),
+  ADD KEY `fk_tsa_1` (`facultyId`),
   ADD KEY `fk_tsa_2` (`subjectId`);
 
 --
@@ -1115,9 +1119,9 @@ ALTER TABLE `class_subjects`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=168;
 
 --
--- AUTO_INCREMENT for table `class_teacher`
+-- AUTO_INCREMENT for table `class_adviser`
 --
-ALTER TABLE `class_teacher`
+ALTER TABLE `class_adviser`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=117;
 
 --
@@ -1217,15 +1221,15 @@ ALTER TABLE `subject_components`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=9;
 
 --
--- AUTO_INCREMENT for table `teachers`
+-- AUTO_INCREMENT for table `faculties`
 --
-ALTER TABLE `teachers`
+ALTER TABLE `faculties`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=113;
 
 --
--- AUTO_INCREMENT for table `teacher_subject_assignment`
+-- AUTO_INCREMENT for table `faculty_subject_assignment`
 --
-ALTER TABLE `teacher_subject_assignment`
+ALTER TABLE `faculty_subject_assignment`
   MODIFY `id` bigint(20) NOT NULL AUTO_INCREMENT, AUTO_INCREMENT=248;
 
 --
@@ -1263,18 +1267,18 @@ ALTER TABLE `class_students`
 -- Constraints for table `class_subjects`
 --
 ALTER TABLE `class_subjects`
-  ADD CONSTRAINT `FK_teacherId` FOREIGN KEY (`teacherId`) REFERENCES `teachers` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `FK_facultyId` FOREIGN KEY (`facultyId`) REFERENCES `faculties` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_classId` FOREIGN KEY (`classId`) REFERENCES `classrooms` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_subjectId` FOREIGN KEY (`subjectId`) REFERENCES `subjects` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
--- Constraints for table `class_teacher`
+-- Constraints for table `class_adviser`
 --
-ALTER TABLE `class_teacher`
-  ADD CONSTRAINT `class_teacher_ibfk_1` FOREIGN KEY (`classId`) REFERENCES `classrooms` (`id`),
-  ADD CONSTRAINT `class_teacher_ibfk_2` FOREIGN KEY (`teacherId`) REFERENCES `teachers` (`id`) ON UPDATE CASCADE,
-  ADD CONSTRAINT `fk_class_teacher2` FOREIGN KEY (`classId`) REFERENCES `classrooms` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `fk_teacherId_1` FOREIGN KEY (`teacherId`) REFERENCES `teachers` (`id`);
+ALTER TABLE `class_adviser`
+  ADD CONSTRAINT `class_adviser_ibfk_1` FOREIGN KEY (`classId`) REFERENCES `classrooms` (`id`),
+  ADD CONSTRAINT `class_adviser_ibfk_2` FOREIGN KEY (`facultyId`) REFERENCES `faculties` (`id`) ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_class_adviser2` FOREIGN KEY (`classId`) REFERENCES `classrooms` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+  ADD CONSTRAINT `fk_facultyId_1` FOREIGN KEY (`facultyId`) REFERENCES `faculties` (`id`);
 
 --
 -- Constraints for table `enrollments`
@@ -1312,7 +1316,7 @@ ALTER TABLE `student_academic_record_components`
 --
 ALTER TABLE `student_academic_record_quarters`
   ADD CONSTRAINT `fk_record_quarter_record` FOREIGN KEY (`recordId`) REFERENCES `student_academic_records` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
-  ADD CONSTRAINT `fk_record_quarter_teacher` FOREIGN KEY (`submittedBy`) REFERENCES `teachers` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+  ADD CONSTRAINT `fk_record_quarter_faculty` FOREIGN KEY (`submittedBy`) REFERENCES `faculties` (`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 --
 -- Constraints for table `student_academic_record_subjects`
@@ -1347,16 +1351,16 @@ ALTER TABLE `subject_components`
   ADD CONSTRAINT `fk_component_parent` FOREIGN KEY (`parentSubjectId`) REFERENCES `subjects` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
--- Constraints for table `teachers`
+-- Constraints for table `faculties`
 --
-ALTER TABLE `teachers`
-  ADD CONSTRAINT `fk_teacher1` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE `faculties`
+  ADD CONSTRAINT `fk_faculty1` FOREIGN KEY (`userId`) REFERENCES `users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 --
--- Constraints for table `teacher_subject_assignment`
+-- Constraints for table `faculty_subject_assignment`
 --
-ALTER TABLE `teacher_subject_assignment`
-  ADD CONSTRAINT `fk_tsa_1` FOREIGN KEY (`teacherId`) REFERENCES `teachers` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+ALTER TABLE `faculty_subject_assignment`
+  ADD CONSTRAINT `fk_tsa_1` FOREIGN KEY (`facultyId`) REFERENCES `faculties` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   ADD CONSTRAINT `fk_tsa_2` FOREIGN KEY (`subjectId`) REFERENCES `subjects` (`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 COMMIT;
 

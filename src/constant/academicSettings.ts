@@ -1,5 +1,5 @@
 // Single-row system settings: the current quarter, enrollment status, and
-// whether teachers are blocked from submitting quarterly student records.
+// whether faculties are blocked from submitting quarterly student records.
 export interface AcademicSettingsProps {
     id: number;
     currentQuarter: number;

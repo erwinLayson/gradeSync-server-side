@@ -119,7 +119,7 @@ export default class Students {
             INNER JOIN students s
             ON e.studentId = s.id
             WHERE cs.classId = ?
-            -- Hide soft-deleted students from teacher rosters
+            -- Hide soft-deleted students from faculty rosters
             AND (s.status IS NULL OR s.status <> "inactive")
             `;
 

@@ -6,16 +6,16 @@ export interface Subject {
     hasComponents?: boolean;
 }
 
-export interface AssignTeacherProps {
+export interface AssignFacultyProps {
     subjectId: number,
-    teachersId: number[],
+    facultiesId: number[],
 }
 
-export interface SubjectWithTeachersNotAssignedToClass {
+export interface SubjectWithFacultiesNotAssignedToClass {
     subjectId: number;
     subjectName: string;
     subjectCode: string;
     subjectUnit: number;
-    teacherId: number;
-    teacherFullname: string;
+    facultyId: number;
+    facultyFullname: string;
 }

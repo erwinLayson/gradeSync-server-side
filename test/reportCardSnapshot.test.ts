@@ -15,8 +15,8 @@ import { getNumQuarters } from "../src/service/academicSettings.js";
 
 /**
  * Audit F-1 — the SF9 report card used to inner-join live classrooms /
- * class_teacher / teachers, so archiving a classroom (which deletes its
- * class_teacher row) made a finalized report card return 404.
+ * class_adviser / faculties, so archiving a classroom (which deletes its
+ * class_adviser row) made a finalized report card return 404.
  */
 describe("SF9 report card after classroom archival (F-1)", () => {
     let connection: PoolConnection;
@@ -41,7 +41,7 @@ describe("SF9 report card after classroom archival (F-1)", () => {
 
     it("returns the finalized report card after the classroom is cleared and archived", async () => {
         scenario = await createScenario(connection);
-        await setClassAdviserService(scenario.classroomId, scenario.teacherId);
+        await setClassAdviserService(scenario.classroomId, scenario.facultyId);
         await finalizeScenario(connection, scenario, { quarters: numQuarters });
 
         // Semester-end flow: clear the operational data, then archive the class.
@@ -114,13 +114,13 @@ describe("SF9 report card after classroom archival (F-1)", () => {
 
     it("still reports an unfinalized current year from the live joins", async () => {
         scenario = await createScenario(connection);
-        await setClassAdviserService(scenario.classroomId, scenario.teacherId);
+        await setClassAdviserService(scenario.classroomId, scenario.facultyId);
 
         // No frozen record: the live classroom/adviser are the correct source.
         const card = await getStudentReportCardService(scenario.enrollmentId);
         expect(card.students.classSection).toBe(scenario.section);
         expect(card.students.classGradeLevel).toBe(scenario.gradeLevel);
-        // Live adviser name is resolved from the class_teacher join (not the
+        // Live adviser name is resolved from the class_adviser join (not the
         // snapshot, which does not exist for this year).
         expect(card.students.classAdviser).not.toBe("");
         expect(card.students.classAdviser).not.toBe(scenario.adviserName);

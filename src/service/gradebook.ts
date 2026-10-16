@@ -41,7 +41,7 @@ export async function getGradeBookDetailsByClassSubjectIdService(classSubjectId:
         // NOTE: getStudentByClassroomIdService expects a classrooms.id (classId), NOT a class_subjects.id
         const studentRoaster = await getStudentByClassroomIdService(classSubjectDetails.classId, connection)
         const rowStudentScore = await getStudentScoreService(classSubjectId, quarter, connection);
-        // Weights are per CLASS SUBJECT (each teacher's own configuration), so
+        // Weights are per CLASS SUBJECT (each faculty's own configuration), so
         // look them up with the class_subjects id, not the shared subject id.
         const gradingWeights = await getGradingWeightsService(classSubjectDetails.classSubjectId, connection)
         // NOTE: attendance is PER SUBJECT (keyed by classSubjectId), so each
@@ -299,7 +299,7 @@ export function computeQuarterGrade(
         activeWeightSum += weightByAssessmentType[assessmentType];
     }
 
-    // Attendance component (optional, teacher-configured weight per subject). Counted only
+    // Attendance component (optional, faculty-configured weight per subject). Counted only
     // when the student has attendance records AND the weight is positive, so classes without
     // attendance data are completely unaffected.
     const attendanceWeight = Number(gradeWeights.attendanceWeight);

@@ -14,35 +14,59 @@ import {
 import allowedRoles from "../middleware/allowedRoles.js";
 import { ValidateToken } from "../middleware/validateToken.js";
 import { ROLES } from "../constant/users.js";
+import { FACULTY_ROLES } from "../constant/faculties.js";
+import { allowedFacultyRoles } from "../middleware/allowedFacultyRoles.js";
 
 const router: Router = Router();
 
 const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
-const adminTeacher: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.TEACHER])];
-const teacherOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.TEACHER])];
+// Teaching-capability routes: the user-role guard says "this is a faculty
+// account" (users.role = "teacher"); the faculty guard makes the teaching
+// requirement explicit, so a register faculty member is refused at the route
+// layer as well as in the services.
+const adminFaculty: RequestHandler[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.TEACHER], { allowAdmin: true }),
+];
+const facultyOnly: RequestHandler[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.TEACHER], { allowAdmin: true }),
+];
 const adminOnlyWithId: RequestHandler<{id: string}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
-const adminRegisterWithId: RequestHandler<{id: string}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.REGISTER])];
 
-// ==================== ADVISER (teacher) ====================
+// SF10 / Form-137 is a register-staff responsibility. After the migration there is
+// no user-level `register` role, so this endpoint is authorized through the
+// authenticated user's verified faculty record instead of through `users.role`.
+// Admins keep access; a register faculty member reaches the controller through the
+// verified faculty path; everyone else is refused.
+const adminRegisterWithId: RequestHandler<{id: string}>[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.REGISTER], { allowAdmin: true }),
+];
+
+// ==================== ADVISER (faculty) ====================
 // The adviser's own advised class (adviser ownership is checked in the service).
-router.get("/student-records/my-class", teacherOnly, getMyClassRecordsController);
+router.get("/student-records/my-class", facultyOnly, getMyClassRecordsController);
 
 // ==================== ADMIN + TEACHER ====================
-// Adviser-scope checks live in the service (teachers must be the class adviser).
-router.get("/student-records/class/:classId", adminTeacher, getClassRecordsController);
+// Adviser-scope checks live in the service (faculties must be the class adviser).
+router.get("/student-records/class/:classId", adminFaculty, getClassRecordsController);
 router.post(
     "/student-records/class/:classId/students/:enrollmentId/quarter/:quarter/submit",
-    adminTeacher,
+    adminFaculty,
     submitStudentRecordController
 );
 router.post(
     "/student-records/class/:classId/quarter/:quarter/submit-all",
-    adminTeacher,
+    adminFaculty,
     submitAllStudentRecordsController
 );
 router.post(
     "/student-records/class/:classId/students/:enrollmentId/quarter/:quarter/reopen",
-    adminTeacher,
+    adminFaculty,
     reopenStudentRecordController
 );
 

@@ -17,7 +17,7 @@ export async function getDashboardSummaryService(): Promise<DashboardSummary> {
         const [
             academicSettingsResult,
             students,
-            teachers,
+            faculties,
             classrooms,
             attendanceToday,
             newStudentsThisWeek,
@@ -31,7 +31,7 @@ export async function getDashboardSummaryService(): Promise<DashboardSummary> {
                         : { currentQuarter: 1, numQuarters: 4, enrollmentOpen: true };
                 }),
             model.getStudentCount(schoolYearId),
-            model.getTeacherCount(),
+            model.getFacultyCount(),
             model.getClassroomCount(),
             model.getAttendanceToday(schoolYearId),
             model.getNewStudentsThisWeek(schoolYearId),
@@ -60,7 +60,7 @@ export async function getDashboardSummaryService(): Promise<DashboardSummary> {
             numQuarters: academicSettingsResult.numQuarters,
             enrollmentOpen: academicSettingsResult.enrollmentOpen,
             students,
-            teachers,
+            faculties,
             classrooms,
             averageGrade: gradeAggregates.averageGrade,
             attendanceToday,

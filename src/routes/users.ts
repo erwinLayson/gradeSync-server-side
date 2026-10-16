@@ -13,9 +13,12 @@ const route: Router = Router();
 const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
 const adminOnlyWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
 // Own-credential updates: any role may update its OWN account (developer
-// included — settings page email/password form). Register is included so a
-// registrar can manage their own login credentials.
-const updateUsersWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.STUDENT, ROLES.TEACHER, ROLES.DEVELOPER, ROLES.REGISTER])];
+// included — settings page email/password form). After the migration there is no
+// user-level `register` role, so register staff update their own credentials as a
+// faculty account (users.role = "teacher") whose capabilities come from
+// faculties.role. The affected register-staff workflow still works because the
+// register-specific routes protect that surface separately.
+const updateUsersWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.STUDENT, ROLES.TEACHER, ROLES.DEVELOPER])];
 
 // Reads are admin + developer (developer manages login accounts — docs/developer-users-plan.md)
 const adminOrDev: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.DEVELOPER])];

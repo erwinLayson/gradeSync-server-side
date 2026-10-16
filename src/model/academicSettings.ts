@@ -21,10 +21,10 @@ export default class AcademicSettings {
     }
 
     // Return the single settings row, seeding the default row (quarter 1, 4
-    // quarters, enrollment open, submissions unlocked — same defaults as
-    // migrate_all.mjs) when the table is empty. The migration only seeds on
-    // CREATE TABLE, so an emptied table (e.g. after a settings wipe) would
-    // otherwise leave every admin settings save stuck on a 404 forever.
+    // quarters, enrollment open, submissions unlocked — the application
+    // defaults) when the table is empty. The schema migration creates the table
+    // empty, so an emptied table (e.g. after a settings wipe) would otherwise
+    // leave every admin settings save stuck on a 404 forever.
     async ensureSettings(): Promise<AcademicSettingsProps> {
         const existing = await this.getSettings();
         if (existing) return existing;

@@ -6,14 +6,24 @@ import { createEnrollmentController, bulkRemoveEnrollmentsController, clearAllFr
 import allowedRoles from "../middleware/allowedRoles.js";
 import { ValidateToken } from "../middleware/validateToken.js";
 import { ROLES } from "../constant/users.js";
+import { FACULTY_ROLES } from "../constant/faculties.js";
+import { allowedFacultyRoles } from "../middleware/allowedFacultyRoles.js";
 
 const route: Router = Router();
 
 const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
-// Enrollment is SHARED with Register (docs/register-role-implementation-plan.md
-// §4.2): Register enrolls students alongside Admin. The destructive cleanup
-// routes below stay Admin-only.
-const adminRegister: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.REGISTER])];
+
+// Enrollment is a register-staff responsibility (docs/register-role-implementation-plan.md
+// §4.2). After the migration there is no user-level `register` role, so the register
+// enrollment path is authorized through the authenticated user's verified faculty
+// record instead of through `users.role`. Admins keep access; a register faculty
+// member reaches the controller through the verified faculty path; everyone else is
+// refused.
+const adminRegister: RequestHandler[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.REGISTER], { allowAdmin: true }),
+];
 
 // ==================== ADMIN + REGISTER ====================
 

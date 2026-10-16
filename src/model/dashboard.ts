@@ -36,13 +36,13 @@ export default class Dashboard {
         }
     }
 
-    async getTeacherCount(): Promise<number> {
+    async getFacultyCount(): Promise<number> {
         try {
-            const query = "SELECT COUNT(*) AS count FROM teachers";
+            const query = "SELECT COUNT(*) AS count FROM faculties";
             const [rows] = await this.connection.execute<RowDataPacket[]>(query);
             return Number(rows[0]?.count ?? 0);
         } catch (err) {
-            throw new InternalServerError("Failed to fetch teacher count", 500, err);
+            throw new InternalServerError("Failed to fetch faculty count", 500, err);
         }
     }
 
@@ -128,7 +128,7 @@ export default class Dashboard {
                 FROM enrollments e
                 JOIN classrooms c ON c.id = e.classId
                 JOIN students s ON s.id = e.studentId AND (s.status IS NULL OR s.status <> 'inactive')
-                LEFT JOIN class_teacher ct ON ct.classId = c.id
+                LEFT JOIN class_adviser ct ON ct.classId = c.id
                 WHERE e.schoolYearId = ? AND e.status IN ('enrolled', 'completed') AND ct.id IS NULL
             `;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId]);

@@ -5,7 +5,7 @@ import { insert } from "./db.js";
 /**
  * Self-contained fixtures for the phase-1 tests.
  *
- * Every scenario is a private classroom + subject + teacher + student +
+ * Every scenario is a private classroom + subject + faculty + student +
  * enrollment (its own school year), so tests never depend on — or disturb —
  * the seeded demo rows. `teardownScenario` removes everything it created in
  * FK-safe order, including the frozen snapshot rows.
@@ -21,8 +21,8 @@ export interface Scenario {
     classroomId: number;
     section: string;
     gradeLevel: number;
-    teacherUserId: number;
-    teacherId: number;
+    facultyUserId: number;
+    facultyId: number;
     adviserName: string;
     subjectId: number;
     subjectName: string;
@@ -45,7 +45,7 @@ async function nextUserId(connection: PoolConnection, email: string, role: strin
 }
 
 /**
- * Creates a classroom with one teacher/subject, one enrolled student,
+ * Creates a classroom with one faculty/subject, one enrolled student,
  * one assessment with a score, and attendance — i.e. everything the semester-end
  * cleanup deletes.
  */
@@ -56,12 +56,12 @@ export async function createScenario(connection: PoolConnection): Promise<Scenar
     const section = `T${short}`.slice(0, 20);
     const gradeLevel = 7;
 
-    const teacherEmail = `t.${suffix}@test.local`;
-    const teacherUserId = await nextUserId(connection, teacherEmail, "teacher");
-    const teacherId = await insert(
+    const facultyEmail = `t.${suffix}@test.local`;
+    const facultyUserId = await nextUserId(connection, facultyEmail, "teacher");
+    const facultyId = await insert(
         connection,
-        "INSERT INTO teachers(email, firstname, middlename, lastname, userId) VALUES(?,?,?,?,?)",
-        [teacherEmail, "Test", "T", `Teacher${short}`, teacherUserId]
+        "INSERT INTO faculties(email, firstname, middlename, lastname, userId) VALUES(?,?,?,?,?)",
+        [facultyEmail, "Test", "T", `Faculty${short}`, facultyUserId]
     );
 
     const studentEmail = `s.${suffix}@test.local`;
@@ -97,8 +97,8 @@ export async function createScenario(connection: PoolConnection): Promise<Scenar
 
     const classSubjectId = await insert(
         connection,
-        "INSERT INTO class_subjects(classId, teacherId, subjectId) VALUES(?,?,?)",
-        [classroomId, teacherId, subjectId]
+        "INSERT INTO class_subjects(classId, facultyId, subjectId) VALUES(?,?,?)",
+        [classroomId, facultyId, subjectId]
     );
 
     const enrollmentId = await insert(
@@ -148,8 +148,8 @@ export async function createScenario(connection: PoolConnection): Promise<Scenar
         classroomId,
         section,
         gradeLevel,
-        teacherUserId,
-        teacherId,
+        facultyUserId,
+        facultyId,
         adviserName: `Snap Adviser ${short}`.slice(0, 50),
         subjectId,
         subjectName,
@@ -218,7 +218,7 @@ export async function finalizeScenario(
             connection,
             `INSERT INTO student_academic_record_quarters(recordId, quarter, status, submittedAt, submittedBy)
              VALUES(?,?,'submitted',NOW(),?)`,
-            [recordId, quarter, scenario.teacherId]
+            [recordId, quarter, scenario.facultyId]
         );
     }
 
@@ -252,14 +252,14 @@ export async function teardownScenario(connection: PoolConnection, scenario: Sce
 
     await connection.execute("DELETE FROM assessments WHERE classSubjectId = ?", [classSubjectId]);
     await connection.execute("DELETE FROM grading_weights WHERE classSubjectId = ?", [classSubjectId]);
-    await connection.execute("DELETE FROM class_teacher WHERE classId = ?", [classroomId]);
+    await connection.execute("DELETE FROM class_adviser WHERE classId = ?", [classroomId]);
     await connection.execute("DELETE FROM class_subjects WHERE id = ?", [classSubjectId]);
     await connection.execute("DELETE FROM classrooms WHERE id = ?", [classroomId]);
-    await connection.execute("DELETE FROM teacher_subject_assignment WHERE subjectId = ?", [subjectId]);
+    await connection.execute("DELETE FROM faculty_subject_assignment WHERE subjectId = ?", [subjectId]);
     await connection.execute("DELETE FROM subject_components WHERE parentSubjectId = ?", [subjectId]);
     await connection.execute("DELETE FROM subjects WHERE id = ?", [subjectId]);
     await connection.execute("DELETE FROM schoolyear WHERE id = ?", [schoolYearId]);
-    await connection.execute("DELETE FROM teachers WHERE id = ?", [scenario.teacherId]);
+    await connection.execute("DELETE FROM faculties WHERE id = ?", [scenario.facultyId]);
     await connection.execute("DELETE FROM students WHERE id = ?", [scenario.studentId]);
-    await connection.execute("DELETE FROM users WHERE id IN (?, ?)", [scenario.userId, scenario.teacherUserId]);
+    await connection.execute("DELETE FROM users WHERE id IN (?, ?)", [scenario.userId, scenario.facultyUserId]);
 }

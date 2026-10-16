@@ -5,7 +5,7 @@ import { pdfFormatter } from "../helper/pdfFormater.js";
 // Service functions 
 import {getStudentReportCardService} from "../service/studentsReportCard.js";
 
-// Ownership authorization (admin/developer any; teacher only their advised class)
+// Ownership authorization (admin/developer any; faculty only their advised class)
 import { assertCanAccessEnrollment } from "../service/authorization.js";
 import { BadRequestError } from "../middleware/errors.js";
 

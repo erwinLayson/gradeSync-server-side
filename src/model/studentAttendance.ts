@@ -64,7 +64,7 @@ export default class StudentAttendance {
   }
 
   // Every attendance record for one subject on one specific date. Used to
-  // pre-fill the teacher's daily attendance sheet (one row per student).
+  // pre-fill the faculty's daily attendance sheet (one row per student).
   async getAttendanceByClassSubjectAndDate(
     classSubjectId: number,
     date: string,
@@ -90,7 +90,7 @@ export default class StudentAttendance {
   // Idempotent daily save for one subject: one row per (classSubjectId,
   // enrollmentId, date) is enforced by the uq_attendance_once unique key, so
   // re-saving a day updates existing rows instead of duplicating them. The
-  // teacher-chosen quarter (1-4) is stored with every row of the day so the
+  // faculty-chosen quarter (1-4) is stored with every row of the day so the
   // history can be filtered per quarter.
   async upsertAttendanceByDate(
     classSubjectId: number,
@@ -190,7 +190,7 @@ export default class StudentAttendance {
 
   // Every recorded cell of the class-wide attendance matrix for ONE SUBJECT,
   // scoped by the supplied filters. The matrix columns are the distinct dates
-  // returned here, so a teacher only ever sees dates that actually have records
+  // returned here, so a faculty only ever sees dates that actually have records
   // for the selected school year / quarter / date range.
   async getAttendanceRangeByClassSubject(
     classSubjectId: number,

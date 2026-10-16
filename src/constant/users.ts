@@ -30,18 +30,17 @@ export const ROLES = {
     ADMIN: "admin",
     TEACHER: "teacher",
     STUDENT: "student",
-    DEVELOPER: "developer",
-    // Registration/enrollment staff: enrolls students (existing or newly
-    // created) and prints SF10/Form-137 records. See
-    // docs/register-role-implementation-plan.md.
-    REGISTER: "register"
+    DEVELOPER: "developer"
 } as const;
 
-/** Roles that may read academic settings (admin, teacher, register). */
+/** Roles that may read academic settings (admin, faculty, register). */
 export const ALLOWED_TO_READ_ACADEMIC_SETTINGS = [
     ROLES.ADMIN,
     ROLES.TEACHER,
-    ROLES.REGISTER,
+    // Register is no longer a user role (see the task: "Move the Register Role
+    // from Users to Faculties"). The academic-settings reader list is rewritten to
+    // include a register faculty via the faculty-role check in the route/service
+    // layer instead.
 ] as const;
 
 /** Roles that may update academic settings (admin only). */

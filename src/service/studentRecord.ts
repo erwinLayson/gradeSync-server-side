@@ -7,7 +7,7 @@ import AcademicSettingsModel from "../model/academicSettings.js";
 // Reuse existing services
 import { getStudentByClassroomIdService, getStudentByIdService } from "./students.js";
 import { getGradeBookDetailsByClassSubjectIdService } from "./gradebook.js";
-import { getTeacherByUserIdService } from "./teachers.js";
+import { getFacultyByUserIdService } from "./faculties.js";
 import { getClassAdviserService, getClassroomByIdService } from "./classrooms.js";
 import {getAllEnrollmentRecordByStudentId} from "./enrollments.js";
 
@@ -39,28 +39,28 @@ import type {
 
 // ==================== helpers ====================
 
-export async function resolveTeacherIdByUserIdService(userId: number): Promise<number> {
-    const teacher = await getTeacherByUserIdService(userId);
-    return teacher.id;
+export async function resolveFacultyIdByUserIdService(userId: number): Promise<number> {
+    const faculty = await getFacultyByUserIdService(userId);
+    return faculty.id;
 }
 
-async function assertAdviserOfClass(connection: PoolConnection, classId: number, teacherId: number | null): Promise<void> {
-    if (teacherId === null) {
+async function assertAdviserOfClass(connection: PoolConnection, classId: number, facultyId: number | null): Promise<void> {
+    if (facultyId === null) {
         return;
     }
     const classroomModel = new ClassroomModel(connection);
-    const adviserClassId = await classroomModel.getClassIdByAdviser(teacherId);
+    const adviserClassId = await classroomModel.getClassIdByAdviser(facultyId);
     if (adviserClassId !== classId) {
         throw new ForbiddenError("You are not the class adviser of this class");
     }
 }
 
-export async function getAdvisedClassIdService(teacherId: number): Promise<number | null> {
+export async function getAdvisedClassIdService(facultyId: number): Promise<number | null> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
         const classroomModel = new ClassroomModel(connection);
-        const classId = await classroomModel.getClassIdByAdviser(teacherId);
+        const classId = await classroomModel.getClassIdByAdviser(facultyId);
         if (classId === null) {
             return null
         }
@@ -192,11 +192,11 @@ async function assertSubmissionsNotLocked(connection: PoolConnection): Promise<v
 
 // ==================== class records view ====================
 
-export async function getClassRecordsService(classId: number, quarter: number, teacherId: number | null): Promise<ClassRecordsResponse> {
+export async function getClassRecordsService(classId: number, quarter: number, facultyId: number | null): Promise<ClassRecordsResponse> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
-        await assertAdviserOfClass(connection, classId, teacherId);
+        await assertAdviserOfClass(connection, classId, facultyId);
 
         const classroom = await getClassroomByIdService(classId, connection);
         if (!classroom) {
@@ -308,13 +308,13 @@ export async function submitStudentRecordService(
     classId: number,
     enrollmentId: number,
     quarter: number,
-    teacherId: number | null
+    facultyId: number | null
 ): Promise<{ recordId: number; status: "submitted" }> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
         await assertSubmissionsNotLocked(connection);
-        await assertAdviserOfClass(connection, classId, teacherId);
+        await assertAdviserOfClass(connection, classId, facultyId);
 
         const classroom = await getClassroomByIdService(classId, connection);
         if (!classroom) {
@@ -328,7 +328,7 @@ export async function submitStudentRecordService(
         const recordModel = new StudentRecordModel(connection);
         const subjects = await recordModel.getClassSubjects(classId);
         const computed = await computeStudentGrades(subjects, enrollmentId, quarter);
-        const { submittedBy, adviserName } = await resolveSubmitter(classId, teacherId);
+        const { submittedBy, adviserName } = await resolveSubmitter(classId, facultyId);
 
         await connection.beginTransaction();
         try {
@@ -356,12 +356,12 @@ export async function submitStudentRecordService(
     }
 }
 
-export async function submitAllStudentRecordsService(classId: number, quarter: number, teacherId: number | null): Promise<SubmitAllResult> {
+export async function submitAllStudentRecordsService(classId: number, quarter: number, facultyId: number | null): Promise<SubmitAllResult> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
         await assertSubmissionsNotLocked(connection);
-        await assertAdviserOfClass(connection, classId, teacherId);
+        await assertAdviserOfClass(connection, classId, facultyId);
 
         const classroom = await getClassroomByIdService(classId, connection);
         if (!classroom) {
@@ -386,7 +386,7 @@ export async function submitAllStudentRecordsService(classId: number, quarter: n
 
         const pending = roster.filter((s) => !submittedEnrollmentIds.has(s.enrollmentId));
         const computedMatrix = await computeClassGradeMatrix(subjects, quarter);
-        const { submittedBy, adviserName } = await resolveSubmitter(classId, teacherId);
+        const { submittedBy, adviserName } = await resolveSubmitter(classId, facultyId);
 
         const blocked: BlockedStudent[] = [];
         let submittedCount = 0;
@@ -436,12 +436,12 @@ export async function reopenStudentRecordService(
     classId: number,
     enrollmentId: number,
     quarter: number,
-    teacherId: number | null
+    facultyId: number | null
 ): Promise<{ status: "pending" }> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
-        await assertAdviserOfClass(connection, classId, teacherId);
+        await assertAdviserOfClass(connection, classId, facultyId);
 
         const roster = await getStudentByClassroomIdService(classId, connection);
         if (!roster.some((s) => s.enrollmentId === enrollmentId)) {

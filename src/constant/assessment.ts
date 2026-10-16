@@ -23,7 +23,7 @@ export interface AssessmentCreateProps {
     dateGiven?: string | null;
 }
 
-// Fields a teacher is allowed to edit on an existing assessment.
+// Fields a faculty is allowed to edit on an existing assessment.
 export interface AssessmentUpdateProps {
     title?: string;
     type?: AssessmentType;

@@ -2,7 +2,7 @@ import {PoolConnection} from "mysql2/promise";
 import type{ResultSetHeader, RowDataPacket} from "mysql2/promise";
 import { InternalServerError } from "../middleware/errors.js";
 
-import type {ClassroomResponse, ClassroomTeachersWithSubjectProps} from "../constant/classrooms.js";
+import type {ClassroomResponse, ClassroomFacultiesWithSubjectProps} from "../constant/classrooms.js";
 
 export default class Classroom {
     constructor(private connection: PoolConnection) {}
@@ -35,13 +35,13 @@ export default class Classroom {
             c.section,
             c.gradeLevel,
             COUNT(s.id) AS totalStudent,
-            -- Class adviser (class_teacher holds at most one adviser per class)
+            -- Class adviser (class_adviser holds at most one adviser per class)
             t.id AS adviserId,
             CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS adviserFullname
             FROM  
             classrooms c
-            LEFT JOIN class_teacher ct ON ct.classId = c.id
-            LEFT JOIN teachers t ON t.id = ct.teacherId
+            LEFT JOIN class_adviser ct ON ct.classId = c.id
+            LEFT JOIN faculties t ON t.id = ct.facultyId
             LEFT JOIN class_students cst ON cst.classId = c.id
             LEFT JOIN enrollments e ON e.id = cst.enrollmentId AND e.status = 'enrolled'
             -- Status filter lives in the JOIN so classrooms with only
@@ -68,8 +68,8 @@ export default class Classroom {
                 SELECT
                     t.id AS adviserId,
                     CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS adviserFullname
-                FROM class_teacher ct
-                LEFT JOIN teachers t ON t.id = ct.teacherId
+                FROM class_adviser ct
+                LEFT JOIN faculties t ON t.id = ct.facultyId
                 WHERE ct.classId = ?
                 LIMIT 1
             `;
@@ -83,20 +83,20 @@ export default class Classroom {
         }
     }
 
-    // The classroom id a teacher currently advises (for the one-class-per-teacher rule).
+    // The classroom id a faculty currently advises (for the one-class-per-faculty rule).
     // Legacy data could theoretically hold rows for several classes; any assignment
-    // still blocks assigning this teacher elsewhere (all writes go through
+    // still blocks assigning this faculty elsewhere (all writes go through
     // setClassAdviser, which deletes the class rows first, so no new dupes arise).
-    async getClassIdByAdviser(teacherId: number): Promise<number | null> {
+    async getClassIdByAdviser(facultyId: number): Promise<number | null> {
         try {
-            const query = "SELECT classId FROM class_teacher WHERE teacherId = ? LIMIT 2";
-            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [teacherId]);
+            const query = "SELECT classId FROM class_adviser WHERE facultyId = ? LIMIT 2";
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [facultyId]);
             if (rows.length === 0 || rows[0] === undefined) {
                 return null;
             }
             const first = Number(rows[0].classId);
             if (rows.length > 1 && rows[1] !== undefined && Number(rows[1].classId) !== first) {
-                throw new InternalServerError("Teacher has duplicate adviser assignments across multiple classes", 500);
+                throw new InternalServerError("Faculty has duplicate adviser assignments across multiple classes", 500);
             }
             return first;
         } catch (err) {
@@ -108,15 +108,15 @@ export default class Classroom {
     }
 
     // Assign (or reassign) the class adviser for a classroom.
-    // The class_teacher table has no unique constraint on classId, so any
+    // The class_adviser table has no unique constraint on classId, so any
     // existing rows for this class are removed first — this keeps the
     // one-adviser-per-class rule enforced here in the application.
-    async setClassAdviser(classId: number, teacherId: number | null): Promise<void> {
+    async setClassAdviser(classId: number, facultyId: number | null): Promise<void> {
         try {
-            await this.connection.execute("DELETE FROM class_teacher WHERE classId = ?", [classId]);
-            if (teacherId !== null) {
-                const query = "INSERT INTO class_teacher (classId, teacherId) VALUES (?, ?)";
-                await this.connection.execute<ResultSetHeader>(query, [classId, teacherId]);
+            await this.connection.execute("DELETE FROM class_adviser WHERE classId = ?", [classId]);
+            if (facultyId !== null) {
+                const query = "INSERT INTO class_adviser (classId, facultyId) VALUES (?, ?)";
+                await this.connection.execute<ResultSetHeader>(query, [classId, facultyId]);
             }
         } catch (err) {
             throw new InternalServerError("Failed to assign class adviser", 500, err);
@@ -232,31 +232,31 @@ export default class Classroom {
         }
     }
 
-    // Remove the adviser assignment(s) for a class (frees the teacher when archiving).
+    // Remove the adviser assignment(s) for a class (frees the faculty when archiving).
     async clearClassAdviserAssignment(classId: number): Promise<void> {
         try {
-            await this.connection.execute("DELETE FROM class_teacher WHERE classId = ?", [classId]);
+            await this.connection.execute("DELETE FROM class_adviser WHERE classId = ?", [classId]);
         } catch (err) {
             throw new InternalServerError("Failed to clear class adviser", 500, err);
         }
     }
 
-    // Get all teachers assigned to a specific classroom along with their subjects
-    async getClassroomTeachersWithSubject(classroomId: number): Promise<ClassroomTeachersWithSubjectProps[]> {
+    // Get all faculties assigned to a specific classroom along with their subjects
+    async getClassroomFacultiesWithSubject(classroomId: number): Promise<ClassroomFacultiesWithSubjectProps[]> {
         try {
             const query = `
                 SELECT 
                     cs.id AS classSubjectId,
-                    t.id AS teacherId,
+                    t.id AS facultyId,
                     s.code,
                     s.unit,
-                    CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS teacherFullname,
+                    CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS facultyFullname,
                     s.id AS subjectId,
                     s.name AS subjectName
                 FROM 
                     class_subjects cs
                 JOIN 
-                    teachers t ON cs.teacherId = t.id
+                    faculties t ON cs.facultyId = t.id
                 JOIN 
                     subjects s ON cs.subjectId = s.id
                 WHERE 
@@ -264,9 +264,9 @@ export default class Classroom {
             `;
 
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [classroomId]);
-            return rows as ClassroomTeachersWithSubjectProps[];
+            return rows as ClassroomFacultiesWithSubjectProps[];
         }catch(err) {
-            throw new InternalServerError("Failed to fetch classroom teachers with subjects", 500, err);
+            throw new InternalServerError("Failed to fetch classroom faculties with subjects", 500, err);
         }
     }
 }

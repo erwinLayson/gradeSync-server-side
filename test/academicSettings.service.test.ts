@@ -77,7 +77,7 @@ describe("quarter advancement workflow", () => {
             if (rows.length === 0) {
                 throw new Error("academic_settings is unexpectedly empty");
             }
-            originalSettings = rows[0];
+            originalSettings = rows[0] ?? null;
         }
     }
 
@@ -89,16 +89,21 @@ describe("quarter advancement workflow", () => {
         // quarter, and not below 1). If it is not, reset the row to a clean single
         // quarter so a leftover completed scenario from a prior test run cannot sit
         // inside this test's active year.
+        if (originalSettings === null) {
+            throw new Error("academic_settings row was not captured for this test");
+        }
+        const originalCurrentQuarter = originalSettings.currentQuarter;
         const safeQuarter =
-            originalSettings.currentQuarter < 1 || originalSettings.currentQuarter >= numQuarters
+            originalCurrentQuarter < 1 || originalCurrentQuarter >= numQuarters
                 ? 1
-                : originalSettings.currentQuarter;
+                : originalCurrentQuarter;
+
         await connection.execute(
             "UPDATE academic_settings SET currentQuarter = ? WHERE id = ?",
             [safeQuarter, originalSettings.id],
         );
-        if (safeQuarter !== originalSettings.currentQuarter) {
-            originalSettings = { ...originalSettings, currentQuarter: safeQuarter };
+        if (safeQuarter !== originalCurrentQuarter) {
+            originalSettings.currentQuarter = safeQuarter;
         }
 
         // Re-point the active year to our owned scenario first, so the service
@@ -107,11 +112,11 @@ describe("quarter advancement workflow", () => {
         await connection.execute("UPDATE schoolyear SET isActive = 0 WHERE isActive = 1");
         await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [scenario.schoolYearId]);
 
-        // Assign an adviser so the scenario's classroom has a class_teacher row
+        // Assign an adviser so the scenario's classroom has a class_adviser row
         // (createScenario does not create one).
         await connection.execute(
-            "INSERT INTO class_teacher(classId, teacherId) VALUES(?, ?)",
-            [scenario.classroomId, scenario.teacherId],
+            "INSERT INTO class_adviser(classId, facultyId) VALUES(?, ?)",
+            [scenario.classroomId, scenario.facultyId],
         );
 
         // Write the frozen record so the submission ledger exists.
@@ -119,7 +124,7 @@ describe("quarter advancement workflow", () => {
 
         const currentSettings = await getAcademicSettingsService();
         expect(currentSettings).toBeTruthy();
-        const quarter = currentSettings!.currentQuarter;
+        const quarter = currentSettings?.currentQuarter ?? 1;
 
         // The service locks the settings row, re-reads the stored quarter, and only
         // then checks completeness against that quarter — so this test must pass the
@@ -145,7 +150,7 @@ describe("quarter advancement workflow", () => {
 
         // The settings row must not have been mutated by the rejected check.
         const settings = await getAcademicSettingsService();
-        expect(settings!.currentQuarter).toBe(originalSettings!.currentQuarter);
+        expect(settings?.currentQuarter).toBe(originalSettings?.currentQuarter ?? 1);
     });
 
     it("rejects when a class has no assigned adviser", async () => {
@@ -155,10 +160,10 @@ describe("quarter advancement workflow", () => {
 
         // Write the frozen record so the submission ledger exists, then remove the
         // class's adviser row. `getClassesWithoutAdviser` is intentionally strict:
-        // it reports a class whose `LEFT JOIN class_teacher ct ... ct.id IS NULL`,
+        // it reports a class whose `LEFT JOIN class_adviser ct ... ct.id IS NULL`,
         // even when a frozen adviser name exists on the record.
         await finalizeScenario(connection, scenario, { quarters: numQuarters, withSubjects: false });
-        await connection.execute("DELETE FROM class_teacher WHERE classId = ?", [scenario.classroomId]);
+        await connection.execute("DELETE FROM class_adviser WHERE classId = ?", [scenario.classroomId]);
 
         await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [scenario.schoolYearId]);
 
@@ -175,7 +180,7 @@ describe("quarter advancement workflow", () => {
         // Make A incomplete and strip its adviser. B is fully complete, so only A
         // contributes blockers.
         await finalizeScenario(connection, scenarioA, { quarters: numQuarters, nullGrades: true });
-        await connection.execute("DELETE FROM class_teacher WHERE classId = ?", [scenarioA.classroomId]);
+        await connection.execute("DELETE FROM class_adviser WHERE classId = ?", [scenarioA.classroomId]);
 
         // Only mark A's year active; B stays inactive so its complete rows don't
         // qualify as blockers inside the active year.
@@ -210,5 +215,9 @@ describe("quarter advancement workflow", () => {
         await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [scenario.schoolYearId]);
 
         await expect(updateAcademicSettingsService({ currentQuarter: 5 })).rejects.toBeInstanceOf(BadRequestError);
+
+        const finalSettings = await getAcademicSettingsService();
+        expect(finalSettings).toBeTruthy();
+        expect(finalSettings?.currentQuarter).toBe(originalSettings?.currentQuarter ?? 1);
     });
 });

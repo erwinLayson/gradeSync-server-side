@@ -2,15 +2,15 @@ import type{Request, Response, NextFunction} from "express"
 
 // Service Functions
 import {
-    assignTeachersToSubjectService,
+    assignFacultiesToSubjectService,
     createSubjectService, 
     getAllSubjectsService, 
     getSubjectByIdService,
-    getSubjectByIdWithTeachersService,
+    getSubjectByIdWithFacultiesService,
     getSubjectsNotInClassService,
-    getSubjectsWithAssignedTeachersNotInClassService,
-    getTeachersUnassignedToSubjectService,
-    unassignTeacherFromSubjectService,
+    getSubjectsWithAssignedFacultiesNotInClassService,
+    getFacultiesUnassignedToSubjectService,
+    unassignFacultyFromSubjectService,
     updateSubjectService,
     deleteSubjectService
 } from "../service/subjects.js";
@@ -123,7 +123,7 @@ export async function getSubjectByIdController(req: Request<{id: string}>, res: 
 }
 
 
-export async function getSubjectByIdWithTeachersController(req: Request<{id: number}>, res: Response, next: NextFunction) {
+export async function getSubjectByIdWithFacultiesController(req: Request<{id: number}>, res: Response, next: NextFunction) {
     const {id} = req.params;
 
 
@@ -132,13 +132,13 @@ export async function getSubjectByIdWithTeachersController(req: Request<{id: num
     }
 
     try {
-        const subjectWithTeachers = await getSubjectByIdWithTeachersService(id);
+        const subjectWithFaculties = await getSubjectByIdWithFacultiesService(id);
         
         res.status(200).json(
             SuccessResponse(
                 {
-                    message: "Subject with teachers retrieved successfully",
-                    data: subjectWithTeachers
+                    message: "Subject with faculties retrieved successfully",
+                    data: subjectWithFaculties
                 }
             )
         );
@@ -147,8 +147,8 @@ export async function getSubjectByIdWithTeachersController(req: Request<{id: num
     }
 }
 
-// get teachers unassigned to a specific subject
-export async function getTeachersUnassignedToSubjectController(req: Request<{id: number}>, res: Response, next: NextFunction) {
+// get faculties unassigned to a specific subject
+export async function getFacultiesUnassignedToSubjectController(req: Request<{id: number}>, res: Response, next: NextFunction) {
     const {id} = req.params;
 
     if(id === undefined || isNaN(id)) {
@@ -156,13 +156,13 @@ export async function getTeachersUnassignedToSubjectController(req: Request<{id:
     }
 
     try {
-        const unassignedTeachers = await getTeachersUnassignedToSubjectService(id);
+        const unassignedFaculties = await getFacultiesUnassignedToSubjectService(id);
         
         res.status(200).json(
             SuccessResponse(
                 {
-                    message: "Unassigned teachers retrieved successfully",
-                    data: unassignedTeachers
+                    message: "Unassigned faculties retrieved successfully",
+                    data: unassignedFaculties
                 }
             )
         );
@@ -171,27 +171,27 @@ export async function getTeachersUnassignedToSubjectController(req: Request<{id:
     }
 }
 
-// Assign teachers to a specific subject
-export async function assignTeachersToSubjectController(req: Request<{id: number}>, res: Response, next: NextFunction) {
+// Assign faculties to a specific subject
+export async function assignFacultiesToSubjectController(req: Request<{id: number}>, res: Response, next: NextFunction) {
     const {id} = req.params;
-    const {teachersId} = req.body;
+    const {facultiesId} = req.body;
 
 
     if(id === undefined || isNaN(id)) {
         throw new BadRequestError(`Invalid subject ID: ${id}`);
     }
 
-    if(!Array.isArray(teachersId)) {
-        throw new BadRequestError(`Invalid teachers ID: ${teachersId}`);
+    if(!Array.isArray(facultiesId)) {
+        throw new BadRequestError(`Invalid faculties ID: ${facultiesId}`);
     }
 
     try {
-        await assignTeachersToSubjectService({subjectId: id, teachersId});
+        await assignFacultiesToSubjectService({subjectId: id, facultiesId});
         
         res.status(200).json(
             SuccessResponse(
                 {
-                    message: "Teachers assigned to subject successfully",
+                    message: "Faculties assigned to subject successfully",
                 }
             )
         );
@@ -200,20 +200,20 @@ export async function assignTeachersToSubjectController(req: Request<{id: number
     }
 }
 
-// Remove a teacher from a subject's teacher pool
-// DELETE /api/subjects/:subjectId/teachers/:teacherId
-export async function unassignTeacherFromSubjectController(req: Request<{subjectId: number, teacherId: number}>, res: Response, next: NextFunction) {
-    const { subjectId, teacherId } = req.params;
+// Remove a faculty from a subject's faculty pool
+// DELETE /api/subjects/:subjectId/faculties/:facultyId
+export async function unassignFacultyFromSubjectController(req: Request<{subjectId: number, facultyId: number}>, res: Response, next: NextFunction) {
+    const { subjectId, facultyId } = req.params;
 
-    if (subjectId === undefined || isNaN(subjectId) || teacherId === undefined || isNaN(teacherId)) {
-        throw new BadRequestError(`Invalid subject/teacher ID`);
+    if (subjectId === undefined || isNaN(subjectId) || facultyId === undefined || isNaN(facultyId)) {
+        throw new BadRequestError(`Invalid subject/faculty ID`);
     }
 
     try {
-        const result = await unassignTeacherFromSubjectService(Number(subjectId), Number(teacherId));
+        const result = await unassignFacultyFromSubjectService(Number(subjectId), Number(facultyId));
         res.status(200).json(
             SuccessResponse({
-                message: "Teacher removed from subject successfully",
+                message: "Faculty removed from subject successfully",
                 data: result
             })
         );
@@ -222,8 +222,8 @@ export async function unassignTeacherFromSubjectController(req: Request<{subject
     }
 }
 
-// get subjects with assigned teachers not in a specific class controller
-export async function getSubjectsWithAssignedTeachersNotInClassController(req: Request<{classId: number, subjectId: number}>, res: Response, next: NextFunction) {
+// get subjects with assigned faculties not in a specific class controller
+export async function getSubjectsWithAssignedFacultiesNotInClassController(req: Request<{classId: number, subjectId: number}>, res: Response, next: NextFunction) {
     const {classId, subjectId} = req.params;
 
     if(classId === undefined || isNaN(classId)) {
@@ -235,13 +235,13 @@ export async function getSubjectsWithAssignedTeachersNotInClassController(req: R
     }
 
     try {
-        const subjectsWithTeachers = await getSubjectsWithAssignedTeachersNotInClassService({classId, subjectId});
+        const subjectsWithFaculties = await getSubjectsWithAssignedFacultiesNotInClassService({classId, subjectId});
         
         res.status(200).json(
             SuccessResponse(
                 {
-                    message: "Subjects with assigned teachers not in class retrieved successfully",
-                    data: subjectsWithTeachers
+                    message: "Subjects with assigned faculties not in class retrieved successfully",
+                    data: subjectsWithFaculties
                 }
             )
         );
@@ -250,7 +250,7 @@ export async function getSubjectsWithAssignedTeachersNotInClassController(req: R
     }
 }
 
-// get subjects with Teachers not in a specific class controller
+// get subjects with Faculties not in a specific class controller
 export async function getSubjectsNotInClassController(req: Request<{classId: number}>, res: Response, next: NextFunction) {
     const {classId} = req.params;
 

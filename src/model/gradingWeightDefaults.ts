@@ -26,10 +26,9 @@ export default class GradingWeightDefaults {
     }
 
     // Return the single defaults row, seeding the DepEd DO 8 s. 2015 default
-    // weights (20/60/20/0 — same values as migrate_all.mjs) when the table is
-    // empty. The migration seeds only on CREATE TABLE, so an emptied table
-    // (e.g. after a settings wipe) would otherwise wedge the weights form on
-    // a 404 forever.
+    // weights (20/60/20/0) when the table is empty. The schema migration creates
+    // the table empty, so an emptied table (e.g. after a settings wipe) would
+    // otherwise wedge the weights form on a 404 forever.
     async ensureDefaults(): Promise<GradingWeightDefaultsProps> {
         const existing = await this.getDefaults();
         if (existing) return existing;

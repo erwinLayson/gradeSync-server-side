@@ -30,7 +30,7 @@ export interface AttendanceRecord {
     enrollmentId: number;
     status: AttendanceStatus | null;
     date?: string;
-    // Which quarter (1-4) this record belongs to. Set by the teacher in the
+    // Which quarter (1-4) this record belongs to. Set by the faculty in the
     // UI when the day's attendance is saved (the same way assessments carry an
     // explicit quarter). Null on rows created before the quarter column existed.
     quarter?: number | null;
@@ -54,7 +54,7 @@ export interface GradeWeights {
 
 // DepEd DO 8 s. 2015 default component weights (SHS profile), used when a class
 // subject has no row in the grading_weights table. Weights are percentages and
-// sum to 100. attendanceWeight is 0 by default (opt-in): the teacher enables it
+// sum to 100. attendanceWeight is 0 by default (opt-in): the faculty enables it
 // per class subject by setting a weight in the grading_weights table
 // (see src/seed.ts for an example).
 export const DEFAULT_GRADING_WEIGHTS: GradeWeights = {

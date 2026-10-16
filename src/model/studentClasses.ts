@@ -26,8 +26,8 @@ export interface ClassSubjectRow {
     name: string;
     code: string;
     unit: number | null;
-    teacherId: number;
-    teacherFullname: string;
+    facultyId: number;
+    facultyFullname: string;
 }
 
 export default class StudentClassesModel {
@@ -72,7 +72,7 @@ export default class StudentClassesModel {
         }
     }
 
-    // Section + grade level + adviser (class_teacher holds at most one per class).
+    // Section + grade level + adviser (class_adviser holds at most one per class).
     async getClassWithAdviser(classId: number): Promise<ClassWithAdviserRow | null> {
         try {
             const query = `
@@ -81,8 +81,8 @@ export default class StudentClassesModel {
                        CONCAT_WS(" ", t.firstname, t.middlename, t.lastname,
                                  IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS adviserFullname
                 FROM classrooms c
-                LEFT JOIN class_teacher ct ON ct.classId = c.id
-                LEFT JOIN teachers t ON t.id = ct.teacherId
+                LEFT JOIN class_adviser ct ON ct.classId = c.id
+                LEFT JOIN faculties t ON t.id = ct.facultyId
                 WHERE c.id = ?
                 LIMIT 1
             `;
@@ -103,18 +103,18 @@ export default class StudentClassesModel {
         }
     }
 
-    // Subjects + teachers assigned to a class.
+    // Subjects + faculties assigned to a class.
     async getClassSubjectsByClassId(classId: number): Promise<ClassSubjectRow[]> {
         try {
             const query = `
                 SELECT cs.id AS classSubjectId, cs.subjectId,
                        s.name, s.code, s.unit,
-                       t.id AS teacherId,
+                       t.id AS facultyId,
                        CONCAT_WS(" ", t.firstname, t.middlename, t.lastname,
-                                 IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS teacherFullname
+                                 IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS facultyFullname
                 FROM class_subjects cs
                 JOIN subjects s ON s.id = cs.subjectId
-                JOIN teachers t ON t.id = cs.teacherId
+                JOIN faculties t ON t.id = cs.facultyId
                 WHERE cs.classId = ?
                 ORDER BY s.name
             `;

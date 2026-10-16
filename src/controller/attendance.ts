@@ -7,7 +7,7 @@ import {
     saveAttendanceByClassSubjectAndDateService,
 } from "../service/studentAttendance.js";
 import { getNumQuarters } from "../service/academicSettings.js";
-import { assertTeacherOwnsClassSubject, resolveActorTeacherId } from "../service/authorization.js";
+import { assertFacultyOwnsClassSubject, resolveActorFacultyId } from "../service/authorization.js";
 import { isValidQuarter } from "../helper/quarterValidation.js";
 
 import type { AttendanceInput } from "../constant/grade.js";
@@ -36,10 +36,10 @@ export async function getAttendanceByClassSubjectAndDateController(
             throw new BadRequestError("date query parameter is required (YYYY-MM-DD)");
         }
 
-        // Ownership: only the teacher assigned to this class subject (or an
+        // Ownership: only the faculty assigned to this class subject (or an
         // admin) may read its attendance.
-        const teacherId = await resolveActorTeacherId(req.user!);
-        await assertTeacherOwnsClassSubject(teacherId, classSubjectId);
+        const facultyId = await resolveActorFacultyId(req.user!);
+        await assertFacultyOwnsClassSubject(facultyId, classSubjectId);
 
         const attendance = await getAttendanceByClassSubjectAndDateService(classSubjectId, date);
 
@@ -55,7 +55,7 @@ export async function getAttendanceByClassSubjectAndDateController(
 }
 
 // GET /api/attendance/range?classSubjectId=&schoolYearId=&quarter=&dateFrom=&dateTo=
-// The class-wide attendance matrix that powers the teacher's spreadsheet view:
+// The class-wide attendance matrix that powers the faculty's spreadsheet view:
 // the class roster (rows), every recorded date in the selected slice (columns)
 // and the cells in between. All filters are optional and combine; the columns
 // are derived from the returned rows, so a column can never be a date with no
@@ -104,10 +104,10 @@ export async function getAttendanceRangeController(
             ? undefined
             : String(req.query.dateTo);
 
-        // Ownership: only the assigned teacher (or an admin) may read a class
+        // Ownership: only the assigned faculty (or an admin) may read a class
         // subject's attendance, matching the other attendance reads.
-        const teacherId = await resolveActorTeacherId(req.user!);
-        await assertTeacherOwnsClassSubject(teacherId, classSubjectId);
+        const facultyId = await resolveActorFacultyId(req.user!);
+        await assertFacultyOwnsClassSubject(facultyId, classSubjectId);
 
         const matrix = await getAttendanceRangeService(classSubjectId, {
             schoolYearId: parsedSchoolYearId,
@@ -173,10 +173,10 @@ export async function getAttendanceHistoryController(
             }
         }
 
-        // Ownership: only the assigned teacher (or an admin) may read a
+        // Ownership: only the assigned faculty (or an admin) may read a
         // student's attendance history for this class subject.
-        const teacherId = await resolveActorTeacherId(req.user!);
-        await assertTeacherOwnsClassSubject(teacherId, classSubjectId);
+        const facultyId = await resolveActorFacultyId(req.user!);
+        await assertFacultyOwnsClassSubject(facultyId, classSubjectId);
 
         const history = await getAttendanceHistoryService(
             classSubjectId,
@@ -199,7 +199,7 @@ export async function getAttendanceHistoryController(
 // POST /api/attendance
 // Body: { classSubjectId, date, quarter, entries: [{ enrollmentId, status }] }
 // Idempotently saves one day of attendance for the subject (upsert per
-// classSubjectId+enrollment+date). The teacher-chosen quarter (1-4) is stored
+// classSubjectId+enrollment+date). The faculty-chosen quarter (1-4) is stored
 // with every row of the day so history can be filtered per quarter.
 export async function saveAttendanceController(
     req: Request<
@@ -229,11 +229,11 @@ export async function saveAttendanceController(
             throw new BadRequestError("entries must be an array of { enrollmentId, status }");
         }
 
-        // Ownership: only the teacher assigned to this class subject (or an
-        // admin) may save attendance for it. (teacherUserId below is a USER id
+        // Ownership: only the faculty assigned to this class subject (or an
+        // admin) may save attendance for it. (facultyUserId below is a USER id
         // used for adviser detection; this is the TEACHER id used for ownership.)
-        const actorTeacherId = await resolveActorTeacherId(req.user!);
-        await assertTeacherOwnsClassSubject(actorTeacherId, parsedClassSubjectId);
+        const actorFacultyId = await resolveActorFacultyId(req.user!);
+        await assertFacultyOwnsClassSubject(actorFacultyId, parsedClassSubjectId);
 
         const normalizedEntries: AttendanceInput[] = entries.map((entry) => {
             const enrollmentId = Number(entry?.enrollmentId);
@@ -247,17 +247,17 @@ export async function saveAttendanceController(
             return { enrollmentId, status };
         });
 
-        // Resolve the authenticated teacher's userId so the service can check
-        // whether this teacher is the class adviser (adviser attendance is saved
+        // Resolve the authenticated faculty's userId so the service can check
+        // whether this faculty is the class adviser (adviser attendance is saved
         // to both student_attendance AND class_daily_attendance).
-        const teacherUserId = req.user?.id ?? null;
+        const facultyUserId = req.user?.id ?? null;
 
         await saveAttendanceByClassSubjectAndDateService(
             parsedClassSubjectId,
             date,
             normalizedEntries,
             parsedQuarter,
-            teacherUserId,
+            facultyUserId,
         );
 
         res.status(200).json(

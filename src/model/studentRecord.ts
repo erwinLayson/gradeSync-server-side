@@ -321,7 +321,7 @@ export default class StudentRecord {
                 FROM enrollments e
                 JOIN classrooms c ON c.id = e.classId
                 JOIN students s ON s.id = e.studentId AND (s.status IS NULL OR s.status <> 'inactive')
-                LEFT JOIN class_teacher ct ON ct.classId = c.id
+                LEFT JOIN class_adviser ct ON ct.classId = c.id
                 WHERE e.schoolYearId = ? AND e.status IN ('enrolled', 'completed') AND ct.id IS NULL
             `;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId]);
@@ -369,8 +369,8 @@ export default class StudentRecord {
                        CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS adviserFullname,
                        COUNT(DISTINCT CASE WHEN (s.status IS NULL OR s.status <> 'inactive') THEN e.id END) AS totalStudents
                 FROM classrooms c
-                LEFT JOIN class_teacher ct ON ct.classId = c.id
-                LEFT JOIN teachers t ON t.id = ct.teacherId
+                LEFT JOIN class_adviser ct ON ct.classId = c.id
+                LEFT JOIN faculties t ON t.id = ct.facultyId
                 LEFT JOIN enrollments e ON e.classId = c.id AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed')
                 LEFT JOIN students s ON s.id = e.studentId
                 -- Archived classes are hidden from the tracker (soft delete).
