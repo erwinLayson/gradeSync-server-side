@@ -7,7 +7,8 @@ import { InternalServerError, NotFoundError } from "../middleware/errors.js";
 import type{
     StudentCreateProps, 
     StudentResponseProps, 
-    StudentWithClassroom
+    StudentWithClassroom,
+    StudentListQuery
 } from "../constant/students.js";
 
 import { AllowedStudentFields } from "../constant/students.js";
@@ -81,15 +82,97 @@ export default class Students {
         }
     }
 
+    // Paginated / searchable / filterable / sortable student registry.
+    // Only the requested page of rows is ever read from the database.
+    async getStudentsPage(query: StudentListQuery): Promise<{ students: StudentResponseProps[]; total: number }> {
+        // WHERE fragments are built from fixed strings; only values are bound.
+        const where: string[] = [];
+        const params: (string | number)[] = [];
+
+        const search = query.search?.trim();
+        if (search) {
+            const like = `%${search}%`;
+            where.push(
+                "(CONCAT_WS(' ', s.firstname, s.middlename, s.lastname, s.suffix) LIKE ? OR s.lrn LIKE ? OR s.email LIKE ?)"
+            );
+            params.push(like, like, like);
+        }
+
+        if (query.status === "active") {
+            where.push("(s.status IS NULL OR s.status = 'active')");
+        } else if (query.status === "inactive") {
+            where.push("s.status = 'inactive'");
+        }
+        // status === "all" adds no predicate.
+
+        if (query.classId) {
+            where.push(
+                "EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.classId = ? AND e.status = 'enrolled')"
+            );
+            params.push(query.classId);
+        }
+
+        const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
+
+        // Whitelist the sort column so nothing user-supplied reaches the SQL text.
+        const sortColumn: Record<StudentListQuery["sort"], string> = {
+            name: "fullname",
+            lrn: "s.lrn",
+            email: "s.email",
+            id: "s.id"
+        };
+        const dir = query.dir === "desc" ? "DESC" : "ASC";
+        // pageSize/page are already clamped to positive integers by the service,
+        // so inlining them for LIMIT/OFFSET is safe (MySQL rejects bound LIMITs
+        // in some configurations).
+        const offset = (query.page - 1) * query.pageSize;
+
+        try {
+            const [countRows] = await this.connection.execute<RowDataPacket[]>(
+                `SELECT COUNT(*) AS total FROM students s ${whereSql}`,
+                params
+            );
+            const total = Number(countRows[0]?.total ?? 0);
+
+            const [rows] = await this.connection.execute<RowDataPacket[]>(
+                `
+                SELECT 
+                s.id,
+                s.lrn,
+                s.email,
+                s.firstname,
+                s.middlename,
+                s.lastname,
+                s.suffix,
+                CONCAT(s.firstname, ' ', s.middlename, ' ', s.lastname, IF(s.suffix IS NOT NULL, CONCAT(' ', s.suffix), '')) AS fullname,
+                s.birthdate,
+                TIMESTAMPDIFF(YEAR, s.birthdate, CURDATE()) AS age,
+                s.sex,
+                s.status
+                FROM students s
+                ${whereSql}
+                ORDER BY ${sortColumn[query.sort]} ${dir}, s.id ASC
+                LIMIT ${query.pageSize} OFFSET ${offset}
+                `,
+                params
+            );
+
+            return { students: rows as StudentResponseProps[], total };
+        } catch (err) {
+            throw new InternalServerError("Internal Server Error", 500, err);
+        }
+    }
     // Get student by ID
     async getStudentById(id: number):Promise<StudentResponseProps | null> {
         try {
             const query = `
                 SELECT 
-                *
+                s.*,
+                CONCAT(s.firstname, ' ', s.middlename, ' ', s.lastname, IF(s.suffix IS NOT NULL, CONCAT(' ', s.suffix), '')) AS fullname,
+                TIMESTAMPDIFF(YEAR, s.birthdate, CURDATE()) AS age
                 FROM
-                students
-                WHERE id = ?
+                students s
+                WHERE s.id = ?
             `;
 
             const [result] = await this.connection.execute<RowDataPacket[]>(query, [id]);

@@ -1,10 +1,10 @@
 import type { Response, Request, NextFunction } from "express";
 
-import type{StudentCreateProps} from "../constant/students.js"
+import type{StudentCreateProps, StudentListQuery, StudentListSort, StudentListStatus} from "../constant/students.js"
 
 import {
     createStudentService,
-    getAllStudentService, 
+    getStudentListService,
     getStudentByIdService,
     getAllNotEnrolledStudentsService,
     updateStudentByIdService,
@@ -16,6 +16,40 @@ import { SuccessResponse } from "../helper/response.js";
 import NormalizedData from "../helper/normalizedData.js";
 import Validate from "../helper/validate.js";
 import { BadRequestError } from "../middleware/errors.js";
+
+// Page sizes the registry UI offers; any other value falls back to the default.
+const ALLOWED_PAGE_SIZES = [10, 25, 50, 100];
+
+// Coerce the raw query string into the typed, clamped list shape the service
+// and model expect. Unknown values fall back to safe defaults rather than error.
+function parseStudentListQuery(query: Request["query"]): StudentListQuery {
+    const first = (value: unknown): string | undefined =>
+        Array.isArray(value) ? String(value[0]) : value === undefined ? undefined : String(value);
+
+    const pageSizeRaw = Number(first(query.pageSize));
+    const pageSize = ALLOWED_PAGE_SIZES.includes(pageSizeRaw) ? pageSizeRaw : 25;
+
+    const pageRaw = Number(first(query.page));
+    const page = Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.floor(pageRaw) : 1;
+
+    const statusRaw = first(query.status);
+    const status: StudentListStatus =
+        statusRaw === "inactive" || statusRaw === "all" ? statusRaw : "active";
+
+    const sortRaw = first(query.sort);
+    const sort: StudentListSort =
+        sortRaw === "lrn" || sortRaw === "email" || sortRaw === "id" ? sortRaw : "name";
+
+    const dir = first(query.dir) === "desc" ? "desc" : "asc";
+
+    const classIdRaw = Number(first(query.classId));
+    const classId = Number.isInteger(classIdRaw) && classIdRaw > 0 ? classIdRaw : undefined;
+
+    const searchRaw = first(query.search);
+    const search = searchRaw && searchRaw.trim() ? searchRaw.trim() : undefined;
+
+    return { search, status, classId, page, pageSize, sort, dir };
+}
 
 export async function createStudentController(req: Request<{}, {}, StudentCreateProps>, res: Response, next: NextFunction) {
     const {lrn, email, firstname, middlename, lastname, suffix, birthdate, sex} = req.body;
@@ -51,9 +85,11 @@ export async function createStudentController(req: Request<{}, {}, StudentCreate
 }
 
 // Get all students controller
-export async function getAllStudentController(_req: Request, res: Response, next: NextFunction) {
+// GET /students?search=&status=active|inactive|all&classId=&page=&pageSize=&sort=&dir=
+export async function getAllStudentController(req: Request, res: Response, next: NextFunction) {
     try { 
-        const result = await getAllStudentService();
+        const query = parseStudentListQuery(req.query);
+        const result = await getStudentListService(query);
         return res.status(200).json(
             SuccessResponse({
                 message: `Get student successfull`,

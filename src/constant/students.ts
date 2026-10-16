@@ -42,6 +42,25 @@ export interface StudentWithClassroom {
 
 
 
+// Server-side controls for the student registry list (GET /students). The
+// registry is paginated/filtered/sorted in SQL so the client never downloads
+// the whole roll; see docs/student-management-ui-plan.md.
+export type StudentListSort = "name" | "lrn" | "email" | "id";
+export type StudentListDir = "asc" | "desc";
+/** "active" hides soft-deleted learners; "inactive" shows only them; "all" shows both. */
+export type StudentListStatus = "active" | "inactive" | "all";
+
+export interface StudentListQuery {
+    search?: string | undefined;
+    status: StudentListStatus;
+    /** Restrict to students with an active enrollment in this classroom. */
+    classId?: number | undefined;
+    page: number;
+    pageSize: number;
+    sort: StudentListSort;
+    dir: StudentListDir;
+}
+
 export const AllowedStudentFields = [
     "lrn",
     "email",

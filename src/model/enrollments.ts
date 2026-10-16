@@ -133,6 +133,10 @@ export default class Enrollments {
                 JOIN 
                     schoolyear sy ON sy.id = e.schoolYearId
                 WHERE e.studentId = ?
+                -- Chronological (oldest first) so the SF10/Form-137 lists each
+                -- school year under its own grade level in order, and the last
+                -- row really is the most recent year attended.
+                ORDER BY sy.startYear ASC, sy.endYear ASC, e.id ASC
             `;
 
             const [row] = await this.connection.execute<RowDataPacket[]>(query, [studentId]);

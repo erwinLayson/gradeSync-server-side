@@ -4,7 +4,7 @@ import StudentModel from "../model/students.js";
 import UserModel from "../model/users.js";
 import { getDBPoolConnection } from "../config/database.js";
  
-import type{StudentCreateProps} from "../constant/students.js"
+import type{StudentCreateProps, StudentListQuery} from "../constant/students.js"
 import {ROLES} from "../constant/users.js"
 
 // Service functions for managing students
@@ -115,6 +115,40 @@ export async function getAllStudentService(){
             status: s.status
         }));
     }finally {
+        connection.release();
+    }
+}
+
+// Paginated student registry list, shared by Admin and Register. Only the
+// requested page of rows is read; filtering, sorting and counting all happen in
+// SQL (see Students.getStudentsPage).
+export async function getStudentListService(query: StudentListQuery) {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const studentModel = new StudentModel(connection);
+        const { students, total } = await studentModel.getStudentsPage(query);
+
+        return {
+            students: students.map((s) => ({
+                id: s.id,
+                lrn: s.lrn,
+                email: s.email,
+                firstname: s.firstname,
+                middlename: s.middlename,
+                lastname: s.lastname,
+                suffix: s.suffix,
+                fullname: s.fullname,
+                birthdate: formatDate(s.birthdate),
+                age: s.age,
+                sex: s.sex,
+                status: s.status
+            })),
+            total,
+            page: query.page,
+            pageSize: query.pageSize
+        };
+    } finally {
         connection.release();
     }
 }
