@@ -60,6 +60,7 @@ npm run migrate:tidb -- --drop --tables=students,enrollments
 | `--force` | Allow running when source and target look identical |
 | `--require-password` | Abort when `TIDB_PASSWORD` is not explicitly set |
 | `--target-env=PATH` | Load target creds (`DB_*` → `TIDB_*`) from another env file |
+| `--with-ledger` | Copy `schema_migrations` too (exact clone). Omitted by default. |
 
 ### Safety
 
@@ -72,8 +73,13 @@ npm run migrate:tidb -- --drop --tables=students,enrollments
 ### Caveats
 
 - Views are intentionally **not** recreated (only base tables are copied).
-- `schema_migrations` is copied like any other table. That is correct for a
-  clone, but do not use this script as a substitute for `npm run migrate` on a
-  database that must track its own migration history.
+- `schema_migrations` is **not** copied by default (`--with-ledger` restores the
+  old behaviour). Copying it lets a target cloned from an out-of-date source
+  claim migrations are applied while its tables keep the source's older shape
+  (e.g. a `schoolyear` without `status`), which `CREATE TABLE IF NOT EXISTS`
+  cannot repair. After a clone, run `npm run migrate` on the target so it
+  rebuilds the ledger and applies repair migrations (e.g. `0032`).
+- Existing target tables are skipped unless `--drop`, so re-running never updates
+  their schema by itself — again, run `npm run migrate` on the target afterward.
 - Only the `utf8mb4_0900_ai_ci` → `utf8mb4_general_ci` collation case is
   auto-corrected for older TiDB versions.

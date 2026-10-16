@@ -42,6 +42,8 @@
 //   --require-password  abort when TIDB_PASSWORD is not explicitly set
 //   --target-env=PATH   load target credentials (DB_* -> TIDB_*) from another
 //                       env file; alias: TIDB_ENV_FILE
+//   --with-ledger    copy `schema_migrations` too (exact clone). Omitted by
+//                    default so the target rebuilds its own ledger.
 //
 // How it works:
 //   1. Discovers every BASE TABLE in the source schema (views are skipped).
@@ -55,10 +57,17 @@
 //
 // Caveats:
 //   - Views are intentionally NOT recreated (only base tables are copied).
-//   - schema_migrations is copied like any other table, so the target's
-//     migration ledger matches the copied schema. That is correct for a clone,
-//     but do not use this as a substitute for `npm run migrate` on a database
-//     that must track its own migration history.
+//   - `schema_migrations` (the app's migration ledger) is NOT copied by default.
+//     Copying it lets a target cloned from an out-of-date source claim
+//     migrations are applied while its tables keep the source's older shape
+//     (e.g. a `schoolyear` without `status`), and `CREATE TABLE IF NOT EXISTS`
+//     can never repair that. Leaving the ledger out forces the target to rebuild
+//     it when `npm run migrate` runs, which also applies repair migrations. Pass
+//     --with-ledger for a byte-for-byte clone (then do not rely on
+//     `npm run migrate` to reconcile schema drift).
+//   - Existing target tables are left untouched unless --drop is given, so run
+//     `npm run migrate` on the target after a clone to bring repair migrations
+//     (e.g. 0032) to bear on tables that predate a column.
 //
 // Usage: from the server directory -> `npm run migrate:tidb`
 //   e.g. `node scripts/migrate-to-tidb.mjs --verify-only --target-env=gradeSync-server-side.env`
@@ -88,12 +97,23 @@ const OPT_VERIFY_ONLY = hasFlag("--verify-only");
 const OPT_DRY_RUN = hasFlag("--dry-run");
 const OPT_FORCE = hasFlag("--force");
 const OPT_REQUIRE_PASSWORD = hasFlag("--require-password");
+const OPT_WITH_LEDGER = hasFlag("--with-ledger");
 const OPT_TABLES = flagValue("--tables", null);
 const BATCH_SIZE = Math.max(1, Number(flagValue("--batch-size", "500")) || 500);
 
 const ONLY_TABLES = OPT_TABLES
     ? OPT_TABLES.split(",").map((t) => t.trim()).filter(Boolean)
     : null;
+
+// The app's migration ledger is not application data, so it is omitted from the
+// clone by default. Copying it verbatim lets a target cloned from an out-of-date
+// source claim migrations are applied while its tables keep the source's older
+// shape (e.g. a `schoolyear` without `status`); `CREATE TABLE IF NOT EXISTS`
+// cannot repair that, so the drift stays invisible. Omitting it forces the
+// target to rebuild its ledger via `npm run migrate`, which also applies repair
+// migrations. `--with-ledger` restores the old byte-for-byte clone behaviour.
+const LEDGER_TABLE = "schema_migrations";
+const EXCLUDE_LEDGER = !OPT_WITH_LEDGER;
 
 // --target-env=<path> (or TIDB_ENV_FILE) loads ANOTHER env file's DB_* variables
 // as the TiDB target. That lets the migration run with a local MySQL source
@@ -241,6 +261,7 @@ function logConfig() {
         OPT_VERIFY_ONLY && "--verify-only",
         OPT_DRY_RUN && "--dry-run",
         OPT_REQUIRE_PASSWORD && "--require-password",
+        OPT_WITH_LEDGER && "--with-ledger",
         TARGET_ENV_FILE && `--target-env=${TARGET_ENV_FILE}`,
         ONLY_TABLES && `--tables=${ONLY_TABLES.join(",")}`,
         `batch-size=${BATCH_SIZE}`,
@@ -557,13 +578,23 @@ async function main() {
             console.log(`Skipping ${views.length} view(s): ${views.join(", ")}`);
         }
 
-        const tables = ONLY_TABLES
+        let tables = ONLY_TABLES
             ? allTables.filter((t) => ONLY_TABLES.includes(t))
             : allTables;
 
         const missing = ONLY_TABLES ? ONLY_TABLES.filter((t) => !allTables.includes(t)) : [];
         if (missing.length > 0) {
             console.warn(`WARNING: requested table(s) not found in source: ${missing.join(", ")}`);
+        }
+
+        if (EXCLUDE_LEDGER) {
+            const before = tables.length;
+            tables = tables.filter((t) => t !== LEDGER_TABLE);
+            if (tables.length !== before) {
+                console.log(
+                    `Excluding ${LEDGER_TABLE} (migration ledger) — run \`npm run migrate\` on the target to rebuild it.`
+                );
+            }
         }
 
         console.log(`Found ${allTables.length} table(s); migrating ${tables.length}.\n`);
