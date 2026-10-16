@@ -4,12 +4,15 @@ import bcrypt from "bcrypt";
 
 import UserModel from '../model/users.js';
 import FeaturesModel from '../model/features.js';
+import FacultyModel from '../model/faculties.js';
 
-import type{User} from "../constant/users.js"
+import { ROLES } from "../constant/users.js";
+import type{AuthenticatedUser} from "../constant/auth.js"
 import type{LoginCredentials} from "../constant/auth.js"
+import type{FacultyRole} from "../constant/faculties.js"
 
 
-export async function LoginUserService(loginCredentials: LoginCredentials): Promise<User> {
+export async function LoginUserService(loginCredentials: LoginCredentials): Promise<AuthenticatedUser> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
@@ -39,7 +42,18 @@ export async function LoginUserService(loginCredentials: LoginCredentials): Prom
             throw new ForbiddenError(`Logins for ${user.role} accounts are currently disabled. Contact the system developer.`);
         }
 
-        return user;
+        // Faculty accounts (teacher + register) share users.role = "teacher";
+        // resolve the authoritative faculties.role so the session can tell the
+        // two workspaces apart without a second lookup. See the faculty-role
+        // plan and middleware/allowedFacultyRoles.ts.
+        let facultyRole: FacultyRole | undefined;
+        if (user.role === ROLES.TEACHER) {
+            const facultyModel = new FacultyModel(connection);
+            const faculty = await facultyModel.getFacultyByUserId(user.id);
+            facultyRole = faculty?.role;
+        }
+
+        return { id: user.id, email: user.email, role: user.role, facultyRole };
     }finally {
         connection.release();
     }

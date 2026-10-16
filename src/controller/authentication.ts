@@ -19,7 +19,11 @@ export async function LoginUserController(req: Request<{}, {}, LoginCredentials>
         Validate({ email, password });
 
         const user = await LoginUserService({ email, password });
-        const token = jwt.sign({ id: user.id, email: user.email, role: user.role }, getEnv("JWT_SECRET"), { expiresIn: "24h" });
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role, facultyRole: user.facultyRole },
+            getEnv("JWT_SECRET"),
+            { expiresIn: "24h" }
+        );
         
         res.cookie("login_token", token, {
             httpOnly: true, 
@@ -34,7 +38,12 @@ export async function LoginUserController(req: Request<{}, {}, LoginCredentials>
                 data: {
                     id: user.id,
                     email: user.email,
-                    role: user.role
+                    role: user.role,
+                    // Present only for faculty accounts (users.role = "teacher"):
+                    // the authoritative faculties.role ("teacher" | "register").
+                    // The client uses it to route a register faculty to its own
+                    // workspace instead of the teaching dashboard.
+                    facultyRole: user.facultyRole ?? null
                 }
             })
         )

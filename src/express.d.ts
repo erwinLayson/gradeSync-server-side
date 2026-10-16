@@ -7,7 +7,11 @@ declare global {
             user?: {
                 id: number
                 email: string,
-                role: UserRoles
+                role: UserRoles,
+                // Resolved at login for faculty accounts (users.role = "teacher")
+                // and carried in the JWT, so /users/verify returns it without a
+                // DB round-trip. Undefined for non-faculty roles.
+                facultyRole?: FacultyRole
             }
             // Set by middleware/allowedFacultyRoles.ts once the caller's own
             // faculties row has been resolved and verified. Never taken from

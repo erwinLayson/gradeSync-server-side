@@ -16,6 +16,8 @@ import {
     getFacultiesUnassignedToSubjectService,
 } from "../src/service/subjects.js";
 import { createClassSubjectService } from "../src/service/class_subjects.js";
+import { LoginUserService } from "../src/service/authentication.js";
+import getEnv from "../src/helper/getEnv.js";
 
 import { FACULTY_ROLES } from "../src/constant/faculties.js";
 import { ROLES } from "../src/constant/users.js";
@@ -399,5 +401,43 @@ describe("faculty and school-year route guards", () => {
     it("refuses an unauthenticated caller on both routers", () => {
         expect(decide(facultiesRouter, "get", "/faculties", null)).toBe(401);
         expect(decide(schoolYearRouter, "patch", "/schoolYear/:id/status", null)).toBe(401);
+    });
+});
+
+// ===========================================================================
+// 5. Login resolves the faculty role (client routing depends on it)
+// ===========================================================================
+describe("login carries the faculty role", () => {
+    async function emailOf(facultyId: number): Promise<string> {
+        const [rows] = await connection.execute<RowDataPacket[]>(
+            "SELECT email FROM faculties WHERE id = ?",
+            [facultyId],
+        );
+        return String(rows[0]?.email);
+    }
+
+    it("returns the register faculty role so the client routes to the register workspace", async () => {
+        const facultyId = await createTestFaculty(REGISTER);
+
+        const authenticated = await LoginUserService({
+            email: await emailOf(facultyId),
+            password: getEnv("DEFAULT_PASSWORD"),
+        });
+
+        // Both faculty kinds share the user role; only faculties.role tells them apart.
+        expect(authenticated.role).toBe(ROLES.TEACHER);
+        expect(authenticated.facultyRole).toBe(REGISTER);
+    });
+
+    it("returns the teacher faculty role for a teaching faculty account", async () => {
+        const facultyId = await createTestFaculty(TEACHER);
+
+        const authenticated = await LoginUserService({
+            email: await emailOf(facultyId),
+            password: getEnv("DEFAULT_PASSWORD"),
+        });
+
+        expect(authenticated.role).toBe(ROLES.TEACHER);
+        expect(authenticated.facultyRole).toBe(TEACHER);
     });
 });
