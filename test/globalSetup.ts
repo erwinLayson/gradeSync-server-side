@@ -54,12 +54,12 @@ export default async function globalSetup(): Promise<void> {
         await db.end();
     }
 
-    if (alreadyProvisioned) {
-        return;
-    }
-
-    // 3. Migrations. The runner is called in-process with an explicit database
-    //    name, so it can never re-point at the dev database configured in .env.
+    // 3. Migrations. ALWAYS run — the runner records applied files in
+    //    schema_migrations and every migration file is guarded, so re-running is
+    //    idempotent. Skipping this for an already-provisioned database silently
+    //    dropped migrations added after the first provision (e.g. 0031).
+    //    The runner is called in-process with an explicit database name, so it
+    //    can never re-point at the dev database configured in .env.
     await runMigrations({
         database: dbName,
         migrationsDir: join(serverDir, "migrations"),
