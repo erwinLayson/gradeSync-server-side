@@ -13,7 +13,7 @@
     "seed": "tsx src/seed.ts",
     "migrate": "tsx src/migrate.ts",
     "migrate:baseline": "tsx src/migrate.ts --baseline",
-    "migrate:tidb": "node migrate_to_tidb.mjs"
+    "migrate:tidb": "node scripts/migrate-to-tidb.mjs"
   },
   "keywords": [],
   "author": "",

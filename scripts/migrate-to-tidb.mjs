@@ -1,5 +1,9 @@
 // ============================================================================
-// migrate_to_tidb.mjs — one-command MySQL → TiDB migration
+// scripts/migrate-to-tidb.mjs — one-command MySQL → TiDB migration
+//
+// Ops/one-off utility, NOT the app's schema-migration system. The app's schema
+// versioning lives in src/migrate.ts + src/migrations/runner.ts (`npm run
+// migrate`); this script is only for cloning/copying data between databases.
 //
 // Copies the full schema and data from the MySQL database configured in .env
 // (DB_HOST / DB_PORT / DB_USER / DB_PASSWORD / DB_NAME) into a TiDB database,
@@ -31,6 +35,7 @@
 //   --create-db      CREATE DATABASE IF NOT EXISTS on the target first
 //   --schema-only    create tables, skip data
 //   --verify-only    compare row counts and exit (no writes)
+//   --dry-run        plan only: list tables/rows/actions and exit (no writes)
 //   --tables=a,b     migrate only these tables (comma-separated)
 //   --batch-size=N   rows per INSERT batch (default 500)
 //   --force          allow running when source and target look identical
@@ -48,8 +53,15 @@
 //   4. Syncs AUTO_INCREMENT counters from the source.
 //   5. Verifies per-table row counts; exits non-zero on any mismatch.
 //
+// Caveats:
+//   - Views are intentionally NOT recreated (only base tables are copied).
+//   - schema_migrations is copied like any other table, so the target's
+//     migration ledger matches the copied schema. That is correct for a clone,
+//     but do not use this as a substitute for `npm run migrate` on a database
+//     that must track its own migration history.
+//
 // Usage: from the server directory -> `npm run migrate:tidb`
-//   e.g. `node migrate_to_tidb.mjs --verify-only --target-env=gradeSync-server-side.env`
+//   e.g. `node scripts/migrate-to-tidb.mjs --verify-only --target-env=gradeSync-server-side.env`
 // ============================================================================
 
 import "dotenv/config";
@@ -73,6 +85,7 @@ const OPT_DROP = hasFlag("--drop");
 const OPT_CREATE_DB = hasFlag("--create-db");
 const OPT_SCHEMA_ONLY = hasFlag("--schema-only");
 const OPT_VERIFY_ONLY = hasFlag("--verify-only");
+const OPT_DRY_RUN = hasFlag("--dry-run");
 const OPT_FORCE = hasFlag("--force");
 const OPT_REQUIRE_PASSWORD = hasFlag("--require-password");
 const OPT_TABLES = flagValue("--tables", null);
@@ -226,6 +239,7 @@ function logConfig() {
         OPT_CREATE_DB && "--create-db",
         OPT_SCHEMA_ONLY && "--schema-only",
         OPT_VERIFY_ONLY && "--verify-only",
+        OPT_DRY_RUN && "--dry-run",
         OPT_REQUIRE_PASSWORD && "--require-password",
         TARGET_ENV_FILE && `--target-env=${TARGET_ENV_FILE}`,
         ONLY_TABLES && `--tables=${ONLY_TABLES.join(",")}`,
@@ -323,52 +337,56 @@ async function ensureTargetDatabase(target) {
 }
 
 async function migrateSchema(source, target, tables, summary) {
-    // Table order does not matter while FK checks are off.
-    await target.query("SET FOREIGN_KEY_CHECKS = 0");
+    // Table order does not matter while FK checks are off. Restore FK checks in
+    // a finally so a thrown table never leaves the shared target session with
+    // them disabled.
     const skipped = new Set();
-
-    for (const table of tables) {
-        try {
-            const exists = await tableExists(target, TGT.database, table);
-            if (exists && !OPT_DROP) {
-                // Leave existing tables untouched so re-runs never duplicate data.
-                skipped.add(table);
-                summary.push({ table, schema: "skipped (exists)", rows: "skipped" });
-                continue;
-            }
-            if (exists && OPT_DROP) {
-                await target.query(`DROP TABLE IF EXISTS \`${table}\``);
-            }
-
-            const [createRows] = await source.query(`SHOW CREATE TABLE \`${table}\``);
-            let createSql = createRows[0]["Create Table"];
-            if (!createSql) {
-                throw new Error("SHOW CREATE TABLE returned no statement");
-            }
-
+    await target.query("SET FOREIGN_KEY_CHECKS = 0");
+    try {
+        for (const table of tables) {
             try {
-                await target.query(createSql);
-            } catch (err) {
-                // MySQL 8 defaults to utf8mb4_0900_ai_ci, which older TiDB
-                // versions reject — retry once with a compatible collation.
-                if (
-                    err.code === "ER_UNKNOWN_COLLATION" &&
-                    createSql.includes("utf8mb4_0900_ai_ci")
-                ) {
-                    createSql = createSql.replaceAll("utf8mb4_0900_ai_ci", "utf8mb4_general_ci");
-                    await target.query(createSql);
-                } else {
-                    throw err;
+                const exists = await tableExists(target, TGT.database, table);
+                if (exists && !OPT_DROP) {
+                    // Leave existing tables untouched so re-runs never duplicate data.
+                    skipped.add(table);
+                    summary.push({ table, schema: "skipped (exists)", rows: "skipped" });
+                    continue;
                 }
-            }
+                if (exists && OPT_DROP) {
+                    await target.query(`DROP TABLE IF EXISTS \`${table}\``);
+                }
 
-            summary.push({ table, schema: "created", rows: "—" });
-        } catch (err) {
-            summary.push({ table, schema: `FAILED: ${err.code || err.message}`, rows: "—" });
+                const [createRows] = await source.query(`SHOW CREATE TABLE \`${table}\``);
+                let createSql = createRows[0]["Create Table"];
+                if (!createSql) {
+                    throw new Error("SHOW CREATE TABLE returned no statement");
+                }
+
+                try {
+                    await target.query(createSql);
+                } catch (err) {
+                    // MySQL 8 defaults to utf8mb4_0900_ai_ci, which older TiDB
+                    // versions reject — retry once with a compatible collation.
+                    if (
+                        err.code === "ER_UNKNOWN_COLLATION" &&
+                        createSql.includes("utf8mb4_0900_ai_ci")
+                    ) {
+                        createSql = createSql.replaceAll("utf8mb4_0900_ai_ci", "utf8mb4_general_ci");
+                        await target.query(createSql);
+                    } else {
+                        throw err;
+                    }
+                }
+
+                summary.push({ table, schema: "created", rows: "—" });
+            } catch (err) {
+                summary.push({ table, schema: `FAILED: ${err.code || err.message}`, rows: "—" });
+            }
         }
+    } finally {
+        await target.query("SET FOREIGN_KEY_CHECKS = 1");
     }
 
-    await target.query("SET FOREIGN_KEY_CHECKS = 1");
     return skipped;
 }
 
@@ -471,6 +489,25 @@ async function verify(source, target, tables, summary) {
     return mismatches;
 }
 
+// --dry-run: report what a real run would do without touching the target.
+async function dryRunPlan(source, target, tables, summary) {
+    for (const table of tables) {
+        const src = await sourceCount(source, table);
+        const exists = await tableExists(target, TGT.database, table);
+        const action = exists && !OPT_DROP
+            ? "skip (exists)"
+            : exists
+                ? "drop + create + copy"
+                : "create + copy";
+        summary.push({
+            table,
+            "source rows": src.toLocaleString(),
+            target: exists ? "exists" : "missing",
+            action,
+        });
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
@@ -506,10 +543,14 @@ async function main() {
             exitWithConnectionError(err, "Target");
         }
         await source.query(`USE \`${SRC.database}\``);
-        if (OPT_CREATE_DB) {
-            await ensureTargetDatabase(target);
+        // A dry run performs no writes and must work even before the target
+        // database exists, so skip creating it and selecting it.
+        if (!OPT_DRY_RUN) {
+            if (OPT_CREATE_DB) {
+                await ensureTargetDatabase(target);
+            }
+            await target.query(`USE \`${TGT.database}\``);
         }
-        await target.query(`USE \`${TGT.database}\``);
 
         const { tables: allTables, views } = await listSourceTables(source, SRC.database);
         if (views.length > 0) {
@@ -529,7 +570,14 @@ async function main() {
 
         const summary = [];
 
-        if (OPT_VERIFY_ONLY) {
+        if (OPT_DRY_RUN) {
+            await dryRunPlan(source, target, tables, summary);
+
+            console.log("\n================ DRY RUN ================");
+            console.table(summary);
+            console.log("=========================================");
+            console.log("\nDRY RUN COMPLETE (no writes performed).");
+        } else if (OPT_VERIFY_ONLY) {
             const mismatches = await verify(source, target, tables, summary);
 
             console.log("\n================ SUMMARY ================");
@@ -549,18 +597,22 @@ async function main() {
             if (!OPT_SCHEMA_ONLY) {
                 console.log("\n== Data ==");
                 // Insert order is alphabetical, so referenced rows may not exist
-                // yet — copy with FK checks off (same session), then restore.
+                // yet — copy with FK checks off (same session). Restore them in a
+                // finally so an unexpected throw cannot leave them disabled.
                 await target.query("SET FOREIGN_KEY_CHECKS = 0");
-                for (const table of tables) {
-                    process.stdout.write(`  ${table} … `);
-                    if (skipped.has(table)) {
-                        console.log("skipped (table already exists)");
-                        continue;
+                try {
+                    for (const table of tables) {
+                        process.stdout.write(`  ${table} … `);
+                        if (skipped.has(table)) {
+                            console.log("skipped (table already exists)");
+                            continue;
+                        }
+                        await migrateTableData(source, target, table, summary);
+                        console.log(summary[summary.length - 1].rows);
                     }
-                    await migrateTableData(source, target, table, summary);
-                    console.log(summary[summary.length - 1].rows);
+                } finally {
+                    await target.query("SET FOREIGN_KEY_CHECKS = 1");
                 }
-                await target.query("SET FOREIGN_KEY_CHECKS = 1");
 
                 console.log("\n== AUTO_INCREMENT ==");
                 await syncAutoIncrement(source, target, tables, skipped);
