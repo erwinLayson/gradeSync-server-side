@@ -78,7 +78,10 @@ const USERS_STEPS: WipeStep[] = [
     // already be gone — enrollments wiped before USERS in the master scope).
     { table: "teachers", sql: "DELETE FROM teachers" },
     {
-        table: "users (teacher/student)",
+        // Every SCHOOL role is removed here — teacher, student, and register
+        // (registration staff) — while the platform roles (admin, developer)
+        // survive. Keep this list and the label in sync when roles are added.
+        table: "users (teacher/student/register)",
         sql: "DELETE FROM users WHERE role NOT IN ('admin', 'developer')",
     },
 ];

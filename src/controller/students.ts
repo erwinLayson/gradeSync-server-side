@@ -34,12 +34,14 @@ export async function createStudentController(req: Request<{}, {}, StudentCreate
         // Validate student data
         Validate(student);
 
-        const response =  await createStudentService(student);
-        console.log(response)
+        // Return the new student id so a caller (e.g. the Register
+        // create + enroll flow) can continue into enrollment straight away.
+        const studentId = await createStudentService(student);
         return res.status(201).json(
             SuccessResponse(
                 {
                     message: `Student create sucessful`,
+                    data: { id: studentId },
                 }
             )
         )

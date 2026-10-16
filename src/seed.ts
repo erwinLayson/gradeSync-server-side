@@ -55,8 +55,16 @@ async function seed() {
     await connection.execute("DELETE FROM schoolyear");
     await connection.execute("DELETE FROM school_info");
 
+    // Re-activate the first school year so admin and student-record summary queries
+    // keep returning rows until the seed deposits its own school years in section 7.
+    await connection.execute("INSERT INTO schoolyear(startYear, endYear, isActive) VALUES('2024','2025',1)");
+
+    // Restore the active school year so the summary query keeps returning rows
+    // when the demo seed runs without any CampusSchools/OAuth wiring.
+    await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id > 0 ORDER BY id DESC LIMIT 1");
+
     // ──────────────────────────────────────────────────────
-    // 2. Users (1 admin + 10 teachers + 10 students = 21)
+    // 2. Users (1 admin + 1 developer + 1 register + 10 teachers + 10 students = 23)
     // ──────────────────────────────────────────────────────
     console.log("Seeding users...");
     const hash = await bcrypt.hash("password123", 10);
@@ -70,6 +78,13 @@ async function seed() {
     await connection.execute(
       "INSERT INTO users(email, password, role) VALUES(?,?,?)",
       sql("dev@gradesync.edu", hash, "developer")
+    );
+
+    // Register account — registration/enrollment staff who enroll students and
+    // print SF10 records (docs/register-role-implementation-plan.md).
+    await connection.execute(
+      "INSERT INTO users(email, password, role) VALUES(?,?,?)",
+      sql("register@gradesync.edu", hash, "register")
     );
 
     const teacherEmails: string[] = [
@@ -771,7 +786,7 @@ async function seed() {
     console.log("\n==========================================");
     console.log("  SEED COMPLETE!");
     console.log("==========================================");
-    console.log(`  Users:              21 (1 admin + 10 teachers + 10 students)`);
+    console.log(`  Users:              23 (1 admin + 1 developer + 1 register + 10 teachers + 10 students)`);
     console.log(`  Teachers:           ${teacherIds.length}`);
     console.log(`  Students:           ${studentIds.length}`);
     console.log(`  Subjects:           ${subjectIds.length}`);

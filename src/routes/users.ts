@@ -13,8 +13,9 @@ const route: Router = Router();
 const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
 const adminOnlyWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
 // Own-credential updates: any role may update its OWN account (developer
-// included — settings page email/password form).
-const updateUsersWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.STUDENT, ROLES.TEACHER, ROLES.DEVELOPER])];
+// included — settings page email/password form). Register is included so a
+// registrar can manage their own login credentials.
+const updateUsersWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.STUDENT, ROLES.TEACHER, ROLES.DEVELOPER, ROLES.REGISTER])];
 
 // Reads are admin + developer (developer manages login accounts — docs/developer-users-plan.md)
 const adminOrDev: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.DEVELOPER])];

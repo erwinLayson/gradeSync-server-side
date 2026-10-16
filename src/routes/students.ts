@@ -23,11 +23,20 @@ import { ROLES } from "../constant/users.js";
 
 const route: Router = Router();
 
-const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
 const adminOnlyWithId: RequestHandler<{id: string}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
-const adminTeacher: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.TEACHER])];
-const adminTeacherWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.TEACHER])];
 const studentOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.STUDENT])];
+
+// ==================== REGISTER (registration/enrollment staff) ====================
+// docs/register-role-implementation-plan.md: Register owns the registration
+// workflow — it manages the student registry (list, create, edit, delete),
+// reads student detail/academic history during enrollment, and enrols students.
+// The past-submitted-grades view stays Admin-only.
+const adminRegister: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.REGISTER])];
+// Update/delete controllers are typed with a string `:id` param (matching the
+// original adminOnlyWithId group), so this guard keeps the same param type.
+const adminRegisterWithId: RequestHandler<{id: string}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.REGISTER])];
+const adminTeacherRegister: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.TEACHER, ROLES.REGISTER])];
+const adminTeacherRegisterWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.TEACHER, ROLES.REGISTER])];
 
 // ==================== STUDENT ONLY (self-service profile) ====================
 // Registered BEFORE the parameterized /students/:id routes so that
@@ -39,19 +48,23 @@ route.get("/students/prospectus", studentOnly, getStudentProspectusController)
 route.get("/students/attendance", studentOnly, getStudentClassAttendanceController)
 route.get("/students/current-quarter", studentOnly, getAcademicSettingsController)
 
-// ==================== ADMIN ONLY ====================
-route.post("/students", adminOnly, createStudentController)
-route.patch("/students/:id", adminOnlyWithId, updateStudentController)
-route.delete("/students/:id", adminOnlyWithId, deleteStudentController)
-route.get("/students/not-enrolled", adminOnly, getAllNotEnrolledStudentsController)
+// ==================== ADMIN + REGISTER ====================
+// Register owns the student registry: it creates the student + login account
+// (role locked to `student` inside createStudentService), edits records, and
+// soft-deletes them.
+route.post("/students", adminRegister, createStudentController)
+route.patch("/students/:id", adminRegisterWithId, updateStudentController)
+route.delete("/students/:id", adminRegisterWithId, deleteStudentController)
+// Register searches the not-yet-enrolled candidate pool while enrolling.
+route.get("/students/not-enrolled", adminRegister, getAllNotEnrolledStudentsController)
 
-// ==================== ADMIN + TEACHER ====================
-route.get("/students", adminTeacher, getAllStudentController)
-route.get("/students/:id/students", adminTeacherWithId, getStudentByIdController)
-route.get("/students/:id/academic-history", adminTeacherWithId, getStudentAcademicHistoryController)
+// ==================== ADMIN + TEACHER + REGISTER ====================
+route.get("/students", adminTeacherRegister, getAllStudentController)
+route.get("/students/:id/students", adminTeacherRegisterWithId, getStudentByIdController)
+route.get("/students/:id/academic-history", adminTeacherRegisterWithId, getStudentAcademicHistoryController)
 
-// Admin-only, curated view used during enrollment so the admin can inspect a
-// candidate student's already-submitted past grades before enrolling them.
+// Admin-only, curated view of a candidate's already-submitted past grades.
+// Intentionally NOT shared with Register (docs/register-role-implementation-plan.md §3).
 route.get("/students/:id/past-submitted-grades", adminOnlyWithId, getPastSubmittedGradesController)
 
 export default route

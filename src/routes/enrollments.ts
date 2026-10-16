@@ -10,11 +10,17 @@ import { ROLES } from "../constant/users.js";
 const route: Router = Router();
 
 const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
+// Enrollment is SHARED with Register (docs/register-role-implementation-plan.md
+// §4.2): Register enrolls students alongside Admin. The destructive cleanup
+// routes below stay Admin-only.
+const adminRegister: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.REGISTER])];
 
-// ==================== ADMIN ONLY ====================
+// ==================== ADMIN + REGISTER ====================
 
 // Enrollments Routes
-route.post("/enrollments", adminOnly, createEnrollmentController);
+route.post("/enrollments", adminRegister, createEnrollmentController);
+
+// ==================== ADMIN ONLY ====================
 route.get("/enrollments/active-count", adminOnly, countActiveEnrollmentsController);
 route.delete("/classrooms/:classId/enrollments", adminOnly, bulkRemoveEnrollmentsController);
 route.delete("/classrooms/:classId/enrollments/clear", adminOnly, clearAllFromClassController);

@@ -21,6 +21,7 @@ const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])]
 const adminTeacher: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.TEACHER])];
 const teacherOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.TEACHER])];
 const adminOnlyWithId: RequestHandler<{id: string}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
+const adminRegisterWithId: RequestHandler<{id: string}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.REGISTER])];
 
 // ==================== ADVISER (teacher) ====================
 // The adviser's own advised class (adviser ownership is checked in the service).
@@ -49,7 +50,9 @@ router.post(
 router.get("/student-records/summary", adminOnly, getSubmissionSummaryController);
 
 // ==================== PDF ====================
-// Teachers are scoped in the service to students in their advised class.
-router.get("/student-records/:id/pdf", adminOnlyWithId, studentRecordController);
+// SF10 / Form-137 student record. Admin + Register share this endpoint per
+// docs/register-role-implementation-plan.md §6.3 — the Register role prints
+// SF10 for registration purposes. The template and PDF pipeline are unchanged.
+router.get("/student-records/:id/pdf", adminRegisterWithId, studentRecordController);
 
 export default router;
