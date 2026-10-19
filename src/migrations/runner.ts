@@ -28,6 +28,8 @@ export interface RunMigrationsOptions {
     migrationsDir?: string;
     /** Mark pending files as applied WITHOUT executing them. */
     baseline?: boolean;
+    /** Drop all existing tables before running migrations (fresh start). */
+    fresh?: boolean;
     /** Sink for progress output. Defaults to `console.log`. */
     logger?: (line: string) => void;
 }
@@ -61,6 +63,10 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
 
     try {
         log(`Target database: ${database} @ ${host}\n`);
+
+        if (options.fresh) {
+            await dropAllDatabaseTables(connection, database, log);
+        }
 
         await ensureMigrationsTable(connection);
         const applied = await appliedMigrations(connection);
@@ -134,4 +140,40 @@ async function migrationFiles(dir: string): Promise<string[]> {
 
 async function recordMigration(connection: Connection, name: string): Promise<void> {
     await connection.query("INSERT INTO `schema_migrations` (`name`) VALUES (?)", [name]);
+}
+
+async function dropAllDatabaseTables(
+    connection: Connection,
+    database: string,
+    log: (line: string) => void
+): Promise<void> {
+    log(`Fresh migration: dropping all existing tables/views in \`${database}\`...`);
+    await connection.query("SET FOREIGN_KEY_CHECKS = 0");
+    try {
+        const [rows] = await connection.query<RowDataPacket[]>(
+            `SELECT TABLE_NAME AS name, TABLE_TYPE AS type
+             FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = ?`,
+            [database]
+        );
+
+        if (rows.length === 0) {
+            log("  No existing tables found to drop.\n");
+            return;
+        }
+
+        for (const row of rows) {
+            const name = String(row.name);
+            const type = String(row.type);
+            if (type === "VIEW") {
+                await connection.query(`DROP VIEW IF EXISTS \`${name}\``);
+            } else {
+                await connection.query(`DROP TABLE IF EXISTS \`${name}\``);
+            }
+            log(`  dropped: ${name}`);
+        }
+        log(`\nDropped ${rows.length} existing table(s)/view(s). Starting clean migration...\n`);
+    } finally {
+        await connection.query("SET FOREIGN_KEY_CHECKS = 1");
+    }
 }
