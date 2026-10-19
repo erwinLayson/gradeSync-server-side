@@ -92,8 +92,7 @@ route.get("/students", adminFacultyRegister, getAllStudentController)
 route.get("/students/:id/students", adminFacultyRegisterWithId, getStudentByIdController)
 route.get("/students/:id/academic-history", adminFacultyRegisterWithId, getStudentAcademicHistoryController)
 
-// Admin-only, curated view of a candidate's already-submitted past grades.
-// Intentionally NOT shared with Register (docs/register-role-implementation-plan.md §3).
-route.get("/students/:id/past-submitted-grades", adminOnlyWithId, getPastSubmittedGradesController)
+// Admin and Register curated view of a candidate's already-submitted past grades during enrollment.
+route.get("/students/:id/past-submitted-grades", adminRegisterWithId, getPastSubmittedGradesController)
 
 export default route

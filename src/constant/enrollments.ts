@@ -5,6 +5,7 @@ export interface EnrollmentCreateProps {
     classId: number;
     schoolYearId: number;
     subjectIds: number[];
+    gradeLevel: number;
 }
 
 export interface EnrollmentResponseProps {

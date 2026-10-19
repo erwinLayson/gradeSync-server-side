@@ -214,6 +214,7 @@ const REGISTER_FACULTY_REACHABLE: Array<[label: string, router: unknown, method:
     ["search not-yet-enrolled students", studentsRouter, "get", "/students/not-enrolled"],
     ["read student detail", studentsRouter, "get", "/students/:id/students"],
     ["read student academic history", studentsRouter, "get", "/students/:id/academic-history"],
+    ["read past submitted grades", studentsRouter, "get", "/students/:id/past-submitted-grades"],
     // Register owns the student registry: it edits and soft-deletes student records.
     ["edit a student", studentsRouter, "patch", "/students/:id"],
     ["soft-delete a student", studentsRouter, "delete", "/students/:id"],
@@ -244,8 +245,6 @@ const REGISTER_FACULTY_DENIED: Array<[label: string, router: unknown, method: Ht
     ["bulk-remove a classroom's enrollments", enrollmentsRouter, "delete", "/classrooms/:classId/enrollments"],
     ["clear a classroom", enrollmentsRouter, "delete", "/classrooms/:classId/enrollments/clear"],
     ["clear all classrooms", enrollmentsRouter, "delete", "/enrollments/clear-all"],
-    // The curated past-submitted-grades view stays Admin-only.
-    ["read past submitted grades", studentsRouter, "get", "/students/:id/past-submitted-grades"],
     // Submission tracker summary.
     ["submission summary", studentRecordRouter, "get", "/student-records/summary"],
     // School-year + academic-settings management.

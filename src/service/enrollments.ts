@@ -27,6 +27,21 @@ export async function createEnrollmentService(enrollment: EnrollmentCreateProps)
 
         const enrollmentModel = new Enrollments(connection);
 
+        // Verify that classroom exists and matches the chosen grade level
+        const [classRows] = await connection.execute<RowDataPacket[]>(
+            "SELECT id, section, gradeLevel FROM classrooms WHERE id = ? LIMIT 1",
+            [enrollment.classId]
+        );
+        const classroom = classRows[0];
+        if (!classroom) {
+            throw new NotFoundError("Selected classroom not found", 404);
+        }
+        if (Number(classroom.gradeLevel) !== Number(enrollment.gradeLevel)) {
+            throw new BadRequestError(
+                `The selected classroom (${classroom.section}) is Grade ${classroom.gradeLevel}, which does not match the chosen grade level (Grade ${enrollment.gradeLevel}).`
+            );
+        }
+
         // Check if student already has an enrollment in this school year
         const existingEnrollment = await enrollmentModel.getExistingEnrollment(
             enrollment.studentId,
@@ -334,18 +349,21 @@ export async function clearAllFromClassService(classId: number): Promise<number>
     }
 }
 
-// Clear all students from ALL active classrooms in the active school year.
-export async function clearAllClassroomsService(): Promise<{ totalCleared: number; classroomsCleared: number }> {
+// Clear all students from ALL active classrooms in the specified (or active) school year.
+export async function clearAllClassroomsService(targetSchoolYearId?: number): Promise<{ totalCleared: number; classroomsCleared: number }> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
         const enrollmentModel = new Enrollments(connection);
 
-        // Get the active school year
-        const [yearRows] = await connection.execute<RowDataPacket[]>(
-            "SELECT id FROM schoolyear WHERE isActive = 1 LIMIT 1"
-        );
-        const schoolYearId = yearRows[0]?.id;
+        let schoolYearId = targetSchoolYearId;
+        if (!schoolYearId) {
+            // Get the active school year
+            const [yearRows] = await connection.execute<RowDataPacket[]>(
+                "SELECT id FROM schoolyear WHERE isActive = 1 LIMIT 1"
+            );
+            schoolYearId = yearRows[0]?.id;
+        }
         if (!schoolYearId) {
             return { totalCleared: 0, classroomsCleared: 0 };
         }

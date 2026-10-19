@@ -5,10 +5,10 @@ import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
 
-import type{Express} from "express";
+import type { Express } from "express";
 
 import ErrorHandler from "./middleware/errorHandler.js"
-import {checkDBConnection} from "./config/database.js";
+import { checkDBConnection } from "./config/database.js";
 
 // Checking database connection:
 checkDBConnection()
@@ -53,6 +53,7 @@ const corsOrigins = [
     getEnv("DEPLOY_CLIENT_ORG_1"),
     getEnv("DEPLOY_CLIENT_ORG_2")
 ].map((origin) => origin.trim().replace(/\/+$/, ""));
+
 
 app.use(express.json());
 app.use(cors({

@@ -120,18 +120,22 @@ export default class Enrollments {
         }
     }
 
-    async getStudentEnrollmentRecordByStudentId(studentId: number): Promise<{ enrollmentId: number; schoolYear: string; classId: number }[]> {
+    async getStudentEnrollmentRecordByStudentId(studentId: number): Promise<{ enrollmentId: number; schoolYear: string; classId: number; gradeLevel?: number; section?: string }[]> {
         try {
             const query = `
                 SELECT 
                 e.id AS enrollmentId,
                 e.classId,
+                c.gradeLevel,
+                c.section,
                 CONCAT(sy.startYear, "-" , sy.endYear) AS schoolYear
                 FROM enrollments e
                 JOIN 
                     students s ON s.id = e.studentId
                 JOIN 
                     schoolyear sy ON sy.id = e.schoolYearId
+                LEFT JOIN
+                    classrooms c ON c.id = e.classId
                 WHERE e.studentId = ?
                 -- Chronological (oldest first) so the SF10/Form-137 lists each
                 -- school year under its own grade level in order, and the last
@@ -141,7 +145,7 @@ export default class Enrollments {
 
             const [row] = await this.connection.execute<RowDataPacket[]>(query, [studentId]);
 
-            return row as { enrollmentId: number; schoolYear: string; classId: number }[];
+            return row as { enrollmentId: number; schoolYear: string; classId: number; gradeLevel?: number; section?: string }[];
         }catch(err){
             throw new InternalServerError("Internal Server Error", 500, err);
         }

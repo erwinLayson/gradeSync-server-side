@@ -11,18 +11,26 @@ import { SuccessResponse } from "../helper/response.js";
 import Validate from "../helper/validate.js";
 
 
+import { BadRequestError } from "../middleware/errors.js";
+
 export async function createEnrollmentController(
     req: Request<{}, {}, EnrollmentCreateProps>,
     res: Response,
     next: NextFunction
 ) {
-    const { studentId, classId, schoolYearId, subjectIds } = req.body;
+    const { studentId, classId, schoolYearId, subjectIds, gradeLevel } = req.body;
     try {
-        const enrollment = {
+        const parsedGradeLevel = Number(gradeLevel);
+        if (!parsedGradeLevel || Number.isNaN(parsedGradeLevel) || parsedGradeLevel <= 0) {
+            throw new BadRequestError("Student grade level is required to enroll");
+        }
+
+        const enrollment: EnrollmentCreateProps = {
             studentId: Number(studentId),
             classId: Number(classId),
             schoolYearId: Number(schoolYearId),
-            subjectIds: Array.isArray(subjectIds) ? subjectIds.map((id) => Number(id)) : []
+            subjectIds: Array.isArray(subjectIds) ? subjectIds.map((id) => Number(id)) : [],
+            gradeLevel: parsedGradeLevel
         };
 
         // Validate enrollment data

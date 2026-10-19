@@ -90,12 +90,21 @@ export async function assertSchoolYearAllowsRoleChange(connection: PoolConnectio
     }
 }
 
+import { clearAllClassroomsService } from "./enrollments.js";
+
 /**
  * Officially mark (or reopen) a school year. Admin-only at the route layer.
  * Reopening is the counterpart that keeps the gate honest: nothing may stay
  * "completed" while a year is still in progress.
+ *
+ * When marking as 'completed', all active classroom rosters for that school
+ * year are cleared and enrollments completed, ensuring all required grades
+ * and snapshots have been finalized.
  */
-export async function setSchoolYearStatusService(id: number, status: SchoolYearStatus): Promise<SchoolYear[]> {
+export async function setSchoolYearStatusService(
+    id: number,
+    status: SchoolYearStatus
+): Promise<{ schoolYears: SchoolYear[]; totalCleared: number; classroomsCleared: number }> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
 
@@ -106,8 +115,18 @@ export async function setSchoolYearStatusService(id: number, status: SchoolYearS
             throw new NotFoundError(`School year with ID ${id} not found`, 404);
         }
 
+        let totalCleared = 0;
+        let classroomsCleared = 0;
+
+        if (status === "completed") {
+            const clearResult = await clearAllClassroomsService(id);
+            totalCleared = clearResult.totalCleared;
+            classroomsCleared = clearResult.classroomsCleared;
+        }
+
         await SYModel.setSchoolYearStatus(id, status);
-        return await SYModel.getSchoolYear();
+        const schoolYears = await SYModel.getSchoolYear();
+        return { schoolYears, totalCleared, classroomsCleared };
     } finally {
         connection.release();
     }

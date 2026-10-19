@@ -615,8 +615,8 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
                 enrollmentId: enrollment.enrollmentId,
                 schoolYear: enrollment.schoolYear,
                 recordId: record?.id ?? null,
-                classSection: record?.classSection ?? null,
-                classGradeLevel: record?.classGradeLevel ?? null,
+                classSection: record?.classSection ?? enrollment.section ?? null,
+                classGradeLevel: record?.classGradeLevel ?? enrollment.gradeLevel ?? null,
                 adviserName: record?.adviserName ?? null,
                 subjects,
                 generalAverage

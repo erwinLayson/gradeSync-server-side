@@ -76,13 +76,17 @@ export async function setSchoolYearStatusController(req: Request<{id: number}, {
             throw new BadRequestError(`"status" must be one of: ${SCHOOL_YEAR_STATUSES.join(", ")}`);
         }
 
-        const schoolYears = await setSchoolYearStatusService(parsedId, status);
+        const result = await setSchoolYearStatusService(parsedId, status);
+        const message = status === "completed"
+            ? (result.totalCleared > 0
+                ? `School year marked as completed. ${result.totalCleared} student(s) cleared from ${result.classroomsCleared} classroom(s).`
+                : "School year marked as completed")
+            : "School year reopened";
+
         res.status(200).json(
             SuccessResponse({
-                message: status === "completed"
-                    ? "School year marked as completed"
-                    : "School year reopened",
-                data: schoolYears
+                message,
+                data: result.schoolYears
             })
         );
     }catch(err) {
