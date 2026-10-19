@@ -748,8 +748,8 @@ async function seed() {
     // ──────────────────────────────────────────────────────
     console.log("Seeding school_info...");
     await connection.execute(
-      "INSERT INTO school_info(schoolId, name, district, division, region) VALUES(?,?,?,?,?)",
-      sql(12345, "GradeSync National High School", "District I", "City Schools Division", "National Capital Region")
+      "INSERT INTO school_info(schoolId, name, district, division, region, principal, address) VALUES(?,?,?,?,?,?,?)",
+      sql(12345, "GradeSync National High School", "District I", "City Schools Division", "National Capital Region", "Dr. Juanito Ramos", "Manila, Philippines")
     );
 
     // ──────────────────────────────────────────────────────
