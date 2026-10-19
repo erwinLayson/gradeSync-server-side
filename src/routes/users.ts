@@ -11,7 +11,6 @@ const route: Router = Router();
 
 // Writes + user reads are admin-only; :id routes carry a numeric param
 const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
-const adminOnlyWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
 // Own-credential updates: any role may update its OWN account (developer
 // included — settings page email/password form). After the migration there is no
 // user-level `register` role, so register staff update their own credentials as a

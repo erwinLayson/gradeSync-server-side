@@ -3,7 +3,6 @@ import { InternalServerError } from "../middleware/errors.js";
 
 import type {
     DashboardSchoolYear,
-    DashboardAcademicProgress,
     DashboardAttentionItem,
 } from "../constant/dashboard.js";
 

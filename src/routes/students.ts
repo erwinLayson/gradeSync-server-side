@@ -25,7 +25,6 @@ import { FACULTY_ROLES } from "../constant/faculties.js";
 
 const route: Router = Router();
 
-const adminOnlyWithId: RequestHandler<{id: string}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
 const studentOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.STUDENT])];
 
 // ==================== REGISTER (registration/enrollment staff) ====================

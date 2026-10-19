@@ -34,7 +34,6 @@ const facultyOnly: RequestHandler[] = [
     allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
     allowedFacultyRoles([FACULTY_ROLES.TEACHER], { allowAdmin: true }),
 ];
-const adminOnlyWithId: RequestHandler<{id: string}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
 
 // SF10 / Form-137 is a register-staff responsibility. After the migration there is
 // no user-level `register` role, so this endpoint is authorized through the

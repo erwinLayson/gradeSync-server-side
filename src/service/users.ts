@@ -7,7 +7,6 @@ import { getDBPoolConnection } from "../config/database.js";
 
 import { BadRequestError, ConflictError, ForbiddenError, NotFoundError, UnauthorizedError } from "../middleware/errors.js";
 import { ROLES, type CreateUserProps, type UpdateUserCredentialsProps, type UserRoles } from "../constant/users.js";
-import { FACULTY_ROLES } from "../constant/faculties.js";
 
 // Shared school-year gate: a faculty role change reached through the account
 // role endpoint is held to the same rule as PATCH /faculties/:id (plan §7).

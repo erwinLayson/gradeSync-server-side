@@ -97,9 +97,5 @@ export function allowedFacultyRoles(
     };
 }
 
-/** True when the caller's verified faculty role is one of `roles`. */
-export function facultyRoleIs(faculty: { role: FacultyRole } | undefined, ...roles: FacultyRole[]): boolean {
-    return Boolean(faculty && roles.includes(faculty.role));
-}
-
 export { FACULTY_ROLES };
+

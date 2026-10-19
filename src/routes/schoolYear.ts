@@ -13,7 +13,6 @@ const router: Router = Router();
 
 const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
 const adminOnlyWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
-const adminFaculty: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN, ROLES.TEACHER])];
 // Register picks the enrollment school year from the list. Creating and
 // activating a school year stay Admin-only (docs/register-role-implementation-plan.md §6.2).
 //

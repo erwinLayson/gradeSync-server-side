@@ -8,7 +8,7 @@ import { ROLES, type UserRoles } from "../constant/users.js";
 import NormalizedData from "../helper/normalizedData.js";
 import {SuccessResponse} from "../helper/response.js";
 import Validate from "../helper/validate.js";
-import { BadRequestError, ForbiddenError, NotFoundError } from "../middleware/errors.js";
+import { BadRequestError, ForbiddenError } from "../middleware/errors.js";
 
 // Service Functions
 import {

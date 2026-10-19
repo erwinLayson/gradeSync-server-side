@@ -1,4 +1,4 @@
-import type { PoolConnection, ResultSetHeader, RowDataPacket } from "mysql2/promise";
+import type { ResultSetHeader, RowDataPacket } from "mysql2/promise";
 
 import { getDBPoolConnection } from "../config/database.js";
 import { InternalServerError } from "../middleware/errors.js";

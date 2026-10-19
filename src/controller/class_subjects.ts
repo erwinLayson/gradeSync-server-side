@@ -23,7 +23,6 @@ import {
 } from "../service/gradingWeight.js";
 import {
     assertFacultyOwnsClassSubject,
-    resolveActorFacultyId,
     resolveTeachingFacultyId,
 } from "../service/authorization.js";
 
