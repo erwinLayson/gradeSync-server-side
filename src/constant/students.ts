@@ -53,8 +53,6 @@ export type StudentListStatus = "active" | "inactive" | "all";
 export interface StudentListQuery {
     search?: string | undefined;
     status: StudentListStatus;
-    /** Restrict to students with an active enrollment in this classroom. */
-    classId?: number | undefined;
     page: number;
     pageSize: number;
     sort: StudentListSort;

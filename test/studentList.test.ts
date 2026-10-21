@@ -170,18 +170,16 @@ describe("student registry list (server-side)", () => {
         expect(all.total).toBe(2);
     });
 
-    it("filters by active classroom", async () => {
+    it("returns students regardless of classroom enrollment status", async () => {
         const enrolledId = await makeStudent(1);
-        await makeStudent(2);
-        const classroomId = await enroll(enrolledId);
+        const unenrolledId = await makeStudent(2);
+        await enroll(enrolledId);
 
-        const result = await getStudentListService(q({ search: PREFIX, status: "all", classId: classroomId }));
-        expect(result.total).toBe(1);
-        expect(result.students[0]?.id).toBe(enrolledId);
-
-        // Searching in a classroom the learner is not in yields nothing.
-        const other = await getStudentListService(q({ search: PREFIX, status: "all", classId: 999999999 }));
-        expect(other.total).toBe(0);
+        const result = await getStudentListService(q({ search: PREFIX, status: "all" }));
+        expect(result.total).toBe(2);
+        const ids = result.students.map((s) => s.id);
+        expect(ids).toContain(enrolledId);
+        expect(ids).toContain(unenrolledId);
     });
 
     it("sorts by name ascending and descending", async () => {

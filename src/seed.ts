@@ -14,6 +14,7 @@ import { submitStudentRecordService } from "./service/studentRecord.js";
 // Landing page content seed (docs/landing-content-plan.md Phase 2) —
 // mirrors client/src/constant/landingContent.ts.
 import { LANDING_CONTENT_SEED } from "./constant/landingSeed.js";
+import { SAMPLE_STUDENTS } from "./constant/sampleStudents.js";
 
 // Helper: coerce values to mysql-compatible array
 function sql(...args: (string | number | null | undefined)[]): (string | number | null)[] {
@@ -49,19 +50,14 @@ async function seed() {
     await connection.execute("DELETE FROM class_adviser");
     await connection.execute("DELETE FROM classrooms");
     await connection.execute("DELETE FROM subjects");
+    await connection.execute("DELETE FROM student_details");
     await connection.execute("DELETE FROM students");
     await connection.execute("DELETE FROM faculties");
     await connection.execute("DELETE FROM users");
     await connection.execute("DELETE FROM schoolyear");
     await connection.execute("DELETE FROM school_info");
 
-    // Re-activate the first school year so admin and student-record summary queries
-    // keep returning rows until the seed deposits its own school years in section 7.
-    await connection.execute("INSERT INTO schoolyear(startYear, endYear, isActive) VALUES('2024','2025',1)");
 
-    // Restore the active school year so the summary query keeps returning rows
-    // when the demo seed runs without any CampusSchools/OAuth wiring.
-    await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id > 0 ORDER BY id DESC LIMIT 1");
 
     // ──────────────────────────────────────────────────────
     // 2. Users (1 admin + 1 developer + 1 register + 10 faculties + 10 students = 23)
@@ -111,23 +107,11 @@ async function seed() {
       facultyUserIds.push(result.insertId);
     }
 
-    const studentEmails: string[] = [
-      "alex.garcia@student.edu",
-      "beatriz.mercado@student.edu",
-      "carlo.mendoza@student.edu",
-      "diana.lorenzo@student.edu",
-      "eduardo.silva@student.edu",
-      "francesca.cruz@student.edu",
-      "gabriel.torres@student.edu",
-      "hannah.aguilar@student.edu",
-      "ivan.delossantos@student.edu",
-      "jasmine.romero@student.edu",
-    ];
     const studentUserIds: number[] = [];
-    for (const email of studentEmails) {
+    for (const student of SAMPLE_STUDENTS) {
       const [result] = await connection.execute<ResultSetHeader>(
-        "INSERT INTO users(email, password, role) VALUES(?,?,?)",
-        sql(email, hash, "student")
+        "INSERT INTO users(email, password, role, status) VALUES(?,?,?, 'active')",
+        sql(student.email, hash, "student")
       );
       studentUserIds.push(result.insertId);
     }
@@ -168,29 +152,40 @@ async function seed() {
     );
 
     // ──────────────────────────────────────────────────────
-    // 4. Students (10)
+    // 4. Students (${SAMPLE_STUDENTS.length})
     // ──────────────────────────────────────────────────────
-    console.log("Seeding students...");
-    const studentData = [
-      { lrn: "123456789001", firstname: "Alex", middlename: "R.", lastname: "Garcia", suffix: null, birthdate: "2008-03-15", sex: "Male" },
-      { lrn: "123456789002", firstname: "Beatriz", middlename: "S.", lastname: "Mercado", suffix: null, birthdate: "2009-07-22", sex: "Female" },
-      { lrn: "123456789003", firstname: "Carlo", middlename: "T.", lastname: "Mendoza", suffix: null, birthdate: "2008-11-02", sex: "Male" },
-      { lrn: "123456789004", firstname: "Diana", middlename: "L.", lastname: "Lorenzo", suffix: null, birthdate: "2009-01-14", sex: "Female" },
-      { lrn: "123456789005", firstname: "Eduardo", middlename: "V.", lastname: "Silva", suffix: null, birthdate: "2008-05-30", sex: "Male" },
-      { lrn: "123456789006", firstname: "Francesca", middlename: "M.", lastname: "Cruz", suffix: null, birthdate: "2009-09-18", sex: "Female" },
-      { lrn: "123456789007", firstname: "Gabriel", middlename: "N.", lastname: "Torres", suffix: "II", birthdate: "2008-12-25", sex: "Male" },
-      { lrn: "123456789008", firstname: "Hannah", middlename: "P.", lastname: "Aguilar", suffix: null, birthdate: "2009-04-08", sex: "Female" },
-      { lrn: "123456789009", firstname: "Ivan", middlename: "Q.", lastname: "Delos Santos", suffix: null, birthdate: "2008-08-19", sex: "Male" },
-      { lrn: "123456789010", firstname: "Jasmine", middlename: "R.", lastname: "Romero", suffix: null, birthdate: "2009-06-05", sex: "Female" },
-    ];
+    console.log(`Seeding students (${SAMPLE_STUDENTS.length})...`);
     const studentIds: number[] = [];
-    for (let i = 0; i < studentData.length; i++) {
-      const s = studentData[i]!;
+    for (let i = 0; i < SAMPLE_STUDENTS.length; i++) {
+      const s = SAMPLE_STUDENTS[i]!;
       const [result] = await connection.execute<ResultSetHeader>(
-        "INSERT INTO students(userId, lrn, email, firstname, middlename, lastname, suffix, birthdate, sex) VALUES(?,?,?,?,?,?,?,?,?)",
-        sql(studentUserIds[i]!, s.lrn, studentEmails[i]!, s.firstname, s.middlename, s.lastname, s.suffix, s.birthdate, s.sex)
+        "INSERT INTO students(userId, lrn, email, firstname, middlename, lastname, suffix, birthdate, sex, status) VALUES(?,?,?,?,?,?,?,?,?, 'active')",
+        sql(studentUserIds[i]!, s.lrn, s.email, s.firstname, s.middlename, s.lastname, s.suffix, s.birthdate, s.sex)
       );
       studentIds.push(result.insertId);
+    }
+
+    // ──────────────────────────────────────────────────────
+    // 4b. Student Details
+    // ──────────────────────────────────────────────────────
+    console.log("Seeding student_details...");
+    for (let i = 0; i < studentIds.length; i++) {
+      const s = SAMPLE_STUDENTS[i]!;
+      await connection.execute(
+        `INSERT INTO student_details(studentId, birthplace, permanentAddress, religion, contactNumber, guardianName, guardianRelation, guardianContact, guardianOccupation)
+         VALUES(?,?,?,?,?,?,?,?,?)`,
+        sql(
+          studentIds[i]!,
+          s.birthplace,
+          s.permanentAddress,
+          s.religion,
+          s.contactNumber,
+          s.guardianName,
+          s.guardianRelation,
+          s.guardianContact,
+          s.guardianOccupation
+        )
+      );
     }
 
     // ──────────────────────────────────────────────────────
@@ -330,13 +325,20 @@ async function seed() {
     }
 
     // ──────────────────────────────────────────────────────
-    // 10. enrollments (10 — one per student)
+    // 10. enrollments (one per student)
     //     Columns: id, dateEnrolled, classId, schoolYearId, studentId
     // ──────────────────────────────────────────────────────
     console.log("Seeding enrollments...");
+    function getStudentClassroomIndex(index: number, totalClassrooms: number): number {
+      if (index < 10) {
+        return index % 5;
+      }
+      return (index - 10) % totalClassrooms;
+    }
+
     const enrollmentIds: number[] = [];
     for (let i = 0; i < studentIds.length; i++) {
-      const ci = i % 5; // distribute across first 5 classrooms
+      const ci = getStudentClassroomIndex(i, classroomIds.length);
       const [result] = await connection.execute<ResultSetHeader>(
         "INSERT INTO enrollments(dateEnrolled, classId, schoolYearId, studentId) VALUES(CURDATE(),?,?,?)",
         sql(classroomIds[ci]!, schoolYearIds[schoolYearIds.length - 1]!, studentIds[i]!)
@@ -345,11 +347,11 @@ async function seed() {
     }
 
     // ──────────────────────────────────────────────────────
-    // 11. class_students (10 — link enrollments to classrooms)
+    // 11. class_students (link enrollments to classrooms)
     // ──────────────────────────────────────────────────────
     console.log("Seeding class_students...");
     for (let i = 0; i < enrollmentIds.length; i++) {
-      const ci = i % 5;
+      const ci = getStudentClassroomIndex(i, classroomIds.length);
       await connection.execute(
         "INSERT INTO class_students(classId, enrollmentId) VALUES(?,?)",
         sql(classroomIds[ci]!, enrollmentIds[i]!)
@@ -427,12 +429,12 @@ async function seed() {
     }
 
     // ──────────────────────────────────────────────────────
-    // 13. enrollment_details (10 — link enrollments to subjects)
+    // 13. enrollment_details (link enrollments to subjects)
     // ──────────────────────────────────────────────────────
     console.log("Seeding enrollment_details...");
     for (let i = 0; i < enrollmentIds.length; i++) {
       // Each enrollment gets the first 2 subjects from their classroom's plan
-      const classIdx = i % 5;
+      const classIdx = getStudentClassroomIndex(i, classroomIds.length);
       const planEntry = csPlan.find(([ci]) => ci === classIdx);
       if (planEntry) {
         const [, subjectIdxs] = planEntry;
@@ -447,7 +449,7 @@ async function seed() {
     }
 
     // ──────────────────────────────────────────────────────
-    // 13b. student_academic_records (10 — one official record per enrollment)
+    // 13b. student_academic_records (one official record per enrollment)
     //     Columns: id, enrollmentId, classSection, classGradeLevel, adviserName
     //     Every enrollment gets a record file. Quarterly grades are frozen into
     //     student_academic_record_subjects at submission time (section 15b),
@@ -456,7 +458,7 @@ async function seed() {
     console.log("Seeding student_academic_records...");
     const recordIds: number[] = [];
     for (let i = 0; i < enrollmentIds.length; i++) {
-      const ci = i % 5;
+      const ci = getStudentClassroomIndex(i, classroomIds.length);
       const t = facultyData[ci]!;
       // Same shape as the faculties model's fullname (first, middle, last, suffix).
       const adviserName = `${t.firstname} ${t.middlename} ${t.lastname}${t.suffix ? " " + t.suffix : ""}`;
@@ -503,19 +505,12 @@ async function seed() {
       );
     }
 
-    // The students enrolled in Section A - G7 (classroom index 0):
-    // i % 5 === 0 → Alex (i=0) and Francesca (i=5). Derived from the same
-    // `ci = i % 5` distribution used for enrollments so the demo scores and
-    // attendance always attach to the right roster. Both are stored against
-    // the student's ENROLLMENT id (student_scores.enrollmentId and
+    // The demo students enrolled in Section A - G7 (classroom index 0):
+    // Alex (enrollment index 0) and Francesca (enrollment index 5).
+    // Stored against the student's ENROLLMENT id (student_scores.enrollmentId and
     // student_attendance.enrollmentId). Section B seeds pass their own roster
     // via studentEnrollmentIds below.
-    const gradebookEnrollmentIds: number[] = [];
-    for (let i = 0; i < studentIds.length; i++) {
-      if (i % 5 === 0) {
-        gradebookEnrollmentIds.push(enrollmentIds[i]!);
-      }
-    }
+    const gradebookEnrollmentIds: number[] = [enrollmentIds[0]!, enrollmentIds[5]!];
 
     interface AssessmentSeed {
       type: AssessmentType;
@@ -798,7 +793,7 @@ async function seed() {
     console.log("\n==========================================");
     console.log("  SEED COMPLETE!");
     console.log("==========================================");
-    console.log(`  Users:              23 (1 admin + 1 developer + 1 register + 10 teacher faculties + 10 students)`);
+    console.log(`  Users:              ${3 + facultyIds.length + studentIds.length} (1 admin + 1 developer + 1 register + ${facultyIds.length} teacher faculties + ${studentIds.length} students)`);
     console.log(`  Faculties:           ${facultyIds.length + 1} (${facultyIds.length} teachers + 1 register)`);
     console.log(`  Students:           ${studentIds.length}`);
     console.log(`  Subjects:           ${subjectIds.length}`);

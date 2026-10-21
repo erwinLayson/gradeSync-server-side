@@ -11,6 +11,7 @@
     "start": "node dist/migrate.js && node dist/server.js",
     "dev": "tsx watch src/server.ts",
     "seed": "tsx src/seed.ts",
+    "seed:students": "tsx src/seedStudents.ts",
     "migrate": "tsx src/migrate.ts",
     "migrate:fresh": "tsx src/migrate.ts --fresh",
     "migrate:fresh:seed": "tsx src/migrate.ts --fresh && tsx src/seed.ts",

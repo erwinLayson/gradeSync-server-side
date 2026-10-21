@@ -124,14 +124,14 @@ export default class Analytics {
         try {
             const query = `
                 SELECT
-                    sy.id AS schoolYearId,
+                    MIN(sy.id) AS schoolYearId,
                     sy.startYear,
                     sy.endYear,
                     COUNT(DISTINCT e.studentId) AS count
                 FROM schoolyear sy
                 LEFT JOIN enrollments e ON e.schoolYearId = sy.id AND e.status IN ('enrolled', 'completed')
-                GROUP BY sy.id, sy.startYear, sy.endYear
-                ORDER BY sy.startYear
+                GROUP BY sy.startYear, sy.endYear
+                ORDER BY sy.startYear ASC
             `;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query);
             return rows.map((row) => ({

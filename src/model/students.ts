@@ -63,13 +63,14 @@ export default class Students {
                 middlename,
                 lastname,
                 suffix,
-                CONCAT(firstname, ' ', middlename, ' ', lastname, IF(suffix IS NOT NULL, CONCAT(' ', suffix), '')) AS fullname,
+                CONCAT(lastname, ', ', firstname, IF(middlename IS NOT NULL AND middlename != '', CONCAT(', ', middlename), ''), IF(suffix IS NOT NULL AND suffix != '', CONCAT(' ', suffix), '')) AS fullname,
                 birthdate,
                 TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) AS age,
                 sex,
                 status
                 FROM
                 students
+                ORDER BY fullname ASC, id ASC
                 -- All records are returned (including inactive/soft-deleted ones);
                 -- the client decides whether to hide inactive rows based on filters.
             `;
@@ -93,9 +94,9 @@ export default class Students {
         if (search) {
             const like = `%${search}%`;
             where.push(
-                "(CONCAT_WS(' ', s.firstname, s.middlename, s.lastname, s.suffix) LIKE ? OR s.lrn LIKE ? OR s.email LIKE ?)"
+                "(CONCAT_WS(' ', s.firstname, s.middlename, s.lastname, s.suffix) LIKE ? OR CONCAT(s.lastname, ', ', s.firstname, IF(s.middlename IS NOT NULL, CONCAT(', ', s.middlename), '')) LIKE ? OR s.lrn LIKE ? OR s.email LIKE ?)"
             );
-            params.push(like, like, like);
+            params.push(like, like, like, like);
         }
 
         if (query.status === "active") {
@@ -104,13 +105,6 @@ export default class Students {
             where.push("s.status = 'inactive'");
         }
         // status === "all" adds no predicate.
-
-        if (query.classId) {
-            where.push(
-                "EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.classId = ? AND e.status = 'enrolled')"
-            );
-            params.push(query.classId);
-        }
 
         const whereSql = where.length > 0 ? `WHERE ${where.join(" AND ")}` : "";
 
@@ -144,7 +138,7 @@ export default class Students {
                 s.middlename,
                 s.lastname,
                 s.suffix,
-                CONCAT(s.firstname, ' ', s.middlename, ' ', s.lastname, IF(s.suffix IS NOT NULL, CONCAT(' ', s.suffix), '')) AS fullname,
+                CONCAT(s.lastname, ', ', s.firstname, IF(s.middlename IS NOT NULL AND s.middlename != '', CONCAT(', ', s.middlename), ''), IF(s.suffix IS NOT NULL AND s.suffix != '', CONCAT(' ', s.suffix), '')) AS fullname,
                 s.birthdate,
                 TIMESTAMPDIFF(YEAR, s.birthdate, CURDATE()) AS age,
                 s.sex,
@@ -168,7 +162,7 @@ export default class Students {
             const query = `
                 SELECT 
                 s.*,
-                CONCAT(s.firstname, ' ', s.middlename, ' ', s.lastname, IF(s.suffix IS NOT NULL, CONCAT(' ', s.suffix), '')) AS fullname,
+                CONCAT(s.lastname, ', ', s.firstname, IF(s.middlename IS NOT NULL AND s.middlename != '', CONCAT(', ', s.middlename), ''), IF(s.suffix IS NOT NULL AND s.suffix != '', CONCAT(' ', s.suffix), '')) AS fullname,
                 TIMESTAMPDIFF(YEAR, s.birthdate, CURDATE()) AS age
                 FROM
                 students s
@@ -192,7 +186,7 @@ export default class Students {
             s.id AS studentId,
             s.lrn AS studentLrn,
             s.email AS studentEmail,
-            CONCAT(s.firstname, ' ', s.middlename, ' ', s.lastname, IF(s.suffix IS NOT NULL, CONCAT(' ', s.suffix), '')) AS fullname,
+            CONCAT(s.lastname, ', ', s.firstname, IF(s.middlename IS NOT NULL AND s.middlename != '', CONCAT(', ', s.middlename), ''), IF(s.suffix IS NOT NULL AND s.suffix != '', CONCAT(' ', s.suffix), '')) AS fullname,
             s.birthdate AS studentBirthdate,
             TIMESTAMPDIFF(YEAR, s.birthdate, CURDATE()) AS studentAge,
             s.sex AS studentSex
@@ -204,6 +198,7 @@ export default class Students {
             WHERE cs.classId = ?
             -- Hide soft-deleted students from faculty rosters
             AND (s.status IS NULL OR s.status <> "inactive")
+            ORDER BY fullname ASC, s.id ASC
             `;
 
             const [result] = await this.connection.execute<RowDataPacket[]>(query, [id]);
@@ -224,7 +219,7 @@ export default class Students {
                 id, 
                 lrn,
                 email,
-                CONCAT_WS(" ", firstname, middlename, lastname, suffix) AS fullname,
+                CONCAT(lastname, ', ', firstname, IF(middlename IS NOT NULL AND middlename != '', CONCAT(', ', middlename), ''), IF(suffix IS NOT NULL AND suffix != '', CONCAT(' ', suffix), '')) AS fullname,
                 birthdate,
                 TIMESTAMPDIFF(YEAR, birthdate, CURDATE()) as age,
                 sex,
@@ -233,6 +228,7 @@ export default class Students {
                 FROM students
                 WHERE status = "active" AND (lrn LIKE ? OR email LIKE ?)
                 AND id NOT IN (SELECT studentId FROM enrollments WHERE status = 'enrolled')
+                ORDER BY fullname ASC, id ASC
             `;
             const params: (string | number)[] = [`%${searchQuery}%`, `%${searchQuery}%`];
 

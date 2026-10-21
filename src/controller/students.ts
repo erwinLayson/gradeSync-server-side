@@ -42,13 +42,10 @@ function parseStudentListQuery(query: Request["query"]): StudentListQuery {
 
     const dir = first(query.dir) === "desc" ? "desc" : "asc";
 
-    const classIdRaw = Number(first(query.classId));
-    const classId = Number.isInteger(classIdRaw) && classIdRaw > 0 ? classIdRaw : undefined;
-
     const searchRaw = first(query.search);
     const search = searchRaw && searchRaw.trim() ? searchRaw.trim() : undefined;
 
-    return { search, status, classId, page, pageSize, sort, dir };
+    return { search, status, page, pageSize, sort, dir };
 }
 
 export async function createStudentController(req: Request<{}, {}, StudentCreateProps>, res: Response, next: NextFunction) {
