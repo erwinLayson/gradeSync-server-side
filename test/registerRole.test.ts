@@ -222,6 +222,9 @@ const REGISTER_FACULTY_REACHABLE: Array<[label: string, router: unknown, method:
     ["read a classroom's subjects", classroomsRouter, "get", "/classrooms/:classroomId/faculties-subject"],
     ["read school years", schoolYearRouter, "get", "/schoolYear"],
     ["read academic settings", academicSettingsRouter, "get", "/academic-settings"],
+    ["advance academic settings", academicSettingsRouter, "patch", "/academic-settings"],
+    ["submission summary", studentRecordRouter, "get", "/student-records/summary"],
+    ["class records drilldown", studentRecordRouter, "get", "/student-records/class/:classId"],
     ["print SF10 / Form-137", studentRecordRouter, "get", "/student-records/:id/pdf"],
     // Every role manages its OWN login credentials; the controller enforces
     // "own account or admin".
@@ -245,12 +248,9 @@ const REGISTER_FACULTY_DENIED: Array<[label: string, router: unknown, method: Ht
     ["bulk-remove a classroom's enrollments", enrollmentsRouter, "delete", "/classrooms/:classId/enrollments"],
     ["clear a classroom", enrollmentsRouter, "delete", "/classrooms/:classId/enrollments/clear"],
     ["clear all classrooms", enrollmentsRouter, "delete", "/enrollments/clear-all"],
-    // Submission tracker summary.
-    ["submission summary", studentRecordRouter, "get", "/student-records/summary"],
-    // School-year + academic-settings management.
+    // School-year management.
     ["create a school year", schoolYearRouter, "post", "/schoolYear"],
     ["activate a school year", schoolYearRouter, "patch", "/schoolYear/:id/activate"],
-    ["change academic settings", academicSettingsRouter, "patch", "/academic-settings"],
     // Classroom management.
     ["create a classroom", classroomsRouter, "post", "/classrooms"],
     ["update a classroom", classroomsRouter, "put", "/classrooms/:id"],

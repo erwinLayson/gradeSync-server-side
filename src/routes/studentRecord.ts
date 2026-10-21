@@ -35,24 +35,36 @@ const facultyOnly: RequestHandler[] = [
     allowedFacultyRoles([FACULTY_ROLES.TEACHER], { allowAdmin: true }),
 ];
 
-// SF10 / Form-137 is a register-staff responsibility. After the migration there is
-// no user-level `register` role, so this endpoint is authorized through the
+// SF10 / Form-137 and Submission Tracker are register-staff responsibilities. After the migration there is
+// no user-level `register` role, so these endpoints are authorized through the
 // authenticated user's verified faculty record instead of through `users.role`.
 // Admins keep access; a register faculty member reaches the controller through the
 // verified faculty path; everyone else is refused.
+const adminRegister: RequestHandler[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.REGISTER], { allowAdmin: true }),
+];
 const adminRegisterWithId: RequestHandler<{id: string}>[] = [
     ValidateToken,
     allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
     allowedFacultyRoles([FACULTY_ROLES.REGISTER], { allowAdmin: true }),
 ];
 
+// Class records can be viewed by class advisers, register staff (via Submission Tracker drill-down), and admin.
+const classRecordsReaders: RequestHandler[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.TEACHER, FACULTY_ROLES.REGISTER], { allowAdmin: true }),
+];
+
 // ==================== ADVISER (faculty) ====================
 // The adviser's own advised class (adviser ownership is checked in the service).
 router.get("/student-records/my-class", facultyOnly, getMyClassRecordsController);
 
-// ==================== ADMIN + TEACHER ====================
-// Adviser-scope checks live in the service (faculties must be the class adviser).
-router.get("/student-records/class/:classId", adminFaculty, getClassRecordsController);
+// ==================== ADMIN + TEACHER + REGISTER ====================
+// Adviser-scope checks live in the service (teachers must be the class adviser; admin and register inspect all classes).
+router.get("/student-records/class/:classId", classRecordsReaders, getClassRecordsController);
 router.post(
     "/student-records/class/:classId/students/:enrollmentId/quarter/:quarter/submit",
     adminFaculty,
@@ -69,8 +81,8 @@ router.post(
     reopenStudentRecordController
 );
 
-// ==================== ADMIN ONLY ====================
-router.get("/student-records/summary", adminOnly, getSubmissionSummaryController);
+// ==================== ADMIN + REGISTER ====================
+router.get("/student-records/summary", adminRegister, getSubmissionSummaryController);
 
 // ==================== PDF ====================
 // SF10 / Form-137 student record. Admin + Register share this endpoint per

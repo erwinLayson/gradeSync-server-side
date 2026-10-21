@@ -226,8 +226,8 @@ export default class Dashboard {
                 type: "warning",
                 message: `${incompleteClasses.length} class${incompleteClasses.length > 1 ? "es" : ""} have incomplete Quarter ${quarter} submissions`,
                 detail: `${totalMissing} student record${totalMissing !== 1 ? "s" : ""} pending across ${incompleteClasses.length} class${incompleteClasses.length !== 1 ? "es" : ""}`,
-                actionLabel: "View Submissions",
-                actionPath: "/admin/student-records",
+                actionLabel: "View Classes",
+                actionPath: "/admin/classrooms",
                 count: incompleteClasses.length,
             });
         }

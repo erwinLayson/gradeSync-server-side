@@ -34,7 +34,9 @@ function parseStudentListQuery(query: Request["query"]): StudentListQuery {
 
     const statusRaw = first(query.status);
     const status: StudentListStatus =
-        statusRaw === "inactive" || statusRaw === "all" ? statusRaw : "active";
+        statusRaw === "inactive" || statusRaw === "all" || statusRaw === "enrolled" || statusRaw === "unenrolled"
+            ? statusRaw
+            : "active";
 
     const sortRaw = first(query.sort);
     const sort: StudentListSort =

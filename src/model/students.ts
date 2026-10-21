@@ -103,6 +103,12 @@ export default class Students {
             where.push("(s.status IS NULL OR s.status = 'active')");
         } else if (query.status === "inactive") {
             where.push("s.status = 'inactive'");
+        } else if (query.status === "enrolled") {
+            where.push("(s.status IS NULL OR s.status = 'active')");
+            where.push("EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.status = 'enrolled')");
+        } else if (query.status === "unenrolled") {
+            where.push("(s.status IS NULL OR s.status = 'active')");
+            where.push("NOT EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.status = 'enrolled')");
         }
         // status === "all" adds no predicate.
 
@@ -228,7 +234,6 @@ export default class Students {
                 FROM students
                 WHERE status = "active" AND (lrn LIKE ? OR email LIKE ?)
                 AND id NOT IN (SELECT studentId FROM enrollments WHERE status = 'enrolled')
-                ORDER BY fullname ASC, id ASC
             `;
             const params: (string | number)[] = [`%${searchQuery}%`, `%${searchQuery}%`];
 
@@ -236,6 +241,8 @@ export default class Students {
                 query += ` AND id NOT IN (SELECT studentId FROM enrollments WHERE schoolYearId = ? AND status = 'completed')`;
                 params.push(schoolYearId);
             }
+
+            query += ` ORDER BY fullname ASC, id ASC`;
 
             const [result] = await this.connection.execute<RowDataPacket[]>(query, params);
 

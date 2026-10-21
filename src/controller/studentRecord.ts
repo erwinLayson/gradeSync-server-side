@@ -17,6 +17,7 @@ import { SuccessResponse } from "../helper/response.js";
 import { BadRequestError } from "../middleware/errors.js";
 import { isValidQuarter } from "../helper/quarterValidation.js";
 import { ROLES } from "../constant/users.js";
+import { FACULTY_ROLES } from "../constant/faculties.js";
 import { HTMLRenderer } from "../helper/HTMLRenderer.js";
 import { pdfFormatter } from "../helper/pdfFormater.js";
 
@@ -40,9 +41,12 @@ async function parseQuarterParam(value: unknown): Promise<number> {
     return quarter;
 }
 
-// The acting faculty's id for ownership checks; null when the caller is an admin.
+// The acting faculty's id for ownership checks; null when the caller is an admin or register.
 async function resolveActorFacultyId(req: Request): Promise<number | null> {
     if (req.user?.role === ROLES.ADMIN) {
+        return null;
+    }
+    if (req.faculty?.role === FACULTY_ROLES.REGISTER || req.user?.facultyRole === FACULTY_ROLES.REGISTER) {
         return null;
     }
     return resolveFacultyIdByUserIdService(req.user!.id);

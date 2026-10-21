@@ -47,8 +47,8 @@ export interface StudentWithClassroom {
 // the whole roll; see docs/student-management-ui-plan.md.
 export type StudentListSort = "name" | "lrn" | "email" | "id";
 export type StudentListDir = "asc" | "desc";
-/** "active" hides soft-deleted learners; "inactive" shows only them; "all" shows both. */
-export type StudentListStatus = "active" | "inactive" | "all";
+/** "active" hides soft-deleted learners; "inactive" shows only them; "all" shows both; "enrolled" and "unenrolled" filter by active enrollment status. */
+export type StudentListStatus = "active" | "inactive" | "all" | "enrolled" | "unenrolled";
 
 export interface StudentListQuery {
     search?: string | undefined;
