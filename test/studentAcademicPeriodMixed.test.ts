@@ -165,5 +165,56 @@ describe("Mixed academic periods across school years (SF10 & Academic History)",
             // Remedial conduct has colspan="7" (recNq + 3 = 7)
             expect(html).toContain('<td colspan="7">');
         });
+
+        it("renders only the selected school year record when filtered and omits Page 2", () => {
+            const year1_3Q = {
+                classGradeLevel: 7,
+                classSection: "A",
+                schoolYear: "2024-2025",
+                adviserName: "Adviser One",
+                generalAverage: 88,
+                numQuarters: 3,
+                subjects: [
+                    {
+                        subjectName: "Filipino",
+                        subjectCode: "FIL",
+                        q1: 85,
+                        q2: 87,
+                        q3: 90,
+                        q4: null,
+                        finalRating: 87,
+                        remarks: "Passed"
+                    }
+                ]
+            };
+
+            const data = {
+                numQuarters: 4,
+                student: { lastname: "Dela Cruz", firstname: "Juan", suffix: null, middlename: "Santos" },
+                scholastic: {
+                    semester1: [year1_3Q],
+                    semester2: []
+                },
+                schoolInfo: { name: "Test School", schoolId: "123456", district: "District", region: "Region" },
+                certification: {
+                    studentName: "Juan Santos Dela Cruz",
+                    studentLrn: "123456789012",
+                    admission_to: 8,
+                    schoolName: "Test School",
+                    schoolId: "123456",
+                    date: "10/23/26",
+                    schoolPrincipal: "Principal Name",
+                    lastSchoolYear: "2024-2025"
+                },
+                signature: null
+            };
+
+            const html = HTMLRenderer("studentRecord.ejs", data);
+
+            expect(html).toContain("Adviser One");
+            expect(html).toContain("2024-2025");
+            expect(html).not.toContain("Adviser Two");
+            expect(html).not.toContain('<div class="page-break">');
+        });
     });
 });

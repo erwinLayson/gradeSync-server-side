@@ -593,7 +593,10 @@ export function determineRecordNumQuarters(
     return 3;
 }
 
-export async function StudentRecordPDFDetailsService(studentId: number) {
+export async function StudentRecordPDFDetailsService(
+    studentId: number,
+    options?: { enrollmentIds?: number[] }
+) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
 
@@ -605,7 +608,11 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
         // beyond it are excluded from final ratings and hidden in the PDF.
         const numQuarters = await getNumQuarters();
 
-        const studentEnrollmentRecord = await getAllEnrollmentRecordByStudentId(studentId, connection);
+        let studentEnrollmentRecord = await getAllEnrollmentRecordByStudentId(studentId, connection);
+        if (options?.enrollmentIds && options.enrollmentIds.length > 0) {
+            const selectedSet = new Set(options.enrollmentIds);
+            studentEnrollmentRecord = studentEnrollmentRecord.filter((e) => selectedSet.has(e.enrollmentId));
+        }
         const enrollmentIds = studentEnrollmentRecord.map((e) => e.enrollmentId);
 
         const recordRows = await studentRecordModel.getRecordsByEnrollmentIds(enrollmentIds);

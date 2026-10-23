@@ -88,5 +88,18 @@ describe("Enrollment Grade Level Requirement & Monitoring", () => {
         expect(match).toBeDefined();
         expect(match?.classGradeLevel).toBe(scenario.gradeLevel);
         expect(match?.classSection).toBe(scenario.section);
+
+        // Check enrollmentIds filtering option in StudentRecordPDFDetailsService
+        const filteredRecord = await StudentRecordPDFDetailsService(scenario.studentId, {
+            enrollmentIds: [scenario.enrollmentId]
+        });
+        expect(filteredRecord.academicRecord.semester1.length).toBe(1);
+        expect(filteredRecord.academicRecord.semester1[0]?.enrollmentId).toBe(scenario.enrollmentId);
+
+        const emptyFiltered = await StudentRecordPDFDetailsService(scenario.studentId, {
+            enrollmentIds: [99999999]
+        });
+        expect(emptyFiltered.academicRecord.semester1.length).toBe(0);
+        expect(emptyFiltered.academicRecord.semester2.length).toBe(0);
     });
 });

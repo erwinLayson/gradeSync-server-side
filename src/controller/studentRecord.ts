@@ -193,7 +193,23 @@ export async function getSubmissionSummaryController(req: Request, res: Response
 export async function studentRecordController(req: Request<{ id: string }>, res: Response, next: NextFunction) {
     try {
         const {id} = req.params;
-        const { student, academicRecord, numQuarters } = await StudentRecordPDFDetailsService(Number(id));
+        const rawEnrollmentIds = req.query.enrollmentIds;
+        let enrollmentIds: number[] | undefined;
+        if (typeof rawEnrollmentIds === "string") {
+            enrollmentIds = rawEnrollmentIds
+                .split(",")
+                .map((s) => Number(s.trim()))
+                .filter((n) => Number.isInteger(n) && n > 0);
+        } else if (Array.isArray(rawEnrollmentIds)) {
+            enrollmentIds = rawEnrollmentIds
+                .map((s) => Number(String(s).trim()))
+                .filter((n) => Number.isInteger(n) && n > 0);
+        }
+
+        const { student, academicRecord, numQuarters } = await StudentRecordPDFDetailsService(
+            Number(id),
+            enrollmentIds && enrollmentIds.length > 0 ? { enrollmentIds } : undefined
+        );
         const schoolInfo = await getSchoolInfoService();
         const signature = await getSchoolSignatureService();
 
@@ -212,7 +228,7 @@ export async function studentRecordController(req: Request<{ id: string }>, res:
             schoolId: schoolInfo?.schoolId,
             date: new Intl.DateTimeFormat("en-US", {month: "2-digit", day: "2-digit", year: "2-digit"}).format(new Date()),
             schoolPrincipal: schoolInfo?.principal,
-            lastSchoolYear: lastSchoolYearAttended?.schoolYear
+            lastSchoolYear: lastSchoolYearAttended?.schoolYear ?? ""
         }
 
         // =================== DATA SEND TO EJS FILE  TO RENDER STUDENT DATA ====================
