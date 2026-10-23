@@ -29,9 +29,9 @@ export interface AttendanceMatrixStudent {
     studentId: number;
     studentLrn: string;
     fullname: string;
-    firstname?: string;
+    firstname?: string | undefined;
     middlename?: string | null;
-    lastname?: string;
+    lastname?: string | undefined;
     suffix?: string | null;
 }
 

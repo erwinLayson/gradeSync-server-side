@@ -10,6 +10,7 @@ export interface ClassroomResponse {
 }
 
 export interface ClassroomFacultiesWithSubjectProps  {
+    classSubjectId: number;
     facultyId: number;
     unit: number,
     code: string;

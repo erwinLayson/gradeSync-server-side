@@ -7,7 +7,8 @@ import {Router, type RequestHandler} from 'express';import {
     setClassAdviserController,
     updateClassroomController,
     archiveClassroomController,
-    getMyAdvisedClassController
+    getMyAdvisedClassController,
+    getMyAdvisedClassHonorStudentsController
 } from '../controller/classrooms.js';
 
 import { getClassSubjectDetailsByIdController } from '../controller/class_subjects.js';
@@ -66,6 +67,7 @@ route.put('/classrooms/:id/adviser', adminOnly, setClassAdviserController);
 
 // ==================== TEACHER ONLY ====================
 route.get('/classrooms/my-advised-class', [ValidateToken, allowedRoles([ROLES.TEACHER]), allowedFacultyRoles([FACULTY_ROLES.TEACHER])], getMyAdvisedClassController);
+route.get('/classrooms/my-advised-class/honor-students', [ValidateToken, allowedRoles([ROLES.TEACHER]), allowedFacultyRoles([FACULTY_ROLES.TEACHER])], getMyAdvisedClassHonorStudentsController);
 
 // ==================== ADMIN + TEACHER ====================
 route.get('/classrooms/:id/adviser', adminFacultyWithStringId, getClassAdviserController);

@@ -10,7 +10,8 @@ import {
     setClassAdviserService,
     updateClassroomService,
     archiveClassroomService,
-    getMyAdvisedClassService
+    getMyAdvisedClassService,
+    getMyAdvisedClassHonorStudentsService
 } from "../service/classrooms.js";
 
 // Types constants
@@ -19,6 +20,8 @@ import { SuccessResponse } from "../helper/response.js";
 import Validate from "../helper/validate.js";
 import NormalizedData from "../helper/normalizedData.js";
 import { resolveFacultyIdByUserIdService } from "../service/studentRecord.js";
+import { getCurrentQuarter, getNumQuarters } from "../service/academicSettings.js";
+import { isValidQuarter } from "../helper/quarterValidation.js";
 
 // Controller Functions
 export async function CreateClassroomController(req: Request<{}, {}, Omit<ClassroomResponse, "id">>, res: Response, next: NextFunction) {
@@ -170,6 +173,46 @@ export async function getMyAdvisedClassController(req: Request, res: Response, n
         res.status(200).json(
             SuccessResponse({
                 message: "Advised class retrieved successfully",
+                data: result
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// get the honor roll of the class the logged-in faculty advises
+// GET /api/classrooms/my-advised-class/honor-students?quarter=1
+// Returns null when the faculty advises no class (feature stays adviser-only).
+// Every student whose average meets HONOR_STUDENT_PASSING_GRADE is included.
+export async function getMyAdvisedClassHonorStudentsController(req: Request, res: Response, next: NextFunction) {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            res.status(401).json({ success: false, message: "Unauthorized" });
+            return;
+        }
+
+        const quarterRaw = req.query.quarter;
+        let quarter = await getCurrentQuarter();
+        if (quarterRaw !== undefined && quarterRaw !== "") {
+            const parsedQuarter = Number(quarterRaw);
+            const numQuarters = await getNumQuarters();
+            if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
+                res.status(400).json({
+                    success: false,
+                    message: `quarter must be a number between 1 and ${numQuarters}`
+                });
+                return;
+            }
+            quarter = parsedQuarter;
+        }
+
+        const facultyId = await resolveFacultyIdByUserIdService(userId);
+        const result = await getMyAdvisedClassHonorStudentsService(facultyId, quarter);
+        res.status(200).json(
+            SuccessResponse({
+                message: "Advised class honor students retrieved successfully",
                 data: result
             })
         );

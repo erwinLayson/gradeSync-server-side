@@ -9,6 +9,9 @@ import type { PoolConnection } from "mysql2/promise";
 
 // Backend guard: only teaching faculty may be a class adviser (plan §6.2).
 import { assertOnlyTeachingFaculty } from "./faculties.js";
+// Reuse the gradebook computation so honor rankings use the same quarter grades
+// the adviser already sees in My Class > Grades.
+import { getGradeBookDetailsByClassSubjectIdService } from "./gradebook.js";
 
 
 // Create new classroom
@@ -188,6 +191,130 @@ export async function getMyAdvisedClassService(facultyId: number) {
         return {
             classroom,
             facultiesWithSubjects
+        };
+    } finally {
+        connection.release();
+    }
+}
+
+// One ranked student in the adviser's class honor roll.
+export interface AdviserHonorStudent {
+    rank: number;
+    enrollmentId: number;
+    studentId: number;
+    studentLrn: string;
+    fullname: string;
+    average: number;
+    gradedSubjects: number;
+}
+
+// Honor roll for the class a faculty advises, ranked by the average of every
+// subject's quarter grade. Returns null when the faculty advises no class, so
+// the feature stays restricted to actual class advisers.
+export interface AdviserHonorStudents {
+    classId: number;
+    classSection: string;
+    classGradeLevel: number;
+    quarter: number;
+    passingGrade: number;
+    students: AdviserHonorStudent[];
+}
+
+// Minimum average required to be included in the honor roll. Configurable so
+// schools can adjust the cutoff without a code change. Falls back to 85 when
+// the variable is absent (e.g. an older deployment environment).
+const DEFAULT_HONOR_PASSING_GRADE = 85;
+
+function getHonorPassingGrade(): number {
+    const raw = process.env.HONOR_STUDENT_PASSING_GRADE;
+    if (raw === undefined || raw.trim() === "") {
+        return DEFAULT_HONOR_PASSING_GRADE;
+    }
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+        throw new Error("HONOR_STUDENT_PASSING_GRADE must be a number between 0 and 100");
+    }
+    return value;
+}
+
+interface HonorAccumulator {
+    enrollmentId: number;
+    studentId: number;
+    studentLrn: string;
+    fullname: string;
+    gradeSum: number;
+    gradedSubjects: number;
+}
+
+export async function getMyAdvisedClassHonorStudentsService(
+    facultyId: number,
+    quarter: number,
+): Promise<AdviserHonorStudents | null> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const classroomModel = new ClassroomModel(connection);
+        const classId = await classroomModel.getClassIdByAdviser(facultyId);
+        if (classId === null) {
+            return null;
+        }
+
+        const classroom = await classroomModel.getClassroomById(classId);
+        if (!classroom) {
+            throw new NotFoundError("Classroom not found", 404);
+        }
+        const subjects = await classroomModel.getClassroomFacultiesWithSubject(classId);
+        const passingGrade = getHonorPassingGrade();
+
+        // Average every subject's quarter grade per student. Only subjects that
+        // actually produced a grade for that student count, so a partially
+        // graded quarter never drags an average down with zeroes.
+        const byEnrollment = new Map<number, HonorAccumulator>();
+        for (const subject of subjects) {
+            const details = await getGradeBookDetailsByClassSubjectIdService(subject.classSubjectId, quarter);
+            for (const row of details.student) {
+                if (row.quarterGrade === null || row.quarterGrade === undefined) continue;
+                const grade = Number(row.quarterGrade);
+                if (Number.isNaN(grade)) continue;
+
+                const existing = byEnrollment.get(row.enrollmentId);
+                if (existing) {
+                    existing.gradeSum += grade;
+                    existing.gradedSubjects += 1;
+                } else {
+                    byEnrollment.set(row.enrollmentId, {
+                        enrollmentId: row.enrollmentId,
+                        studentId: row.studentId,
+                        studentLrn: row.studentLrn,
+                        fullname: row.fullname,
+                        gradeSum: grade,
+                        gradedSubjects: 1,
+                    });
+                }
+            }
+        }
+
+        // Every student at or above the passing average is an honor student.
+        const students: AdviserHonorStudent[] = [...byEnrollment.values()]
+            .map((student) => ({
+                enrollmentId: student.enrollmentId,
+                studentId: student.studentId,
+                studentLrn: student.studentLrn,
+                fullname: student.fullname,
+                average: Math.round((student.gradeSum / student.gradedSubjects) * 100) / 100,
+                gradedSubjects: student.gradedSubjects,
+            }))
+            .filter((student) => student.average >= passingGrade)
+            .sort((a, b) => b.average - a.average || a.fullname.localeCompare(b.fullname))
+            .map((student, index) => ({ ...student, rank: index + 1 }));
+
+        return {
+            classId,
+            classSection: classroom.section,
+            classGradeLevel: classroom.gradeLevel,
+            quarter,
+            passingGrade,
+            students,
         };
     } finally {
         connection.release();
