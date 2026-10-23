@@ -158,7 +158,8 @@ export async function getStudentClassAttendanceService(userId: number, quarter?:
 }
 
 // Student prospectus: frozen-record-only view of the student's academic
-// history. No live activities or attendance — only the official snapshot grades.
+// history. Only completed school years are displayed; in-progress school
+// years are excluded.
 export async function getStudentProspectusService(userId: number) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
@@ -168,7 +169,7 @@ export async function getStudentProspectusService(userId: number) {
         if (studentId === null) {
             throw new NotFoundError("Student record not found", 404);
         }
-        return await getStudentAcademicHistoryService(studentId);
+        return await getStudentAcademicHistoryService(studentId, { completedOnly: true });
     } finally {
         connection.release();
     }
@@ -183,7 +184,11 @@ export async function getStudentProspectusService(userId: number) {
 // where they should see their own activities, scores, and attendance.
 // When skipFrozen is false (default) the frozen record takes priority —
 // used by the admin academic-history view and the student prospectus.
-export async function getStudentAcademicHistoryService(studentId: number, options?: { skipFrozen?: boolean }) {
+// When completedOnly is true, in-progress / unfinalized school years are excluded.
+export async function getStudentAcademicHistoryService(
+    studentId: number,
+    options?: { skipFrozen?: boolean; completedOnly?: boolean }
+) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
@@ -207,6 +212,16 @@ export async function getStudentAcademicHistoryService(studentId: number, option
 
         const classes = [];
         for (const enrollment of enrollments) {
+            // When completedOnly is true, skip school years that are still ongoing / in-progress.
+            if (options?.completedOnly) {
+                const isCompletedYear =
+                    enrollment.enrollmentStatus === "completed" ||
+                    enrollment.schoolYearStatus === "completed";
+                if (!isCompletedYear) {
+                    continue;
+                }
+            }
+
             // Frozen-first: a submitted academic record is the official, immutable
             // history. When one exists, render it exactly like the SF10 PDF — the
             // record's own section/grade/adviser snapshots and the frozen per-subject
@@ -279,6 +294,11 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     subjects.map((subject) => ({ finalGrades: subject.final }))
                 ).score;
 
+                // When completedOnly is requested, a record must have finalized grades.
+                if (options?.completedOnly && generalAverage === null) {
+                    continue;
+                }
+
                 classes.push({
                     enrollmentId: enrollment.enrollmentId,
                     classId: enrollment.classId,
@@ -291,6 +311,12 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     generalAverage,
                     numQuarters: recNq
                 });
+                continue;
+            }
+
+            // In-progress school year / live gradebook fallback:
+            // When completedOnly is true, skip live gradebook since this is an ongoing/unfinalized year.
+            if (options?.completedOnly) {
                 continue;
             }
 

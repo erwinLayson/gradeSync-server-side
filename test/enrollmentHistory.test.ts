@@ -74,6 +74,14 @@ describe("completed enrollment history (F-2)", () => {
         expect(entry?.section).toBe(scenario.section);
     });
 
+    it("does not display in-progress school years in the student prospectus", async () => {
+        scenario = await createScenario(connection);
+        // Scenario is ongoing (status = 'enrolled', school year 'ongoing') and not completed
+        const prospectus = await getStudentProspectusService(scenario.userId);
+        const entry = prospectus.classes.find((c) => c.enrollmentId === scenario?.enrollmentId);
+        expect(entry).toBeUndefined();
+    });
+
     it("does not treat a completed enrollment as an active enrollment", async () => {
         scenario = await createScenario(connection);
         await finalizeScenario(connection, scenario, { quarters: numQuarters });

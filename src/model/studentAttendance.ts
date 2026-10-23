@@ -3,12 +3,15 @@ import { InternalServerError } from "../middleware/errors.js";
 
 import type { StudentAttendanceProps, AttendanceRecord, AttendanceInput, AttendanceStatus } from "../constant/grade.js";
 
-// One roster row of the class-wide attendance matrix (a student in a column-grid row).
 export interface AttendanceRosterRow {
   enrollmentId: number;
   studentId: number;
   studentLrn: string;
   fullname: string;
+  firstname?: string;
+  middlename?: string | null;
+  lastname?: string;
+  suffix?: string | null;
 }
 
 // One cell of the class-wide attendance matrix (one student on one date).
@@ -165,7 +168,17 @@ export default class StudentAttendance {
           e.id AS enrollmentId,
           s.id AS studentId,
           s.lrn AS studentLrn,
-          CONCAT_WS(' ', s.firstname, s.middlename, s.lastname, s.suffix) AS fullname
+          s.firstname,
+          s.middlename,
+          s.lastname,
+          s.suffix,
+          CONCAT(
+            s.lastname,
+            ', ',
+            s.firstname,
+            IF(s.middlename IS NOT NULL AND s.middlename != '', CONCAT(' ', s.middlename), ''),
+            IF(s.suffix IS NOT NULL AND s.suffix != '', CONCAT(' ', s.suffix), '')
+          ) AS fullname
         FROM class_subjects cs
         JOIN enrollments e ON e.classId = cs.classId
         JOIN students s ON s.id = e.studentId

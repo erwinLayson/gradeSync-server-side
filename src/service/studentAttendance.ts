@@ -29,6 +29,10 @@ export interface AttendanceMatrixStudent {
     studentId: number;
     studentLrn: string;
     fullname: string;
+    firstname?: string;
+    middlename?: string | null;
+    lastname?: string;
+    suffix?: string | null;
 }
 
 // One cell of the class-wide attendance matrix: a student on a date.
@@ -327,6 +331,10 @@ export async function getAttendanceRangeService(
                 studentId: Number(student.studentId),
                 studentLrn: student.studentLrn,
                 fullname: student.fullname,
+                firstname: student.firstname,
+                middlename: student.middlename ?? null,
+                lastname: student.lastname,
+                suffix: student.suffix ?? null,
             })),
             dates: [...dates].sort(),
             records,

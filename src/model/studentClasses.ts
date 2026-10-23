@@ -11,6 +11,8 @@ export interface StudentEnrollmentRow {
     startYear: string;
     endYear: string;
     isActive?: number | boolean;
+    schoolYearStatus?: "ongoing" | "completed";
+    enrollmentStatus?: string;
 }
 
 export interface ClassWithAdviserRow {
@@ -60,7 +62,9 @@ export default class StudentClassesModel {
         try {
             const query = `
                 SELECT e.id AS enrollmentId, e.classId, e.schoolYearId,
-                       sy.startYear, sy.endYear, sy.isActive
+                       sy.startYear, sy.endYear, sy.isActive,
+                       sy.status AS schoolYearStatus,
+                       e.status AS enrollmentStatus
                 FROM enrollments e
                 JOIN schoolyear sy ON sy.id = e.schoolYearId
                 WHERE e.studentId = ? AND e.status IN ('enrolled', 'completed')
