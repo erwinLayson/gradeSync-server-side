@@ -117,7 +117,7 @@ describe("completed enrollment history (F-2)", () => {
         if (!entry) return;
 
         expect(Object.keys(entry).sort()).toEqual(
-            ["adviser", "classId", "enrollmentId", "generalAverage", "gradeLevel", "schoolYear", "schoolYearId", "section", "subjects"].sort()
+            ["adviser", "classId", "enrollmentId", "generalAverage", "gradeLevel", "numQuarters", "schoolYear", "schoolYearId", "section", "subjects"].sort()
         );
     });
 });

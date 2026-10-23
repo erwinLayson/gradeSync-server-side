@@ -229,6 +229,46 @@ export default class StudentRecord {
         }
     }
 
+    async getAllSubmissionsByRecordIds(recordIds: number[]): Promise<QuarterSubmissionRow[]> {
+        if (recordIds.length === 0) {
+            return [];
+        }
+        try {
+            const placeholders = recordIds.map(() => "?").join(", ");
+            const query = `
+                SELECT id, recordId, quarter, status, submittedAt, submittedBy
+                FROM student_academic_record_quarters
+                WHERE recordId IN (${placeholders})
+            `;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, recordIds);
+            return rows as QuarterSubmissionRow[];
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch all quarter submissions", 500, err);
+        }
+    }
+
+    async getSchoolYearsWithQuarter4Data(schoolYearIds: number[]): Promise<Set<number>> {
+        if (schoolYearIds.length === 0) {
+            return new Set<number>();
+        }
+        try {
+            const placeholders = schoolYearIds.map(() => "?").join(", ");
+            const query = `
+                SELECT DISTINCT e.schoolYearId
+                FROM enrollments e
+                JOIN student_academic_records sar ON sar.enrollmentId = e.id
+                LEFT JOIN student_academic_record_quarters sarq ON sarq.recordId = sar.id AND sarq.quarter = 4 AND sarq.status = 'submitted'
+                LEFT JOIN student_academic_record_subjects sars ON sars.recordId = sar.id AND sars.q4 IS NOT NULL
+                WHERE e.schoolYearId IN (${placeholders})
+                  AND (sarq.id IS NOT NULL OR sars.id IS NOT NULL)
+            `;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, schoolYearIds);
+            return new Set<number>(rows.map((r: any) => Number(r.schoolYearId)));
+        } catch (err) {
+            throw new InternalServerError("Failed to check quarter 4 data for school years", 500, err);
+        }
+    }
+
     // Idempotent submit: inserting again re-freezes (bumps submittedAt) — E4.
     async upsertQuarterSubmission(recordId: number, quarter: number, submittedBy: number | null): Promise<void> {
         try {

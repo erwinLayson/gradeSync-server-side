@@ -29,6 +29,7 @@ import type {
     ClassRecordSubject,
     QuarterSubmissionRow,
     StudentAcademicRecordRow,
+    StudentAcademicRecordSubjectRow,
     StudentClassRecordRow,
     StudentRecordPdfEntry,
     StudentRecordPdfSubject,
@@ -557,6 +558,41 @@ export async function assertQuarterCompleteService(quarter: number, existingConn
 
 // ==================== PDF details ====================
 
+export function determineRecordNumQuarters(
+    enrollment: { schoolYearId?: number; isActive?: boolean | number },
+    recordSubRows: StudentAcademicRecordSubjectRow[],
+    recordSubmissions: QuarterSubmissionRow[],
+    schoolYearsWithQ4: Set<number>,
+    currentNumQuarters: number
+): number {
+    // 1. If any subject row in this record has a recorded Q4 grade, it's 4 quarters.
+    const hasQ4Grade = recordSubRows.some((row) => row.q4 !== null && row.q4 !== undefined && !Number.isNaN(Number(row.q4)));
+    if (hasQ4Grade) {
+        return 4;
+    }
+
+    // 2. If Q4 submission exists and was submitted for this record, it's 4 quarters.
+    const hasQ4Submission = recordSubmissions.some((s) => s.quarter === 4 && s.status === "submitted");
+    if (hasQ4Submission) {
+        return 4;
+    }
+
+    // 3. If this enrollment is for the currently active school year, use the configured academic setting.
+    const isActive = Boolean(enrollment.isActive);
+    if (isActive) {
+        return currentNumQuarters === 3 ? 3 : 4;
+    }
+
+    // 4. For historical/completed school years:
+    // If any record in that school year had Q4 data, it's a 4-quarter year.
+    if (enrollment.schoolYearId && schoolYearsWithQ4.has(enrollment.schoolYearId)) {
+        return 4;
+    }
+
+    // Otherwise, this historical year only had 3 quarters.
+    return 3;
+}
+
 export async function StudentRecordPDFDetailsService(studentId: number) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
@@ -575,36 +611,60 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
         const recordRows = await studentRecordModel.getRecordsByEnrollmentIds(enrollmentIds);
         const recordIds = recordRows.map((r) => r.id);
         const subjectRows = await studentRecordModel.getSubjectRowsByRecordIds(recordIds);
-
-        const subjectsByRecord = new Map<number, StudentRecordPdfSubject[]>();
-        for (const row of subjectRows) {
-            const finalRating = calculateFinalGrade({
-                q1: row.q1 != null ? String(row.q1) : null,
-                q2: row.q2 != null ? String(row.q2) : null,
-                q3: row.q3 != null ? String(row.q3) : null,
-                q4: row.q4 != null ? String(row.q4) : null,
-            }, numQuarters);
-            const remarks = finalRating === null ? "" : getRemarks(finalRating);
-
-            const list = subjectsByRecord.get(row.recordId) ?? [];
-            list.push({
-                subjectName: row.subjectName,
-                subjectCode: row.subjectCode,
-                q1: row.q1 === null ? null : Number(row.q1),
-                q2: row.q2 === null ? null : Number(row.q2),
-                q3: row.q3 === null ? null : Number(row.q3),
-                q4: row.q4 === null ? null : Number(row.q4),
-                finalRating,
-                remarks
-            });
-            subjectsByRecord.set(row.recordId, list);
-        }
+        const allSubmissions = await studentRecordModel.getAllSubmissionsByRecordIds(recordIds);
+        const schoolYearIds = studentEnrollmentRecord
+            .map((e) => e.schoolYearId)
+            .filter((id): id is number => typeof id === "number");
+        const schoolYearsWithQ4 = await studentRecordModel.getSchoolYearsWithQuarter4Data(schoolYearIds);
 
         const recordByEnrollment = new Map(recordRows.map((r) => [r.enrollmentId, r]));
+        const subjectRowsByRecordId = new Map<number, StudentAcademicRecordSubjectRow[]>();
+        for (const row of subjectRows) {
+            const list = subjectRowsByRecordId.get(row.recordId) ?? [];
+            list.push(row);
+            subjectRowsByRecordId.set(row.recordId, list);
+        }
+
+        const submissionsByRecordId = new Map<number, QuarterSubmissionRow[]>();
+        for (const s of allSubmissions) {
+            const list = submissionsByRecordId.get(s.recordId) ?? [];
+            list.push(s);
+            submissionsByRecordId.set(s.recordId, list);
+        }
 
         const academicRecord: StudentRecordPdfEntry[] = studentEnrollmentRecord.map((enrollment) => {
             const record = recordByEnrollment.get(enrollment.enrollmentId);
-            const subjects = record ? (subjectsByRecord.get(record.id) ?? []) : [];
+            const recordSubRows = record ? (subjectRowsByRecordId.get(record.id) ?? []) : [];
+            const recordSubmissions = record ? (submissionsByRecordId.get(record.id) ?? []) : [];
+            const recordNq = determineRecordNumQuarters(
+                enrollment,
+                recordSubRows,
+                recordSubmissions,
+                schoolYearsWithQ4,
+                numQuarters
+            );
+
+            const subjects: StudentRecordPdfSubject[] = recordSubRows.map((row) => {
+                const finalRating = calculateFinalGrade({
+                    q1: row.q1 != null ? String(row.q1) : null,
+                    q2: row.q2 != null ? String(row.q2) : null,
+                    q3: row.q3 != null ? String(row.q3) : null,
+                    q4: row.q4 != null ? String(row.q4) : null,
+                }, recordNq);
+                const remarks = finalRating === null ? "" : getRemarks(finalRating);
+
+                return {
+                    subjectName: row.subjectName,
+                    subjectCode: row.subjectCode,
+                    q1: row.q1 === null ? null : Number(row.q1),
+                    q2: row.q2 === null ? null : Number(row.q2),
+                    q3: row.q3 === null ? null : Number(row.q3),
+                    q4: row.q4 === null ? null : Number(row.q4),
+                    finalRating,
+                    remarks
+                };
+            });
+
             // Same helper as the SF9 report card, so an ungraded year is null
             // (rendered blank by the template) instead of a misleading 0.
             const generalAverage = computeGeneralAverage(
@@ -619,7 +679,8 @@ export async function StudentRecordPDFDetailsService(studentId: number) {
                 classGradeLevel: record?.classGradeLevel ?? enrollment.gradeLevel ?? null,
                 adviserName: record?.adviserName ?? null,
                 subjects,
-                generalAverage
+                generalAverage,
+                numQuarters: recordNq
             };
         });
 

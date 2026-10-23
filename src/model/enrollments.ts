@@ -120,12 +120,22 @@ export default class Enrollments {
         }
     }
 
-    async getStudentEnrollmentRecordByStudentId(studentId: number): Promise<{ enrollmentId: number; schoolYear: string; classId: number; gradeLevel?: number; section?: string }[]> {
+    async getStudentEnrollmentRecordByStudentId(studentId: number): Promise<{
+        enrollmentId: number;
+        schoolYearId?: number;
+        isActive?: number | boolean;
+        schoolYear: string;
+        classId: number;
+        gradeLevel?: number;
+        section?: string;
+    }[]> {
         try {
             const query = `
                 SELECT 
                 e.id AS enrollmentId,
                 e.classId,
+                e.schoolYearId,
+                sy.isActive,
                 c.gradeLevel,
                 c.section,
                 CONCAT(sy.startYear, "-" , sy.endYear) AS schoolYear
@@ -145,7 +155,15 @@ export default class Enrollments {
 
             const [row] = await this.connection.execute<RowDataPacket[]>(query, [studentId]);
 
-            return row as { enrollmentId: number; schoolYear: string; classId: number; gradeLevel?: number; section?: string }[];
+            return row as {
+                enrollmentId: number;
+                schoolYearId?: number;
+                isActive?: number | boolean;
+                schoolYear: string;
+                classId: number;
+                gradeLevel?: number;
+                section?: string;
+            }[];
         }catch(err){
             throw new InternalServerError("Internal Server Error", 500, err);
         }

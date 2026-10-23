@@ -25,6 +25,7 @@ import { computeAttendanceRate } from "../helper/attendanceRate.js";
 // Error handling
 import { NotFoundError } from "../middleware/errors.js";
 import { formatDate } from "../helper/formatDate.js";
+import { determineRecordNumQuarters } from "./studentRecord.js";
 
 import type { GradeWeights } from "../constant/grade.js";
 import type { StudentScoreProps } from "../constant/grade.js";
@@ -197,9 +198,13 @@ export async function getStudentAcademicHistoryService(studentId: number, option
         const enrollments = await model.getEnrollmentsByStudentId(studentId);
 
         const studentRecordModel = new StudentRecordModel(connection);
-        // Configured grading periods (3 or 4), resolved once and reused by both
-        // branches so frozen and live history trim quarters exactly like SF9/SF10.
-        const numQuarters = await getNumQuarters();
+        // Configured grading periods (3 or 4) for the active school year
+        const currentNumQuarters = await getNumQuarters();
+        const schoolYearIds = enrollments
+            .map((e) => e.schoolYearId)
+            .filter((id): id is number => typeof id === "number");
+        const schoolYearsWithQ4 = await studentRecordModel.getSchoolYearsWithQuarter4Data(schoolYearIds);
+
         const classes = [];
         for (const enrollment of enrollments) {
             // Frozen-first: a submitted academic record is the official, immutable
@@ -212,6 +217,14 @@ export async function getStudentAcademicHistoryService(studentId: number, option
             const frozenRecord = options?.skipFrozen ? null : frozenRecords[0] ?? null;
             if (frozenRecord) {
                 const subjectRows = await studentRecordModel.getSubjectRowsByRecordIds([frozenRecord.id]);
+                const submissions = await studentRecordModel.getAllSubmissionsByRecordIds([frozenRecord.id]);
+                const recNq = determineRecordNumQuarters(
+                    enrollment,
+                    subjectRows,
+                    submissions,
+                    schoolYearsWithQ4,
+                    currentNumQuarters
+                );
 
                 // Frozen component grades (composite subjects), keyed by subject row.
                 const componentRows = await studentRecordModel.getComponentRowsByRecordIds([frozenRecord.id]);
@@ -224,7 +237,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
 
                 // The frozen quarter grades are reported exactly as stored (2-dp) —
                 // any whole-number display belongs to the presentation layer.
-                // Quarters beyond the configured grading periods are trimmed, and the
+                // Quarters beyond this record's grading periods are trimmed, and the
                 // final rating + general average come from the shared helpers, so this
                 // view is numerically identical to the SF9/SF10 for the same record.
                 // Frozen rows have no live gradebook data, so
@@ -233,7 +246,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     const storedQuarters: (number | null)[] = [row.q1, row.q2, row.q3, row.q4].map((q) =>
                         q === null || q === undefined ? null : Number(q)
                     );
-                    const quarters = storedQuarters.slice(0, numQuarters);
+                    const quarters = storedQuarters.slice(0, recNq);
                     const final = calculateFinalGrade(
                         {
                             q1: toGradeString(storedQuarters[0]),
@@ -241,7 +254,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                             q3: toGradeString(storedQuarters[2]),
                             q4: toGradeString(storedQuarters[3])
                         },
-                        numQuarters
+                        recNq
                     );
                     return {
                         classSubjectId: null,
@@ -257,7 +270,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                         attendance: [],
                         componentBreakdown: buildFrozenComponentBreakdown(
                             componentsByRowId.get(row.id) ?? [],
-                            numQuarters
+                            recNq
                         )
                     };
                 });
@@ -275,10 +288,19 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     schoolYear: `${enrollment.startYear}-${enrollment.endYear}`,
                     adviser: frozenRecord.adviserName,
                     subjects,
-                    generalAverage
+                    generalAverage,
+                    numQuarters: recNq
                 });
                 continue;
             }
+
+            const recNq = determineRecordNumQuarters(
+                enrollment,
+                [],
+                [],
+                schoolYearsWithQ4,
+                currentNumQuarters
+            );
 
             const classroom = await model.getClassWithAdviser(enrollment.classId);
             if (classroom === null) {
@@ -302,7 +324,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                 );
 
                 // Attendance summary + records grouped per quarter.
-                const attendanceByQuarter = getQuarterArray(numQuarters).map((quarter) => {
+                const attendanceByQuarter = getQuarterArray(recNq).map((quarter) => {
                     const records = attendanceHistory.records.filter((record) => record.quarter === quarter);
                     const presentDays = records.filter((record) => record.status === "present").length;
                     const totalDays = records.length;
@@ -330,7 +352,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                     dateGiven: string | null;
                     score: number | null;
                 }[] = [];
-                for (let quarter = 1; quarter <= numQuarters; quarter++) {
+                for (let quarter = 1; quarter <= recNq; quarter++) {
                     // Filter attendance to THIS quarter only — the gradebook
                     // must not bleed attendance from other quarters into this one.
                     const quarterRecords = attendanceHistory.records.filter((r) => r.quarter === quarter);
@@ -405,7 +427,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                         q3: toGradeString(quarters[2] ?? null),
                         q4: toGradeString(quarters[3] ?? null)
                     },
-                    numQuarters
+                    recNq
                 );
 
                 // Build component grades breakdown for composite subjects. Each
@@ -428,7 +450,7 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                                     q3: toGradeString(grades[2] ?? null),
                                     q4: toGradeString(grades[3] ?? null)
                                 },
-                                numQuarters
+                                recNq
                             )
                         };
                     })
@@ -463,7 +485,8 @@ export async function getStudentAcademicHistoryService(studentId: number, option
                 schoolYear: `${enrollment.startYear}–${enrollment.endYear}`,
                 adviser: classroom.adviserFullname,
                 subjects,
-                generalAverage
+                generalAverage,
+                numQuarters: recNq
             });
         }
 

@@ -49,7 +49,8 @@ export interface StudentRecordPdfEntry {
     subjects: StudentRecordPdfSubject[];
     // null when the year has no final ratings at all (computeGeneralAverage) —
     // the template renders that as a blank cell, never as a 0.
-    generalAverage: number | null
+    generalAverage: number | null;
+    numQuarters?: number;
 }
 
 export type QuarterSubmissionStatus = "pending" | "submitted";

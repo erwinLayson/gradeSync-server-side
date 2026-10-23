@@ -10,6 +10,7 @@ export interface StudentEnrollmentRow {
     schoolYearId: number;
     startYear: string;
     endYear: string;
+    isActive?: number | boolean;
 }
 
 export interface ClassWithAdviserRow {
@@ -59,7 +60,7 @@ export default class StudentClassesModel {
         try {
             const query = `
                 SELECT e.id AS enrollmentId, e.classId, e.schoolYearId,
-                       sy.startYear, sy.endYear
+                       sy.startYear, sy.endYear, sy.isActive
                 FROM enrollments e
                 JOIN schoolyear sy ON sy.id = e.schoolYearId
                 WHERE e.studentId = ? AND e.status IN ('enrolled', 'completed')

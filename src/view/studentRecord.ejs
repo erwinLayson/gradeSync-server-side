@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Permanent Record</title>
-    <% // Respect the school's configured number of grading periods (3 or 4).
-       const nq = Number(numQuarters) === 3 ? 3 : 4; %>
+    <% // Respect the school's configured number of grading periods (3 or 4) as fallback.
+       const defaultNq = Number(numQuarters) === 3 ? 3 : 4; %>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 </head>
 <style>
@@ -228,6 +228,7 @@
         <div>
             <% if(scholastic.semester1.length > 0) { %>
                 <% scholastic.semester1.forEach((record, index) => { %>
+                    <% const recNq = Number(record.numQuarters) === 3 ? 3 : (Number(record.numQuarters) === 4 ? 4 : defaultNq); %>
                     <div class="flex text-xxs gap-5 border px-2 <%= index === 1 ? 'mt-2' : '' %>">
                         <div class="flex gap-2">
                             <span>School: </span>
@@ -280,7 +281,7 @@
                                         <span class="font-semibold"><%= record.schoolYear %></span>
                                     </div>
                                 </th>
-                                <th colspan="<%= nq > 3 ? 3 : 2 %>">
+                                <th colspan="<%= recNq > 3 ? 3 : 2 %>">
                                     <div class="grid">
                                         <span class="text-[8px]">Name of Adviser/Faculty:</span>
                                         <span class="font-semibold"><%= record.adviserName %></span>
@@ -302,7 +303,7 @@
                                 <td colspan="2" rowspan="2" class="text-center font-semibold">
                                     LEARNNG AREAS
                                 </td>
-                                <td colspan="<%= nq %>" class="text-center">
+                                <td colspan="<%= recNq %>" class="text-center">
                                     Quarter Rating
                                 </td>
                                 <td class="text-center" rowspan="2">
@@ -314,7 +315,7 @@
                             </tr>
 
                             <tr>
-                                <% for (let q = 1; q <= nq; q++) { %>
+                                <% for (let q = 1; q <= recNq; q++) { %>
                                     <td class="text-center"><%= q %></td>
                                 <% } %>
                             </tr>
@@ -324,7 +325,7 @@
                             <% record.subjects.forEach(sub => { %>
                                 <tr>
                                     <td colspan="2"><%= sub.subjectName %></td>
-                                    <% for (let q = 1; q <= nq; q++) { %>
+                                    <% for (let q = 1; q <= recNq; q++) { %>
                                         <td class="text-center"><%= sub['q' + q] %></td>
                                     <% } %>
                                     <td class="text-center"><%= sub.finalRating %></td>
@@ -336,20 +337,20 @@
                                 <td colspan="2">
                                     General Average
                                 </td>
-                                <td colspan="<%= nq %>"></td>
+                                <td colspan="<%= recNq %>"></td>
                                 <td class="text-center"><%= record.generalAverage === null ? "" : record.generalAverage %></td>
                                 <td class="text-center">Promoted</td>
                             </tr>
 
                             <!-- End of subject details -->
                             <tr class="remedial-classes-tr">
-                                <td class="bg-gray-300" colspan="<%= nq + 4 %>"></td>
+                                <td class="bg-gray-300" colspan="<%= recNq + 4 %>"></td>
                             </tr>
                             <tr>
                                 <td class="text-center">
                                     Remedial Classess
                                 </td>
-                                <td colspan="<%= nq + 3 %>">
+                                <td colspan="<%= recNq + 3 %>">
                                     <div class="grid grid-cols-2">
                                         <span>Conducted from (mm/dd/yyyy)</span>
                                         <span>to (mm/dd/yyyy)</span>
@@ -374,7 +375,7 @@
                                 <td colspan="2" class="text-center">
                                     Recomputed Final Rating
                                 </td>
-                                <td colspan="<%= nq >= 4 ? 2 : 1 %>" class="text-center">
+                                <td colspan="<%= recNq >= 4 ? 2 : 1 %>" class="text-center">
                                     Remarkss
                                 </td>
                             </tr>
@@ -382,14 +383,14 @@
                             <tr class="remedial-classes-tr">
                                 <td class="text-center"></td>
                                 <td class="text-center"></td>
-                                <td class="text-center" colspan="<%= nq >= 4 ? 2 : 1 %>"></td>
+                                <td class="text-center" colspan="<%= recNq >= 4 ? 2 : 1 %>"></td>
                                 <td class="text-center" colspan="2"></td>
                                 <td class="text-center" colspan="2"></td>
                             </tr>
                             <tr class="remedial-classes-tr">
                                 <td class="text-center"></td>
                                 <td class="text-center"></td>
-                                <td class="text-center" colspan="<%= nq >= 4 ? 2 : 1 %>"></td>
+                                <td class="text-center" colspan="<%= recNq >= 4 ? 2 : 1 %>"></td>
                                 <td class="text-center" colspan="2"></td>
                                 <td class="text-center" colspan="2"></td>
                             </tr>
@@ -457,6 +458,7 @@
             <div class="page-break">
                 <% if(scholastic.semester2.length > 0) { %>
                     <% scholastic.semester2.forEach((record, index) => { %>
+                        <% const recNq = Number(record.numQuarters) === 3 ? 3 : (Number(record.numQuarters) === 4 ? 4 : defaultNq); %>
                         <div class="text-xxs flex gap-5 border px-2 <%= index === 1 ? 'mt-2' : '' %>">
                             <div class="flex gap-2">
                                 <span>School: </span>
@@ -509,7 +511,7 @@
                                             <span class="font-semibold"><%= record.schoolYear %></span>
                                         </div>
                                     </th>
-                                    <th colspan="3">
+                                    <th colspan="<%= recNq > 3 ? 3 : 2 %>">
                                         <div class="grid">
                                             <span class="text-[8px]">Name of Adviser/Faculty:</span>
                                             <span class="font-semibold"><%= record.adviserName %></span>
@@ -531,7 +533,7 @@
                                     <td colspan="2" rowspan="2" class="text-center font-semibold">
                                         LEARNNG AREAS
                                     </td>
-                                    <td colspan="<%= nq %>" class="text-center">
+                                    <td colspan="<%= recNq %>" class="text-center">
                                         Quarter Rating
                                     </td>
                                     <td class="text-center" rowspan="2">
@@ -543,7 +545,7 @@
                                 </tr>
 
                                 <tr>
-                                    <% for (let q = 1; q <= nq; q++) { %>
+                                    <% for (let q = 1; q <= recNq; q++) { %>
                                         <td class="text-center"><%= q %></td>
                                     <% } %>
                                 </tr>
@@ -553,7 +555,7 @@
                                 <% record.subjects.forEach(sub => { %>
                                     <tr>
                                         <td colspan="2"><%= sub.subjectName %></td>
-                                        <% for (let q = 1; q <= nq; q++) { %>
+                                        <% for (let q = 1; q <= recNq; q++) { %>
                                             <td class="text-center"><%= sub['q' + q] %></td>
                                         <% } %>
                                         <td class="text-center"><%= sub.finalRating %></td>
@@ -561,15 +563,24 @@
                                     </tr>
                                 <% }) %>
 
+                                <tr>
+                                    <td colspan="2">
+                                        General Average
+                                    </td>
+                                    <td colspan="<%= recNq %>"></td>
+                                    <td class="text-center"><%= record.generalAverage === null ? "" : record.generalAverage %></td>
+                                    <td class="text-center">Promoted</td>
+                                </tr>
+
                                 <!-- End of subject details -->
                                 <tr class="remedial-classes-tr">
-                                    <td class="bg-gray-300" colspan="<%= nq + 4 %>"></td>
+                                    <td class="bg-gray-300" colspan="<%= recNq + 4 %>"></td>
                                 </tr>
                                 <tr>
                                     <td class="text-center">
                                         Remedial Classess
                                     </td>
-                                    <td colspan="<%= nq + 3 %>">
+                                    <td colspan="<%= recNq + 3 %>">
                                         <div class="grid grid-cols-2">
                                             <span>Conducted from (mm/dd/yyyy)</span>
                                             <span>to (mm/dd/yyyy)</span>
@@ -594,7 +605,7 @@
                                     <td colspan="2" class="text-center">
                                         Recomputed Final Rating
                                     </td>
-                                    <td colspan="2" class="text-center">
+                                    <td colspan="<%= recNq >= 4 ? 2 : 1 %>" class="text-center">
                                         Remarks
                                     </td>
                                 </tr>
@@ -602,14 +613,14 @@
                                 <tr class="remedial-classes-tr">
                                     <td class="text-center"></td>
                                     <td class="text-center"></td>
-                                    <td class="text-center" colspan="<%= nq >= 4 ? 2 : 1 %>"></td>
+                                    <td class="text-center" colspan="<%= recNq >= 4 ? 2 : 1 %>"></td>
                                     <td class="text-center" colspan="2"></td>
                                     <td class="text-center" colspan="2"></td>
                                 </tr>
                                 <tr class="remedial-classes-tr">
                                     <td class="text-center"></td>
                                     <td class="text-center"></td>
-                                    <td class="text-center" colspan="<%= nq >= 4 ? 2 : 1 %>"></td>
+                                    <td class="text-center" colspan="<%= recNq >= 4 ? 2 : 1 %>"></td>
                                     <td class="text-center" colspan="2"></td>
                                     <td class="text-center" colspan="2"></td>
                                 </tr>
