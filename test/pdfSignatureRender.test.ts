@@ -11,6 +11,7 @@ import { HTMLRenderer } from "../src/helper/HTMLRenderer.js";
  */
 
 const SIGNATURE_DATA_URL = "data:image/png;base64,SIGNATURE_SENTINEL";
+const LOGO_DATA_URL = "data:image/png;base64,LOGO_SENTINEL";
 
 function countSignatureImages(html: string): number {
     return html.split('class="school-head-signature-image"').length - 1;
@@ -44,7 +45,7 @@ function sf10Data(signature: string | null) {
     };
 }
 
-function sf9Data(signature: string | null) {
+function sf9Data(signature: string | null, logo: string | null = null) {
     return {
         numQuarters: 4,
         student: {
@@ -69,6 +70,7 @@ function sf9Data(signature: string | null) {
         generalAverages: { score: 90, remarks: "Passed" },
         attendance: [],
         signature,
+        logo,
     };
 }
 
@@ -108,5 +110,12 @@ describe("PDF school-head signature rendering", () => {
         expect(html.match(/class="[^"]*school-head-signature-area"/g)?.length).toBe(3);
         expect(html).not.toContain("SIGNATURE_SENTINEL");
         expect(html).not.toContain('src="data:image');
+    });
+
+    it("renders the uploaded school logo in the SF9 header", () => {
+        const html = HTMLRenderer("studentCard.ejs", sf9Data(null, LOGO_DATA_URL));
+
+        expect(html).toContain(`src="${LOGO_DATA_URL}"`);
+        expect(html).toContain('alt="School logo"');
     });
 });

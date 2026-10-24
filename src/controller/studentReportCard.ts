@@ -5,6 +5,7 @@ import { pdfFormatter } from "../helper/pdfFormater.js";
 // Service functions 
 import {getStudentReportCardService} from "../service/studentsReportCard.js";
 import { getSchoolSignatureService } from "../service/schoolSignature.js";
+import { getSchoolLogoService } from "../service/schoolLogo.js";
 
 // Ownership authorization (admin/developer any; faculty only their advised class)
 import { assertCanAccessEnrollment } from "../service/authorization.js";
@@ -24,10 +25,13 @@ export async function studentReportCardController(req: Request<{enrollmentId: st
         await assertCanAccessEnrollment(req.user!, enrollmentId);
 
         const {students, schoolInfo, subjects, generalAverages, attendance, numQuarters} = await getStudentReportCardService(enrollmentId)
-        const signature = await getSchoolSignatureService()
+        const [signature, logo] = await Promise.all([
+            getSchoolSignatureService(),
+            getSchoolLogoService(),
+        ])
 
         console.log(attendance)
-        const html = HTMLRenderer("studentCard.ejs", {student: students, schoolInfo, subjects, generalAverages, attendance, signature: signature?.dataUrl ?? null, numQuarters});
+        const html = HTMLRenderer("studentCard.ejs", {student: students, schoolInfo, subjects, generalAverages, attendance, signature: signature?.dataUrl ?? null, logo: logo?.dataUrl ?? null, numQuarters});
         const pdfFormat = {
             width: '8.5in',
             height: '13in',
