@@ -2,7 +2,7 @@ export interface Subject {
     id: number;
     name: string;
     code : string;
-    unit: number;
+    unit: number | null;
     hasComponents?: boolean;
 }
 

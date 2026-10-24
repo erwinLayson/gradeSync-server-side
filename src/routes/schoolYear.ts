@@ -13,11 +13,18 @@ const router: Router = Router();
 
 const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
 const adminOnlyWithId: RequestHandler<{id: number}>[] = [ValidateToken, allowedRoles([ROLES.ADMIN])];
-// Register picks the enrollment school year from the list. Creating and
-// activating a school year stay Admin-only (docs/register-role-implementation-plan.md §6.2).
+// Creating a school year is authorized for Admin and Register staff.
+const adminRegister: RequestHandler[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN, ROLES.TEACHER]),
+    allowedFacultyRoles([FACULTY_ROLES.REGISTER], { allowAdmin: true }),
+];
+
+// Register picks the enrollment school year from the list. Activating a school year
+// stays Admin-only.
 //
 // After the migration there is no user-level `register` role, so the school-year
-// read path for register staff is authorized through the authenticated user's
+// paths for register staff are authorized through the authenticated user's
 // verified faculty record (`faculties.role === "register"`).
 const adminFacultyRegister: RequestHandler[] = [
     ValidateToken,
@@ -25,8 +32,10 @@ const adminFacultyRegister: RequestHandler[] = [
     allowedFacultyRoles([FACULTY_ROLES.TEACHER, FACULTY_ROLES.REGISTER], { allowAdmin: true }),
 ];
 
+// ==================== ADMIN + REGISTER ====================
+router.post("/schoolYear", adminRegister, createSchoolYearController);
+
 // ==================== ADMIN ONLY ====================
-router.post("/schoolYear", adminOnly, createSchoolYearController);
 router.patch("/schoolYear/:id/activate", adminOnlyWithId, activateSchoolYearController);
 // Officially complete (or reopen) a school year — the gate that unlocks faculty
 // role changes (docs/faculty-role-implementation-plan.md §7).

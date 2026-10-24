@@ -17,20 +17,61 @@ import {
 
 // Types constants
 import type { Subject } from "../constant/subjects.js";
+import type { ComponentCreateProps } from "../constant/subjectComponents.js";
 import { SuccessResponse } from "../helper/response.js";
 import Validate from "../helper/validate.js";
 import { BadRequestError } from "../middleware/errors.js";
 import NormalizedData from "../helper/normalizedData.js";
 
+// Units are optional for subjects that don't carry credit units.
+function normalizeUnit(unit: unknown): number | null {
+    if (unit === null || unit === undefined || String(unit).trim() === "") {
+        return null;
+    }
+
+    const value = Number(unit);
+    if (!Number.isFinite(value)) {
+        throw new BadRequestError("Invalid unit");
+    }
+    return value;
+}
+
+// Sub-components are optional. When provided they must be complete enough to
+// insert (name, code, numeric weight).
+function normalizeComponents(value: unknown): ComponentCreateProps[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value.map((component) => {
+        const raw = component as Partial<ComponentCreateProps> | null;
+        const name = String(raw?.name ?? "").trim();
+        const code = String(raw?.code ?? "").trim();
+        const weight = Number(raw?.weight);
+
+        if (!name || !code || !Number.isFinite(weight)) {
+            throw new BadRequestError("Invalid component");
+        }
+
+        return { name, code, weight };
+    });
+}
+
 // create a new subject controller
-export async function CreateSubjectController(req: Request<{}, {}, Omit<Subject, "id">>, res: Response, next: NextFunction) {
-    const {name, code, unit} = req.body;
+export async function CreateSubjectController(req: Request<{}, {}, Omit<Subject, "id"> & { components?: unknown }>, res: Response, next: NextFunction) {
+    const {name, code, unit, hasComponents, components} = req.body;
     try {
-        const subject = {name: NormalizedData(name, true), code, unit};
+        const subject = {
+            name: NormalizedData(name, true),
+            code,
+            unit: normalizeUnit(unit),
+            hasComponents: Boolean(hasComponents),
+        };
 
-        Validate(subject);
+        // Name and code are required; unit and sub-components are optional.
+        Validate({ name: subject.name, code: subject.code });
 
-        await createSubjectService(subject);
+        await createSubjectService(subject, normalizeComponents(components));
         res.status(201).json(
             SuccessResponse(
                 {
@@ -45,15 +86,15 @@ export async function CreateSubjectController(req: Request<{}, {}, Omit<Subject,
 
 // update subject (name, code, unit)
 // PUT /api/subjects/:id
-// Body: { name: string, code: string, unit: number }
-export async function updateSubjectController(req: Request<{id: number}, {}, { name: string; code: string; unit: string | number }>, res: Response, next: NextFunction) {
+// Body: { name: string, code: string, unit?: number | null }
+export async function updateSubjectController(req: Request<{id: number}, {}, { name: string; code: string; unit?: string | number | null }>, res: Response, next: NextFunction) {
     const { id } = req.params;
     const { name, code, unit } = req.body;
     try {
-        const subject = { name: NormalizedData(name, true), code, unit };
+        const subject = { name: NormalizedData(name, true), code, unit: normalizeUnit(unit) };
 
-        // validate subject data (same rules as create)
-        Validate(subject);
+        // Name and code are required; unit is optional.
+        Validate({ name: subject.name, code: subject.code });
 
         await updateSubjectService(Number(id), subject);
         res.status(200).json(

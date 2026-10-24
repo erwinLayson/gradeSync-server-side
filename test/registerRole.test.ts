@@ -221,6 +221,7 @@ const REGISTER_FACULTY_REACHABLE: Array<[label: string, router: unknown, method:
     ["list classrooms", classroomsRouter, "get", "/classrooms"],
     ["read a classroom's subjects", classroomsRouter, "get", "/classrooms/:classroomId/faculties-subject"],
     ["read school years", schoolYearRouter, "get", "/schoolYear"],
+    ["create a school year", schoolYearRouter, "post", "/schoolYear"],
     ["read academic settings", academicSettingsRouter, "get", "/academic-settings"],
     ["advance academic settings", academicSettingsRouter, "patch", "/academic-settings"],
     ["submission summary", studentRecordRouter, "get", "/student-records/summary"],
@@ -239,6 +240,7 @@ const TEACHER_FACULTY_DENIED: Array<[label: string, router: unknown, method: Htt
     ["edit a student", studentsRouter, "patch", "/students/:id"],
     ["soft-delete a student", studentsRouter, "delete", "/students/:id"],
     ["print SF10 / Form-137", studentRecordRouter, "get", "/student-records/:id/pdf"],
+    ["create a school year", schoolYearRouter, "post", "/schoolYear"],
 ];
 
 /** Endpoints register faculty are NOT allowed to reach (admin-only or teacher-only). */
@@ -248,8 +250,7 @@ const REGISTER_FACULTY_DENIED: Array<[label: string, router: unknown, method: Ht
     ["bulk-remove a classroom's enrollments", enrollmentsRouter, "delete", "/classrooms/:classId/enrollments"],
     ["clear a classroom", enrollmentsRouter, "delete", "/classrooms/:classId/enrollments/clear"],
     ["clear all classrooms", enrollmentsRouter, "delete", "/enrollments/clear-all"],
-    // School-year management.
-    ["create a school year", schoolYearRouter, "post", "/schoolYear"],
+    // School-year management (activating stays Admin-only).
     ["activate a school year", schoolYearRouter, "patch", "/schoolYear/:id/activate"],
     // Classroom management.
     ["create a classroom", classroomsRouter, "post", "/classrooms"],
@@ -314,6 +315,7 @@ describe("existing user-role checks are unchanged for non-faculty routes", () =>
         expect(await isAdminReached(studentRecordRouter, "get", "/student-records/:id/pdf")).toBe(true);
         expect(await isAdminReached(classroomsRouter, "get", "/classrooms")).toBe(true);
         expect(await isAdminReached(schoolYearRouter, "get", "/schoolYear")).toBe(true);
+        expect(await isAdminReached(schoolYearRouter, "post", "/schoolYear")).toBe(true);
         expect(await isAdminReached(academicSettingsRouter, "get", "/academic-settings")).toBe(true);
     });
 

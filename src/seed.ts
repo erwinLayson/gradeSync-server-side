@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 import bcrypt from "bcrypt";
-import type{ ResultSetHeader } from "mysql2/promise";
+import type { ResultSetHeader } from "mysql2/promise";
 import { getDBPoolConnection } from "./config/database.js";
 
 import type { AssessmentType } from "./constant/assessment.js";

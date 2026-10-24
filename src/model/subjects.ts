@@ -66,7 +66,7 @@ export default class Subjects {
     }
 
     // Update a subject's name/code/unit. Returns affected rows (0 when the id is missing).
-    async updateSubject(id: number, data: { name: string; code: string; unit: string | number }): Promise<number> {
+    async updateSubject(id: number, data: { name: string; code: string; unit: number | null }): Promise<number> {
         try {
             const query = `
                 UPDATE subjects

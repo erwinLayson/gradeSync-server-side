@@ -1,13 +1,44 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import type { NextFunction, Request, Response } from "express";
 import type { PoolConnection } from "mysql2/promise";
 
 import { getTestConnection, count } from "./helpers/db.js";
 import { createScenario, finalizeScenario, teardownScenario, type Scenario } from "./helpers/fixtures.js";
 
+import { getStudentAcademicHistoryController } from "../src/controller/studentClasses.js";
 import { getStudentAcademicHistoryService, getStudentProspectusService } from "../src/service/studentClasses.js";
 import { clearAllFromClassService } from "../src/service/enrollments.js";
 import { getStudentByClassroomIdService } from "../src/service/students.js";
 import { getNumQuarters } from "../src/service/academicSettings.js";
+
+type MockResponse = Response & { statusCode: number; body: unknown };
+
+/** Call the admin academic-history endpoint with a minimal req/res pair. */
+async function callAcademicHistory(studentId: number): Promise<MockResponse> {
+    const request = { params: { id: String(studentId) } } as unknown as Request<{ id: number }>;
+    const response = {
+        statusCode: 0,
+        body: null,
+        status(code: number) {
+            response.statusCode = code;
+            return response;
+        },
+        json(payload: unknown) {
+            response.body = payload;
+            return response;
+        },
+    } as unknown as MockResponse;
+
+    let nextError: unknown;
+    const next = ((error?: unknown) => {
+        nextError = error;
+    }) as NextFunction;
+
+    await getStudentAcademicHistoryController(request, response, next);
+
+    if (nextError) throw nextError;
+    return response;
+}
 
 /**
  * Audit F-2 — the history reader filtered `enrollments.status = 'enrolled'`, so
@@ -127,5 +158,27 @@ describe("completed enrollment history (F-2)", () => {
         expect(Object.keys(entry).sort()).toEqual(
             ["adviser", "classId", "enrollmentId", "generalAverage", "gradeLevel", "numQuarters", "schoolYear", "schoolYearId", "section", "subjects"].sort()
         );
+    });
+
+    it("hides an in-progress school year from the admin academic-history endpoint", async () => {
+        scenario = await createScenario(connection);
+
+        const response = await callAcademicHistory(scenario.studentId);
+        expect(response.statusCode).toBe(200);
+
+        const data = (response.body as { data: { classes: { enrollmentId: number }[] } }).data;
+        expect(data.classes.some((c) => c.enrollmentId === scenario?.enrollmentId)).toBe(false);
+    });
+
+    it("keeps a completed school year in the admin academic-history endpoint", async () => {
+        scenario = await createScenario(connection);
+        await finalizeScenario(connection, scenario, { quarters: numQuarters });
+        await clearAllFromClassService(scenario.classroomId);
+
+        const response = await callAcademicHistory(scenario.studentId);
+        expect(response.statusCode).toBe(200);
+
+        const data = (response.body as { data: { classes: { enrollmentId: number }[] } }).data;
+        expect(data.classes.some((c) => c.enrollmentId === scenario?.enrollmentId)).toBe(true);
     });
 });

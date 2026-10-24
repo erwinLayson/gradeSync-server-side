@@ -75,7 +75,7 @@ export async function getSubjectByIdService(id: number) {
 
 
 // Update a subject's name/code/unit.
-export async function updateSubjectService(id: number, data: { name: string; code: string; unit: string | number }) {
+export async function updateSubjectService(id: number, data: { name: string; code: string; unit: number | null }) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {

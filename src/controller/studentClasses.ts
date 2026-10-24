@@ -98,7 +98,8 @@ export async function getStudentAcademicHistoryController(
             throw new BadRequestError("Invalid student id");
         }
 
-        const result = await getStudentAcademicHistoryService(studentId);
+        // Only completed school years: an ongoing year has no final record yet.
+        const result = await getStudentAcademicHistoryService(studentId, { completedOnly: true });
 
         return res.status(200).json(
             SuccessResponse({
