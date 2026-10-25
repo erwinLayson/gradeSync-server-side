@@ -4,6 +4,7 @@ import { getLandingContentController, updateLandingSectionController } from "../
 
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
+import { cacheResponse } from "../middleware/cache.js";
 import { ValidateToken } from "../middleware/validateToken.js";
 import { ROLES } from "../constant/users.js";
 
@@ -15,7 +16,7 @@ const developerOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.DEVE
 // ==================== PUBLIC (no auth) ====================
 // The landing page renders pre-login, so this read cannot sit behind auth.
 // It exposes only presentational content the page already shows publicly.
-router.get("/landing-content", publicRead, getLandingContentController);
+router.get("/landing-content", publicRead, cacheResponse({ ttl: 300_000, shared: true }), getLandingContentController);
 
 // ==================== DEVELOPER ONLY ====================
 // Server-side authorization is mandatory (plan §6.1).

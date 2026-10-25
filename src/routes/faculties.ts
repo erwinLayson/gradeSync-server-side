@@ -12,6 +12,7 @@ import {
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
 import { allowedFacultyRoles } from "../middleware/allowedFacultyRoles.js";
+import { cacheResponse } from "../middleware/cache.js";
 import { ValidateToken } from "../middleware/validateToken.js";
 import { ROLES } from "../constant/users.js";
 import { FACULTY_ROLES } from "../constant/faculties.js";
@@ -35,12 +36,12 @@ router.patch("/faculties/:id", adminFacultyWithId, UpdateFacultyController);
 router.delete("/faculties/:id", adminOnlyWithId, DeleteFacultyController);
 
 // ==================== ADMIN + TEACHER ====================
-router.get("/faculties", adminFaculty, getAllFacultiesController);
+router.get("/faculties", adminFaculty, cacheResponse({ ttl: 60_000, shared: true }), getAllFacultiesController);
 
 // ========== Get faculty by the linked user account ID ================
-router.get("/faculties/by-user/:userId", adminFacultyWithUserId, getFacultyByUserIdController);
-router.get("/faculties/:id", adminFacultyWithId, getFacultyByIdController);
+router.get("/faculties/by-user/:userId", adminFacultyWithUserId, cacheResponse({ ttl: 60_000, shared: true }), getFacultyByUserIdController);
+router.get("/faculties/:id", adminFacultyWithId, cacheResponse({ ttl: 60_000, shared: true }), getFacultyByIdController);
 
 // ========== Get faculties subject details by faculties ID route ================
-router.get("/faculties/:facultyId/subjects", adminFacultyWithFacultyId, getFacultySubjectDetailsByIdController)
+router.get("/faculties/:facultyId/subjects", adminFacultyWithFacultyId, cacheResponse({ ttl: 60_000, shared: true }), getFacultySubjectDetailsByIdController)
 export default router;

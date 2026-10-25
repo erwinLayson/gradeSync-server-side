@@ -16,6 +16,7 @@ import { getClassSubjectDetailsByIdController } from '../controller/class_subjec
 // Role-based access control
 import allowedRoles from '../middleware/allowedRoles.js';
 import { allowedFacultyRoles } from '../middleware/allowedFacultyRoles.js';
+import { cacheResponse } from '../middleware/cache.js';
 import { ValidateToken } from '../middleware/validateToken.js';
 import { ROLES } from '../constant/users.js';
 import { FACULTY_ROLES } from '../constant/faculties.js';
@@ -70,8 +71,8 @@ route.get('/classrooms/my-advised-class', [ValidateToken, allowedRoles([ROLES.TE
 route.get('/classrooms/my-advised-class/honor-students', [ValidateToken, allowedRoles([ROLES.TEACHER]), allowedFacultyRoles([FACULTY_ROLES.TEACHER])], getMyAdvisedClassHonorStudentsController);
 
 // ==================== ADMIN + TEACHER ====================
-route.get('/classrooms/:id/adviser', adminFacultyWithStringId, getClassAdviserController);
-route.get('/classrooms/:id', adminFacultyWithStringId, getClassroomByIdController);
+route.get('/classrooms/:id/adviser', adminFacultyWithStringId, cacheResponse({ ttl: 60_000, shared: true }), getClassAdviserController);
+route.get('/classrooms/:id', adminFacultyWithStringId, cacheResponse({ ttl: 60_000, shared: true }), getClassroomByIdController);
 
 // Convenience alias so callers can explicitly request the point-in-time stable
 // classroom view used by audit code that cares about mid-request drift (P5). It is
@@ -80,10 +81,10 @@ route.get('/classrooms/:id', adminFacultyWithStringId, getClassroomByIdControlle
 // ==================== ADMIN + REGISTER + TEACHER (section list) ====================
 // Read-only enrollment lookups shared with Register (and Faculty above for the
 // adviser/section detail routes).
-route.get('/classrooms', adminRegisterFaculty, getAllClassroomController);
-route.get('/classrooms/:classroomId/faculties-subject', adminRegisterWithClassroomId, getClassroomFacultiesWithSubjectController);
+route.get('/classrooms', adminRegisterFaculty, cacheResponse({ ttl: 60_000, shared: true }), getAllClassroomController);
+route.get('/classrooms/:classroomId/faculties-subject', adminRegisterWithClassroomId, cacheResponse({ ttl: 60_000, shared: true }), getClassroomFacultiesWithSubjectController);
 
 // This route is imported from the class_subjects controller to get class subject details by ID
-route.get('/classrooms/details/:id', adminFacultyWithId, getClassSubjectDetailsByIdController);
+route.get('/classrooms/details/:id', adminFacultyWithId, cacheResponse({ ttl: 60_000, shared: true }), getClassSubjectDetailsByIdController);
 
 export default route;

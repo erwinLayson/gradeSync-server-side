@@ -7,6 +7,7 @@ import { getSchoolLogoController, saveSchoolLogoController } from "../controller
 
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
+import { cacheResponse } from "../middleware/cache.js";
 import { ValidateToken } from "../middleware/validateToken.js";
 import { ROLES } from "../constant/users.js";
 
@@ -71,10 +72,10 @@ const multerSingleSchoolImage: RequestHandler = (req, res, next) => {
 router.get("/school-info/logo", getSchoolLogoController);
 
 // ==================== AUTHENTICATED (ANY ROLE) ====================
-router.get("/school-info", authenticated, getSchoolInfoController);
+router.get("/school-info", authenticated, cacheResponse({ ttl: 300_000, shared: true }), getSchoolInfoController);
 // The saved signature is readable by any authenticated user so official
 // documents can render it; only admins may change it.
-router.get("/school-info/signature", authenticated, getSchoolSignatureController);
+router.get("/school-info/signature", authenticated, cacheResponse({ ttl: 300_000, shared: true }), getSchoolSignatureController);
 
 // ==================== ADMIN ONLY ====================
 router.patch("/school-info", adminOnly, updateSchoolInfoController);

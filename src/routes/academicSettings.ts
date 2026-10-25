@@ -5,6 +5,7 @@ import { getAcademicSettingsController, updateAcademicSettingsController } from 
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
 import { allowedFacultyRoles } from "../middleware/allowedFacultyRoles.js";
+import { cacheResponse } from "../middleware/cache.js";
 import { ValidateToken } from "../middleware/validateToken.js";
 import {
     ALLOWED_TO_READ_ACADEMIC_SETTINGS,
@@ -29,7 +30,7 @@ const editAcademicSettings: RequestHandler[] = [
     allowedFacultyRoles([FACULTY_ROLES.REGISTER], { allowAdmin: true }),
 ];// ==================== READ ====================
 // Admin, faculty, and register consumers all read the live grading config.
-router.get("/academic-settings", readAcademicSettings, getAcademicSettingsController);
+router.get("/academic-settings", readAcademicSettings, cacheResponse({ ttl: 60_000, shared: true }), getAcademicSettingsController);
 
 // ==================== WRITE ====================
 // Quarter and configuration changes remain admin-only.

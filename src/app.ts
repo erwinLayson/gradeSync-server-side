@@ -8,6 +8,7 @@ import cookieParser from "cookie-parser";
 import type { Express } from "express";
 
 import ErrorHandler from "./middleware/errorHandler.js"
+import { invalidateCacheOnWrite } from "./middleware/cache.js";
 import { checkDBConnection } from "./config/database.js";
 
 // Checking database connection:
@@ -61,6 +62,10 @@ app.use(cors({
     credentials: true,
 }));
 app.use(cookieParser());
+
+// Any mutation drops the cached read responses before it runs, so the next GET
+// reflects the write. Mounted before the routers to cover every module.
+app.use(invalidateCacheOnWrite());
 
 //Use Routes
 app.use("/api", AuthRoutes);

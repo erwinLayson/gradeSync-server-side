@@ -17,6 +17,7 @@ import {
 // Role-based access control
 import allowedRoles from '../middleware/allowedRoles.js';
 import { allowedFacultyRoles } from '../middleware/allowedFacultyRoles.js';
+import { cacheResponse } from '../middleware/cache.js';
 import { ValidateToken } from '../middleware/validateToken.js';
 import { ROLES } from '../constant/users.js';
 import { FACULTY_ROLES } from '../constant/faculties.js';
@@ -43,13 +44,13 @@ route.post('/subjects/:id/assign-faculties', adminOnlyWithId, assignFacultiesToS
 route.delete('/subjects/:subjectId/faculties/:facultyId', adminOnlyWithSubjectAndFaculty, unassignFacultyFromSubjectController);
 
 // ==================== ADMIN + TEACHER ====================
-route.get('/subjects', adminFaculty, getAllSubjectController);
-route.get('/subjects/:id', adminFacultyWithStringId, getSubjectByIdController);
-route.get('/subjects/:subjectId/classrooms/:classId/assigned-faculties', adminFacultyWithSubjectAndClass, getSubjectsWithAssignedFacultiesNotInClassController);
-route.get('/subjects/classrooms/:classId/faculties', adminFacultyWithClassId, getSubjectsNotInClassController);
+route.get('/subjects', adminFaculty, cacheResponse({ ttl: 60_000, shared: true }), getAllSubjectController);
+route.get('/subjects/:id', adminFacultyWithStringId, cacheResponse({ ttl: 60_000, shared: true }), getSubjectByIdController);
+route.get('/subjects/:subjectId/classrooms/:classId/assigned-faculties', adminFacultyWithSubjectAndClass, cacheResponse({ ttl: 60_000, shared: true }), getSubjectsWithAssignedFacultiesNotInClassController);
+route.get('/subjects/classrooms/:classId/faculties', adminFacultyWithClassId, cacheResponse({ ttl: 60_000, shared: true }), getSubjectsNotInClassController);
 
 // get subject by ID with faculties
-route.get('/subjects/:id/faculties', adminFacultyWithId, getSubjectByIdWithFacultiesController);
+route.get('/subjects/:id/faculties', adminFacultyWithId, cacheResponse({ ttl: 60_000, shared: true }), getSubjectByIdWithFacultiesController);
 
 
 export default route;

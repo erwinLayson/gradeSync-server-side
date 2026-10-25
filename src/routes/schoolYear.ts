@@ -4,6 +4,7 @@ import { getSchoolYearController, createSchoolYearController, activateSchoolYear
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
 import { allowedFacultyRoles } from "../middleware/allowedFacultyRoles.js";
+import { cacheResponse } from "../middleware/cache.js";
 import { ValidateToken } from "../middleware/validateToken.js";
 import { ROLES } from "../constant/users.js";
 import { FACULTY_ROLES } from "../constant/faculties.js";
@@ -44,6 +45,6 @@ router.patch("/schoolYear/:id/status", adminOnlyWithId, setSchoolYearStatusContr
 // ==================== ADMIN + TEACHER + REGISTER (read list) ====================
 // Register picks the enrollment school year from the list. Creating and
 // activating a school year stay Admin-only (docs/register-role-implementation-plan.md §6.2).
-router.get("/schoolYear", adminFacultyRegister, getSchoolYearController);
+router.get("/schoolYear", adminFacultyRegister, cacheResponse({ ttl: 60_000, shared: true }), getSchoolYearController);
 
 export default router;

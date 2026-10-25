@@ -39,6 +39,7 @@
     "@types/multer": "^2.2.0",
     "dotenv": "^17.4.2",
     "ejs": "^6.0.1",
+    "lru-cache": "^11.5.3",
     "multer": "^2.3.0",
     "mysql2": "^3.23.2",
     "puppeteer": "^25.6.0",
