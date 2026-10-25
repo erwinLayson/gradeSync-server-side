@@ -50,6 +50,8 @@ export interface StudentRecordPdfEntry {
     // null when the year has no final ratings at all (computeGeneralAverage) —
     // the template renders that as a blank cell, never as a 0.
     generalAverage: number | null;
+    // "Passed" / "Failed" from the same helper, or "N/A" when ungraded.
+    generalAverageRemarks: string;
     numQuarters?: number;
 }
 

@@ -676,7 +676,7 @@ export async function StudentRecordPDFDetailsService(
             // (rendered blank by the template) instead of a misleading 0.
             const generalAverage = computeGeneralAverage(
                 subjects.map((subject) => ({ finalGrades: subject.finalRating }))
-            ).score;
+            );
 
             return {
                 enrollmentId: enrollment.enrollmentId,
@@ -686,7 +686,8 @@ export async function StudentRecordPDFDetailsService(
                 classGradeLevel: record?.classGradeLevel ?? enrollment.gradeLevel ?? null,
                 adviserName: record?.adviserName ?? null,
                 subjects,
-                generalAverage,
+                generalAverage: generalAverage.score,
+                generalAverageRemarks: generalAverage.remarks,
                 numQuarters: recordNq
             };
         });

@@ -115,20 +115,28 @@
 
 
             <!-- Personal Info 2 -->
+             <%
+                // student.birthdate arrives as yyyy-mm-dd; the printed form uses mm/dd/yyyy.
+                const rawBirthdate = student.birthdate ? String(student.birthdate) : "";
+                const [birthYear, birthMonth, birthDay] = rawBirthdate.split("-");
+                const formattedBirthdate = birthYear && birthMonth && birthDay
+                    ? `${birthMonth}/${birthDay}/${birthYear}`
+                    : rawBirthdate;
+             %>
              <div class="flex border-b gap-5 px-2">
                 <div class="flex-1 flex items-center justify-start gap-5">
-                    <span class="text-[10px]">Learner Referrence Number (LRN):</span>
-                    <span class="font-semibold text-xxs">1234567890</span>
+                    <span class="text-[10px]">Learner Reference Number (LRN):</span>
+                    <span class="font-semibold text-xxs"><%= student.lrn ?? "N/A" %></span>
                 </div>
 
                 <div class="flex-1 items-center justify-start gap-5">
                     <span class="text-[10px]">Birthdate (mm/dd/yyyy):</span>
-                    <span class="font-semibold text-xxs">05-23-2003</span>
+                    <span class="font-semibold text-xxs"><%= formattedBirthdate || "N/A" %></span>
                 </div>
 
                 <div class="flex items-center justify-start gap-5 pr-10">
                     <span class="text-[10px]">Sex:</span>
-                    <span class="font-semibold text-xxs">Male</span>
+                    <span class="font-semibold text-xxs"><%= student.sex ?? "N/A" %></span>
                 </div>
              </div>
              <!-- New Block -->
@@ -339,7 +347,7 @@
                                 </td>
                                 <td colspan="<%= recNq %>"></td>
                                 <td class="text-center"><%= record.generalAverage === null ? "" : record.generalAverage %></td>
-                                <td class="text-center">Promoted</td>
+                                <td class="text-center"><%= record.generalAverageRemarks %></td>
                             </tr>
 
                             <!-- End of subject details -->
@@ -569,7 +577,7 @@
                                     </td>
                                     <td colspan="<%= recNq %>"></td>
                                     <td class="text-center"><%= record.generalAverage === null ? "" : record.generalAverage %></td>
-                                    <td class="text-center">Promoted</td>
+                                    <td class="text-center"><%= record.generalAverageRemarks %></td>
                                 </tr>
 
                                 <!-- End of subject details -->
