@@ -5,7 +5,8 @@ import {
     getAssessmentsController,
     updateAssessmentController,
     deleteAssessmentController,
-    saveAssessmentScoresController
+    saveAssessmentScoresController,
+    saveSingleStudentScoreController
 } from "../controller/assessments.js";
 
 // Role-based access control
@@ -38,5 +39,8 @@ route.delete("/assessments/:id", adminFacultyWithId, deleteAssessmentController)
 
 // Batch-save the score sheet for one assessment
 route.post("/assessments/:id/scores", adminFacultyWithId, saveAssessmentScoresController);
+
+// Granular single-student score update under approved amendment
+route.patch("/assessments/:id/scores/:enrollmentId", adminFaculty, saveSingleStudentScoreController);
 
 export default route;

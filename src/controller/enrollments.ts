@@ -3,6 +3,7 @@ import type { RowDataPacket } from "mysql2/promise";
 import type { EnrollmentCreateProps } from "../constant/enrollments.js";
 
 import { createEnrollmentService, bulkRemoveStudentsFromClassService, clearAllFromClassService, clearAllClassroomsService } from "../service/enrollments.js";
+import { getActiveSchoolYearService } from "../service/schoolYear.js";
 import Enrollments from "../model/enrollments.js";
 import { getDBPoolConnection } from "../config/database.js";
 
@@ -87,20 +88,17 @@ export async function countActiveEnrollmentsController(
     next: NextFunction
 ) {
     try {
+        const activeYear = await getActiveSchoolYearService();
+        if (!activeYear) {
+            return res.status(200).json(
+                SuccessResponse({ message: "No active school year", data: { count: 0 } })
+            );
+        }
         const pool = getDBPoolConnection();
         const connection = await pool.getConnection();
         try {
-            const [yearRows] = await connection.execute<RowDataPacket[]>(
-                "SELECT id FROM schoolyear WHERE isActive = 1 LIMIT 1"
-            );
-            const schoolYearId = yearRows[0]?.id;
-            if (!schoolYearId) {
-                return res.status(200).json(
-                    SuccessResponse({ message: "No active school year", data: { count: 0 } })
-                );
-            }
             const enrollmentModel = new Enrollments(connection);
-            const count = await enrollmentModel.countActiveEnrollments(schoolYearId);
+            const count = await enrollmentModel.countActiveEnrollments(activeYear.id);
             return res.status(200).json(
                 SuccessResponse({ message: "Retrieved", data: { count } })
             );

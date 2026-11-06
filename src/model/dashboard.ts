@@ -1,5 +1,6 @@
 import { PoolConnection, type RowDataPacket } from "mysql2/promise";
 import { InternalServerError } from "../middleware/errors.js";
+import SchoolYearModel from "./schoolYear.js";
 
 import type {
     DashboardSchoolYear,
@@ -10,15 +11,10 @@ export default class Dashboard {
     constructor(private connection: PoolConnection) {}
 
     async getActiveSchoolYear(): Promise<DashboardSchoolYear | null> {
-        try {
-            const query = "SELECT id, startYear, endYear FROM schoolyear WHERE isActive = 1 LIMIT 1";
-            const [rows] = await this.connection.execute<RowDataPacket[]>(query);
-            if (rows.length === 0 || rows[0] === undefined) return null;
-            const row = rows[0];
-            return { id: Number(row.id), startYear: String(row.startYear), endYear: String(row.endYear) };
-        } catch (err) {
-            throw new InternalServerError("Failed to fetch active school year", 500, err);
-        }
+        const syModel = new SchoolYearModel(this.connection);
+        const active = await syModel.getActiveSchoolYear(false);
+        if (!active) return null;
+        return { id: Number(active.id), startYear: String(active.startYear), endYear: String(active.endYear) };
     }
 
     async getStudentCount(schoolYearId?: number): Promise<number> {

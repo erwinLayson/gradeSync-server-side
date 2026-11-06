@@ -18,6 +18,27 @@ export default class SchoolYearModel {
         }
     }
 
+    async getActiveSchoolYear(forUpdate: boolean = false): Promise<SchoolYear | null> {
+        try {
+            const lockClause = forUpdate ? " FOR UPDATE" : "";
+            const query = `SELECT ${SCHOOL_YEAR_COLUMNS} FROM schoolyear WHERE isActive = 1 LIMIT 1${lockClause}`;
+            const [result] = await this.connection.execute<RowDataPacket[]>(query);
+            return (result[0] as SchoolYear) ?? null;
+        } catch (err) {
+            throw new InternalServerError("Server Error", 500, err);
+        }
+    }
+
+    async countSchoolYears(): Promise<number> {
+        try {
+            const query = "SELECT COUNT(*) AS total FROM schoolyear";
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query);
+            return Number(rows[0]?.total ?? 0);
+        } catch (err) {
+            throw new InternalServerError("Server Error", 500, err);
+        }
+    }
+
     async getSchoolYearById(id: number): Promise<SchoolYear | null> {
         try {
             const query = `SELECT ${SCHOOL_YEAR_COLUMNS} FROM schoolyear WHERE id = ? LIMIT 1`;
@@ -38,10 +59,14 @@ export default class SchoolYearModel {
         }
     }
 
-    async createSchoolYear(startYear: number, endYear: number): Promise<number> {
+    async createSchoolYear(startYear: number, endYear: number, isActive: boolean = false): Promise<number> {
         try {
-            const query = "INSERT INTO schoolyear(startYear, endYear) VALUES(?,?)";
-            const [result] = await this.connection.execute<ResultSetHeader>(query, [String(startYear), String(endYear)]);
+            const query = "INSERT INTO schoolyear(startYear, endYear, isActive) VALUES(?,?,?)";
+            const [result] = await this.connection.execute<ResultSetHeader>(query, [
+                String(startYear),
+                String(endYear),
+                isActive ? 1 : 0
+            ]);
             return result.insertId;
         } catch (err) {
             throw new InternalServerError("Server Error", 500, err);
@@ -51,7 +76,8 @@ export default class SchoolYearModel {
     // Make `id` the single active school year (all other rows are cleared).
     async activateSchoolYear(id: number): Promise<void> {
         try {
-            const query = "UPDATE schoolyear SET isActive = (id = ?)";
+            await this.connection.execute("UPDATE schoolyear SET isActive = 0 WHERE isActive = 1");
+            const query = "UPDATE schoolyear SET isActive = 1 WHERE id = ?";
             const [result] = await this.connection.execute<ResultSetHeader>(query, [id]);
             if (result.affectedRows === 0) {
                 throw new NotFoundError(`School year with ID ${id} not found`, 404);

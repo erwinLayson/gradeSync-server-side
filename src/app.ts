@@ -39,6 +39,7 @@ import FeatureRoutes from "./routes/features.js";
 import LandingContentRoutes from "./routes/landingContent.js";
 import UploadRoutes from "./routes/uploads.js";
 import DashboardRoutes from "./routes/dashboard.js";
+import AmendmentRoutes from "./routes/amendments.js";
 
 
 import getEnv from "./helper/getEnv.js";
@@ -92,6 +93,7 @@ app.use("/api", LandingContentRoutes);
 app.use("/api", UploadRoutes);
 app.use("/api", SystemWipeRoutes);
 app.use("/api", DashboardRoutes);
+app.use("/api", AmendmentRoutes);
 
 // Error middleware
 app.use(ErrorHandler)

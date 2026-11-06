@@ -5,6 +5,7 @@ import {
     getAttendanceHistoryController,
     getAttendanceRangeController,
     saveAttendanceController,
+    saveSingleStudentAttendanceController,
 } from "../controller/attendance.js";
 
 // Role-based access control
@@ -32,6 +33,9 @@ const adminFacultyWithEnrollmentId: RequestHandler<{ enrollmentId: number }>[] =
 // Daily attendance recording (per class subject)
 route.get("/attendance", adminFaculty, getAttendanceByClassSubjectAndDateController);
 route.post("/attendance", adminFaculty, saveAttendanceController);
+
+// Granular single-student attendance update under approved amendment
+route.patch("/attendance/class-subjects/:classSubjectId/students/:enrollmentId", adminFaculty, saveSingleStudentAttendanceController);
 
 // Class-wide attendance matrix (students × dates) for the spreadsheet view.
 // Registered before the parameterized history route so "/attendance/range" is

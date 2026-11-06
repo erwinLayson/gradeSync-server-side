@@ -454,6 +454,47 @@ export async function reopenStudentRecordService(
         if (!record) {
             throw new NotFoundError("No student record found for this student", 404);
         }
+
+        // Policy Enforcement: Reopening a finalized student record requires an approved amendment request
+        if (facultyId !== null) {
+            const { default: AmendmentPermissionModel } = await import("../model/amendmentPermission.js");
+            const { default: AmendmentRequestModel } = await import("../model/amendmentRequest.js");
+            const { default: AmendmentAuditModel } = await import("../model/amendmentAudit.js");
+
+            const permModel = new AmendmentPermissionModel(connection);
+            const activePerm = await permModel.getActivePermission(
+                facultyId,
+                enrollmentId,
+                null,
+                quarter,
+                "student_record_grade"
+            );
+
+            if (!activePerm) {
+                throw new ForbiddenError(
+                    `Reopening student records for Quarter ${quarter} requires an approved Amendment Request from the Register/Admin.`
+                );
+            }
+
+            await permModel.consumePermission(activePerm.id);
+            const reqModel = new AmendmentRequestModel(connection);
+            await reqModel.markCompleted(activePerm.requestId);
+
+            const auditModel = new AmendmentAuditModel(connection);
+            await auditModel.logAudit({
+                requestId: activePerm.requestId,
+                action: "reopened",
+                actorUserId: (await recordModel.getActiveSchoolYearId()) ?? 0, // Fallback actor
+                actorRole: "teacher",
+                recordType: "student_record_grade",
+                enrollmentId,
+                quarter,
+                targetTable: "student_academic_record_quarters",
+                targetRecordId: String(record.id),
+                reason: "Student record reopened via approved amendment"
+            });
+        }
+
         const reopened = await recordModel.reopenQuarterSubmission(record.id, quarter);
         if (!reopened) {
             throw new ConflictError("Record is not currently submitted for this quarter");

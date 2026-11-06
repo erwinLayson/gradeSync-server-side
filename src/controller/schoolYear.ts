@@ -1,11 +1,17 @@
-import type{ Request, Response, NextFunction } from 'express';
+import type { Request, Response, NextFunction } from 'express';
 
-import {activateSchoolYearService, getSchoolYearService, createSchoolYearService, setSchoolYearStatusService} from '../service/schoolYear.js';
+import {
+    activateSchoolYearService,
+    getSchoolYearService,
+    getActiveSchoolYearService,
+    createSchoolYearService,
+    setSchoolYearStatusService,
+    recoverActiveSchoolYearService
+} from '../service/schoolYear.js';
 import { SuccessResponse } from '../helper/response.js';
 import Validate from '../helper/validate.js';
 import { BadRequestError } from '../middleware/errors.js';
 import { isSchoolYearStatus, SCHOOL_YEAR_STATUSES } from '../constant/schoolYear.js';
-
 
 export async function getSchoolYearController(_req: Request, res: Response, next: NextFunction) {
     try {
@@ -16,10 +22,42 @@ export async function getSchoolYearController(_req: Request, res: Response, next
                 data: schoolYear
             })
         );
-    }catch(err) {
+    } catch (err) {
         next(err);
     }
+}
 
+// GET /schoolYear/active — get the currently active school year (or null)
+export async function getActiveSchoolYearController(_req: Request, res: Response, next: NextFunction) {
+    try {
+        const activeSchoolYear = await getActiveSchoolYearService();
+        res.status(200).json(
+            SuccessResponse({
+                message: activeSchoolYear ? "Active school year retrieved" : "No active school year",
+                data: {
+                    activeSchoolYear,
+                    hasActive: activeSchoolYear !== null
+                }
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// POST /schoolYear/recover-active — admin recovery to activate the newest ongoing year if none is active
+export async function recoverActiveSchoolYearController(_req: Request, res: Response, next: NextFunction) {
+    try {
+        const recovered = await recoverActiveSchoolYearService();
+        res.status(200).json(
+            SuccessResponse({
+                message: `School year SY ${recovered.startYear}–${recovered.endYear} activated`,
+                data: recovered
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
 }
 
 export async function createSchoolYearController(_req: Request, res: Response, next: NextFunction) {

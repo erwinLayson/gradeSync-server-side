@@ -4,9 +4,11 @@ import AssessmentModel from "../model/assessment.js";
 import type { PoolConnection } from "mysql2/promise";
 import { getDBPoolConnection } from "../config/database.js";
 
-import { BadRequestError, NotFoundError } from "../middleware/errors.js";
-
+import { BadRequestError, ForbiddenError, NotFoundError } from "../middleware/errors.js";
+import type { RowDataPacket } from "mysql2/promise";
 import type { StudentScoreInput } from "../constant/grade.js";
+import { getCurrentQuarter, getAcademicSettingsService } from "./academicSettings.js";
+import { executeWithAmendmentAudit } from "./amendmentPermission.js";
 
 
 export async function getStudentScoreService(classSubjectId: number, quarter: number, conn?: PoolConnection) {
@@ -47,6 +49,17 @@ export async function saveAssessmentScoresService(
     }
 
     const maxScore = Number(assessment.maxScore);
+    const settings = await getAcademicSettingsService();
+    const currentQuarter = settings?.currentQuarter ?? 1;
+    if (Boolean(settings?.submissionsLocked)) {
+      throw new ForbiddenError("All score submissions are locked by the administrator");
+    }
+    if (assessment.quarter < currentQuarter) {
+      throw new ForbiddenError(
+        `Quarter ${assessment.quarter} is locked. Bulk-saving is disabled for past quarters. Submit an Amendment Request to modify an individual student's score.`
+      );
+    }
+
     for (const scoreEntry of scoreEntries) {
       if (scoreEntry.score < 0 || scoreEntry.score > maxScore) {
         throw new BadRequestError(
@@ -67,6 +80,72 @@ export async function saveAssessmentScoresService(
     if (transactionStarted) {
       await connection.rollback();
     }
+    throw err;
+  } finally {
+    connection.release();
+  }
+}
+
+// Atomically save a single student's score under an approved amendment permission
+export async function saveSingleStudentScoreService(
+  assessmentId: number,
+  enrollmentId: number,
+  newScore: number,
+  actor: { id: number; facultyId: number | null; role: string },
+  clientMeta?: { ipAddress?: string | null; userAgent?: string | null }
+): Promise<void> {
+  const pool = getDBPoolConnection();
+  const connection = await pool.getConnection();
+
+  await connection.beginTransaction();
+  try {
+    const assessmentModel = new AssessmentModel(connection);
+    const assessment = await assessmentModel.getAssessmentById(assessmentId);
+    if (!assessment) {
+      throw new NotFoundError(`Assessment with ID ${assessmentId} not found`, 404);
+    }
+
+    const maxScore = Number(assessment.maxScore);
+    if (newScore < 0 || newScore > maxScore) {
+      throw new BadRequestError(`Score ${newScore} must be between 0 and ${maxScore}`);
+    }
+
+    // Fetch existing score for beforeState
+    const [existingRows] = await connection.execute<RowDataPacket[]>(
+      "SELECT score FROM student_scores WHERE assessmentId = ? AND enrollmentId = ? LIMIT 1",
+      [assessmentId, enrollmentId]
+    );
+    const beforeState = existingRows[0] ? { score: Number(existingRows[0].score) } : null;
+    const afterState = { score: newScore };
+
+    await executeWithAmendmentAudit(
+      connection,
+      actor,
+      {
+        enrollmentId,
+        classSubjectId: assessment.classSubjectId,
+        quarter: assessment.quarter,
+        recordType: "gradebook_score",
+        assessmentId,
+      },
+      {
+        targetTable: "student_scores",
+        targetRecordId: `${assessmentId}-${enrollmentId}`,
+        beforeState,
+        reason: "Score amended via approved request",
+        ipAddress: clientMeta?.ipAddress,
+        userAgent: clientMeta?.userAgent,
+      },
+      async () => {
+        const studentScoreModel = new StudentScoreModel(connection);
+        await studentScoreModel.upsertScoresBatch(assessmentId, [{ enrollmentId, score: newScore }]);
+        return { result: undefined, afterState };
+      }
+    );
+
+    await connection.commit();
+  } catch (err) {
+    await connection.rollback();
     throw err;
   } finally {
     connection.release();

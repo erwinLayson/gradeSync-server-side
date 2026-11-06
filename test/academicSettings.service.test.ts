@@ -1,6 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 
-import type { PoolConnection } from "mysql2/promise";
+import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 
 import { getTestConnection, select } from "./helpers/db.js";
 import { createScenario, finalizeScenario, teardownScenario, type Scenario } from "./helpers/fixtures.js";
@@ -25,17 +25,30 @@ describe("quarter advancement workflow", () => {
         enrollmentOpen: number;
         submissionsLocked: number;
     } | null = null;
+    let originalActiveSchoolYearId: number | null = null;
     const scenarios: Scenario[] = [];
     let numQuarters: number;
 
     beforeAll(async () => {
         connection = await getTestConnection();
         numQuarters = await getNumQuarters();
+        const [rows] = await connection.execute<RowDataPacket[]>("SELECT id FROM schoolyear WHERE isActive = 1 LIMIT 1");
+        originalActiveSchoolYearId = (rows[0] as { id: number } | undefined)?.id ?? null;
+    });
+
+    afterAll(async () => {
+        await connection.execute("UPDATE schoolyear SET isActive = 0 WHERE isActive = 1");
+        if (originalActiveSchoolYearId !== null) {
+            await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [originalActiveSchoolYearId]);
+        }
     });
 
     afterEach(async () => {
         // Restore the active school year if a test flipped it.
         await connection.execute("UPDATE schoolyear SET isActive = 0 WHERE isActive = 1");
+        if (originalActiveSchoolYearId !== null) {
+            await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [originalActiveSchoolYearId]);
+        }
         // Restore the settings row to its baseline.
         if (originalSettings !== null) {
             await connection.execute(
@@ -144,6 +157,7 @@ describe("quarter advancement workflow", () => {
         scenarios.push(scenario);
 
         // No submission ledger yet -> record missing.
+        await connection.execute("UPDATE schoolyear SET isActive = 0 WHERE isActive = 1");
         await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [scenario.schoolYearId]);
 
         await expect(assertQuarterCompleteService(1, connection)).rejects.toBeInstanceOf(ConflictError);
@@ -165,6 +179,7 @@ describe("quarter advancement workflow", () => {
         await finalizeScenario(connection, scenario, { quarters: numQuarters, withSubjects: false });
         await connection.execute("DELETE FROM class_adviser WHERE classId = ?", [scenario.classroomId]);
 
+        await connection.execute("UPDATE schoolyear SET isActive = 0 WHERE isActive = 1");
         await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [scenario.schoolYearId]);
 
         await expect(assertQuarterCompleteService(1, connection)).rejects.toBeInstanceOf(ConflictError);
@@ -212,6 +227,7 @@ describe("quarter advancement workflow", () => {
         // Make the scenario's year active and complete so the only failure route is
         // the range check on the requested quarter.
         await finalizeScenario(connection, scenario, { quarters: numQuarters });
+        await connection.execute("UPDATE schoolyear SET isActive = 0 WHERE isActive = 1");
         await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [scenario.schoolYearId]);
 
         await expect(updateAcademicSettingsService({ currentQuarter: 5 })).rejects.toBeInstanceOf(BadRequestError);

@@ -3,11 +3,12 @@ import ClassDailyAttendanceModel from "../model/classDailyAttendance.js";
 
 import type { PoolConnection } from "mysql2/promise";
 import { getDBPoolConnection } from "../config/database.js";
-import { BadRequestError } from "../middleware/errors.js";
+import { BadRequestError, ForbiddenError } from "../middleware/errors.js";
 import type { RowDataPacket } from "mysql2/promise";
 
 import type { AttendanceInput, AttendanceRecord, AttendanceStatus } from "../constant/grade.js";
-import { getNumQuarters } from "./academicSettings.js";
+import { getNumQuarters, getCurrentQuarter, getAcademicSettingsService } from "./academicSettings.js";
+import { executeWithAmendmentAudit } from "./amendmentPermission.js";
 
 // Shared helpers — never re-implement quarter bounds or the present rate here.
 import { isValidQuarter } from "../helper/quarterValidation.js";
@@ -211,6 +212,18 @@ export async function saveAttendanceByClassSubjectAndDateService(
         `quarter must be a number between 1 and ${numQuarters}`
       );
     }
+
+    const settings = await getAcademicSettingsService();
+    const currentQuarter = settings?.currentQuarter ?? 1;
+    if (Boolean(settings?.submissionsLocked)) {
+      throw new ForbiddenError("All attendance submissions are locked by the administrator");
+    }
+    if (quarter < currentQuarter) {
+      throw new ForbiddenError(
+        `Quarter ${quarter} is locked. Bulk attendance recording is disabled for past quarters. Submit an Amendment Request to modify an individual student's attendance.`
+      );
+    }
+
     for (const entry of entries) {
       if (!isValidAttendanceStatus(entry.status)) {
         throw new BadRequestError(`Invalid attendance status: ${entry.status}`);
@@ -403,5 +416,85 @@ export async function getAttendanceHistoryService(
     };
   } finally {
     if (ownConn) connection.release();
+  }
+}
+
+// Atomically save a single student's attendance under an approved amendment permission
+export async function saveSingleStudentAttendanceService(
+  classSubjectId: number,
+  enrollmentId: number,
+  date: string,
+  status: AttendanceStatus,
+  quarter: number,
+  actor: { id: number; facultyId: number | null; role: string },
+  clientMeta?: { ipAddress?: string | null; userAgent?: string | null }
+): Promise<void> {
+  const pool = getDBPoolConnection();
+  const connection = await pool.getConnection();
+
+  await connection.beginTransaction();
+  try {
+    const studentAttendanceModel = new StudentAttendanceModel(connection);
+    const enrolledIds = new Set(
+      await studentAttendanceModel.getEnrollmentIdsByClassSubjectId(classSubjectId)
+    );
+    if (!enrolledIds.has(enrollmentId)) {
+      throw new BadRequestError(`Student is not enrolled in class subject ${classSubjectId}`);
+    }
+
+    // Fetch existing attendance row for beforeState
+    const [existingRows] = await connection.execute<RowDataPacket[]>(
+      "SELECT status FROM student_attendance WHERE classSubjectId = ? AND enrollmentId = ? AND date = ? LIMIT 1",
+      [classSubjectId, enrollmentId, date]
+    );
+    const beforeState = existingRows[0] ? { status: existingRows[0].status, date } : null;
+    const afterState = { status, date };
+
+    await executeWithAmendmentAudit(
+      connection,
+      actor,
+      {
+        enrollmentId,
+        classSubjectId,
+        quarter,
+        recordType: "attendance",
+        attendanceDate: date,
+      },
+      {
+        targetTable: "student_attendance",
+        targetRecordId: `${classSubjectId}-${enrollmentId}-${date}`,
+        beforeState,
+        reason: "Attendance amended via approved request",
+        ipAddress: clientMeta?.ipAddress,
+        userAgent: clientMeta?.userAgent,
+      },
+      async () => {
+        await studentAttendanceModel.upsertAttendanceByDate(
+          classSubjectId,
+          date,
+          [{ enrollmentId, status }],
+          quarter
+        );
+
+        // Mirror to class_daily_attendance if teacher is adviser
+        const classId = await studentAttendanceModel.getClassIdByClassSubjectId(classSubjectId);
+        if (classId !== null) {
+          const adviserUserId = await getAdviserUserIdOfClass(connection, classId);
+          if (adviserUserId !== null && adviserUserId === actor.id) {
+            const classDailyModel = new ClassDailyAttendanceModel(connection);
+            await classDailyModel.upsertByDate(classId, date, [{ enrollmentId, status }], quarter);
+          }
+        }
+
+        return { result: undefined, afterState };
+      }
+    );
+
+    await connection.commit();
+  } catch (err) {
+    await connection.rollback();
+    throw err;
+  } finally {
+    connection.release();
   }
 }

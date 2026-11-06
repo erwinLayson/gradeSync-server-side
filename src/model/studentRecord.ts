@@ -1,6 +1,7 @@
 import { PoolConnection, type ResultSetHeader, type RowDataPacket } from "mysql2/promise";
 
 import { InternalServerError } from "../middleware/errors.js";
+import SchoolYearModel from "./schoolYear.js";
 
 import type {
     QuarterSubmissionRow,
@@ -343,14 +344,9 @@ export default class StudentRecord {
     // ---------------- enforcement / admin summary ----------------
 
     async getActiveSchoolYearId(): Promise<number | null> {
-        try {
-            const query = "SELECT id FROM schoolyear WHERE isActive = 1 LIMIT 1";
-            const [rows] = await this.connection.execute<RowDataPacket[]>(query);
-            const row = rows[0] as { id: number } | undefined;
-            return row ? Number(row.id) : null;
-        } catch (err) {
-            throw new InternalServerError("Failed to fetch active school year", 500, err);
-        }
+        const syModel = new SchoolYearModel(this.connection);
+        const active = await syModel.getActiveSchoolYear(false);
+        return active ? active.id : null;
     }
 
     // Classes in the school year that have enrolled students but no assigned adviser.

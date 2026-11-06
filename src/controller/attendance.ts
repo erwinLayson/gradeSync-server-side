@@ -5,6 +5,7 @@ import {
     getAttendanceHistoryService,
     getAttendanceRangeService,
     saveAttendanceByClassSubjectAndDateService,
+    saveSingleStudentAttendanceService,
 } from "../service/studentAttendance.js";
 import { getNumQuarters } from "../service/academicSettings.js";
 import { assertFacultyOwnsClassSubject, resolveActorFacultyId } from "../service/authorization.js";
@@ -263,6 +264,63 @@ export async function saveAttendanceController(
         res.status(200).json(
             SuccessResponse({
                 message: "Attendance saved successfully",
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// PATCH /api/attendance/class-subjects/:classSubjectId/students/:enrollmentId
+export async function saveSingleStudentAttendanceController(
+    req: Request<
+        { classSubjectId: string; enrollmentId: string },
+        {},
+        { date: string; status: AttendanceInput["status"]; quarter: number }
+    >,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const classSubjectId = Number(req.params.classSubjectId);
+        const enrollmentId = Number(req.params.enrollmentId);
+        const { date, status, quarter } = req.body;
+
+        if (Number.isNaN(classSubjectId) || Number.isNaN(enrollmentId)) {
+            throw new BadRequestError("Valid classSubjectId and enrollmentId are required");
+        }
+        if (!date || typeof date !== "string") {
+            throw new BadRequestError("date is required (YYYY-MM-DD)");
+        }
+        if (status !== "present" && status !== "absent") {
+            throw new BadRequestError("status must be 'present' or 'absent'");
+        }
+        const parsedQuarter = Number(quarter);
+        if (Number.isNaN(parsedQuarter)) {
+            throw new BadRequestError("quarter must be a valid number");
+        }
+
+        const facultyId = await resolveActorFacultyId(req.user!);
+        await assertFacultyOwnsClassSubject(facultyId, classSubjectId);
+
+        const clientMeta = {
+            ipAddress: req.ip || req.socket.remoteAddress || null,
+            userAgent: req.headers["user-agent"] || null
+        };
+
+        await saveSingleStudentAttendanceService(
+            classSubjectId,
+            enrollmentId,
+            date,
+            status,
+            parsedQuarter,
+            { id: req.user!.id, facultyId, role: req.user!.role },
+            clientMeta
+        );
+
+        res.status(200).json(
+            SuccessResponse({
+                message: "Student attendance amended successfully"
             })
         );
     } catch (err) {

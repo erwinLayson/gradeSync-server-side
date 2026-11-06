@@ -6,7 +6,7 @@ import {
     updateAssessmentService,
     deleteAssessmentService
 } from "../service/assessment.js";
-import { saveAssessmentScoresService } from "../service/studentScore.js";
+import { saveAssessmentScoresService, saveSingleStudentScoreService } from "../service/studentScore.js";
 import {
     assertFacultyOwnsAssessment,
     assertFacultyOwnsClassSubject,
@@ -223,6 +223,50 @@ export async function saveAssessmentScoresController(
         res.status(200).json(
             SuccessResponse({
                 message: "Scores saved successfully"
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// Atomically save a single student's score under an approved amendment permission
+export async function saveSingleStudentScoreController(
+    req: Request<{ id: string; enrollmentId: string }, {}, { score: number }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const assessmentId = Number(req.params.id);
+        const enrollmentId = Number(req.params.enrollmentId);
+        const { score } = req.body;
+
+        if (Number.isNaN(assessmentId) || Number.isNaN(enrollmentId)) {
+            throw new BadRequestError("Valid assessment id and enrollment id are required");
+        }
+        if (score === undefined || Number.isNaN(Number(score))) {
+            throw new BadRequestError("A valid numeric score is required");
+        }
+
+        const facultyId = await resolveActorFacultyId(req.user!);
+        await assertFacultyOwnsAssessment(facultyId, assessmentId);
+
+        const clientMeta = {
+            ipAddress: req.ip || req.socket.remoteAddress || null,
+            userAgent: req.headers["user-agent"] || null
+        };
+
+        await saveSingleStudentScoreService(
+            assessmentId,
+            enrollmentId,
+            Number(score),
+            { id: req.user!.id, facultyId, role: req.user!.role },
+            clientMeta
+        );
+
+        res.status(200).json(
+            SuccessResponse({
+                message: "Student score amended successfully"
             })
         );
     } catch (err) {

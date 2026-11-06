@@ -1,4 +1,5 @@
 import Enrollments from "../model/enrollments.js";
+import SchoolYearModel from "../model/schoolYear.js";
 import { getDBPoolConnection } from "../config/database.js";
 import type { PoolConnection, RowDataPacket } from "mysql2/promise";
 import type { EnrollmentCreateProps } from "../constant/enrollments.js";
@@ -359,10 +360,9 @@ export async function clearAllClassroomsService(targetSchoolYearId?: number): Pr
         let schoolYearId = targetSchoolYearId;
         if (!schoolYearId) {
             // Get the active school year
-            const [yearRows] = await connection.execute<RowDataPacket[]>(
-                "SELECT id FROM schoolyear WHERE isActive = 1 LIMIT 1"
-            );
-            schoolYearId = yearRows[0]?.id;
+            const syModel = new SchoolYearModel(connection);
+            const active = await syModel.getActiveSchoolYear(false);
+            schoolYearId = active?.id;
         }
         if (!schoolYearId) {
             return { totalCleared: 0, classroomsCleared: 0 };

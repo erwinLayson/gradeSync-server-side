@@ -1,5 +1,12 @@
-import {Router, type RequestHandler} from "express";
-import { getSchoolYearController, createSchoolYearController, activateSchoolYearController, setSchoolYearStatusController } from "../controller/schoolYear.js";
+import { Router, type RequestHandler } from "express";
+import {
+    getSchoolYearController,
+    getActiveSchoolYearController,
+    createSchoolYearController,
+    activateSchoolYearController,
+    setSchoolYearStatusController,
+    recoverActiveSchoolYearController
+} from "../controller/schoolYear.js";
 
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
@@ -38,13 +45,15 @@ router.post("/schoolYear", adminRegister, createSchoolYearController);
 
 // ==================== ADMIN ONLY ====================
 router.patch("/schoolYear/:id/activate", adminOnlyWithId, activateSchoolYearController);
+router.post("/schoolYear/recover-active", adminOnly, recoverActiveSchoolYearController);
 // Officially complete (or reopen) a school year — the gate that unlocks faculty
 // role changes (docs/faculty-role-implementation-plan.md §7).
 router.patch("/schoolYear/:id/status", adminOnlyWithId, setSchoolYearStatusController);
 
-// ==================== ADMIN + TEACHER + REGISTER (read list) ====================
+// ==================== ADMIN + TEACHER + REGISTER (read list & active) ====================
 // Register picks the enrollment school year from the list. Creating and
 // activating a school year stay Admin-only (docs/register-role-implementation-plan.md §6.2).
+router.get("/schoolYear/active", adminFacultyRegister, getActiveSchoolYearController);
 router.get("/schoolYear", adminFacultyRegister, cacheResponse({ ttl: 60_000, shared: true }), getSchoolYearController);
 
 export default router;
