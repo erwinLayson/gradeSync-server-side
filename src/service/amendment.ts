@@ -8,10 +8,14 @@ import AmendmentPermissionModel from "../model/amendmentPermission.js";
 import AmendmentAuditModel from "../model/amendmentAudit.js";
 import FacultyModel from "../model/faculties.js";
 import ClassroomsModel from "../model/classrooms.js";
+import StudentRecordModel from "../model/studentRecord.js";
+import { getGradeBookDetailsByClassSubjectIdService } from "./gradebook.js";
 import type {
     AmendmentRequestCreateProps,
     AmendmentRequestRow,
-    AmendmentStatus
+    AmendmentStatus,
+    AmendmentRequestDetails,
+    SubjectAmendmentChanges
 } from "../constant/amendment.js";
 import { resolveTeachingFacultyId, resolveRegisterFacultyId } from "./authorization.js";
 
@@ -32,7 +36,7 @@ export async function submitAmendmentRequestService(
         // Ownership: If classSubjectId is provided, verify this faculty teaches it
         if (props.classSubjectId) {
             const [subjectRows] = await connection.execute<RowDataPacket[]>(
-                "SELECT facultyId FROM class_subjects WHERE id = ? LIMIT 1",
+                "SELECT facultyId, classId FROM class_subjects WHERE id = ? LIMIT 1",
                 [props.classSubjectId]
             );
             if (subjectRows.length === 0) {
@@ -40,6 +44,9 @@ export async function submitAmendmentRequestService(
             }
             if (Number(subjectRows[0]?.facultyId) !== facultyId) {
                 throw new ForbiddenError("You are not assigned to teach this class subject");
+            }
+            if (!props.classId && subjectRows[0]?.classId) {
+                props.classId = Number(subjectRows[0].classId);
             }
         } else {
             // Class-level attendance or student record: verify faculty is the class adviser
@@ -343,6 +350,145 @@ export async function revokeAmendmentRequestService(
 
         await connection.commit();
         return { status: "revoked" };
+    } catch (err) {
+        await connection.rollback();
+        throw err;
+    } finally {
+        connection.release();
+    }
+}
+
+export async function applyUnifiedSubjectAmendmentService(
+    actorUser: { id: number; role: UserRoles },
+    permissionId: number,
+    data: {
+        changes?: SubjectAmendmentChanges;
+    },
+    clientMeta?: { ipAddress?: string | null; userAgent?: string | null }
+): Promise<{ success: boolean; newQuarterGrade: number | null }> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+
+    await connection.beginTransaction();
+    try {
+        const permModel = new AmendmentPermissionModel(connection);
+        const reqModel = new AmendmentRequestModel(connection);
+        const auditModel = new AmendmentAuditModel(connection);
+        const recordModel = new StudentRecordModel(connection);
+
+        const permission = await permModel.getPermissionById(permissionId);
+        if (!permission) {
+            throw new NotFoundError("Amendment permission not found", 404);
+        }
+
+        if (permission.status !== "active") {
+            throw new ForbiddenError(`Amendment permission is already ${permission.status}`);
+        }
+
+        if (new Date(permission.expiresAt) <= new Date()) {
+            await permModel.expireOverduePermissions();
+            throw new ForbiddenError("Amendment permission has expired");
+        }
+
+        let facultyId: number | null = null;
+        if (actorUser.role !== ROLES.ADMIN) {
+            facultyId = await resolveTeachingFacultyId(actorUser, connection);
+            if (!facultyId || permission.facultyId !== facultyId) {
+                throw new ForbiddenError("You are not authorized to use this amendment permission");
+            }
+        }
+
+        const request = await reqModel.getRequestById(permission.requestId);
+        if (!request) {
+            throw new NotFoundError("Associated amendment request not found", 404);
+        }
+
+        let details: AmendmentRequestDetails = {};
+        try {
+            details = JSON.parse(request.details);
+        } catch {
+            details = {};
+        }
+
+        const changesToApply = data.changes ?? details.changes ?? {};
+
+        // 1. Apply Gradebook Score changes
+        if (changesToApply.gradebook && changesToApply.gradebook.length > 0) {
+            const StudentScoreModel = (await import("../model/studentScore.js")).default;
+            const scoreModel = new StudentScoreModel(connection);
+            for (const item of changesToApply.gradebook) {
+                await scoreModel.upsertScoresBatch(item.assessmentId, [
+                    { enrollmentId: permission.enrollmentId, score: Number(item.proposedScore) }
+                ]);
+            }
+        }
+
+        // 2. Apply Attendance changes
+        if (changesToApply.attendance && changesToApply.attendance.length > 0 && permission.classSubjectId) {
+            for (const item of changesToApply.attendance) {
+                const query = `
+                    INSERT INTO student_attendance (classSubjectId, enrollmentId, date, status, quarter)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = CURRENT_TIMESTAMP
+                `;
+                await connection.execute(query, [
+                    permission.classSubjectId,
+                    permission.enrollmentId,
+                    item.date,
+                    item.proposedStatus,
+                    permission.quarter
+                ]);
+            }
+        }
+
+        // 3. Auto-Recompute Quarter Grade
+        let newQuarterGrade: number | null = null;
+        if (permission.classSubjectId) {
+            const gradebook = await getGradeBookDetailsByClassSubjectIdService(permission.classSubjectId, permission.quarter);
+            const student = gradebook.student.find((s) => s.enrollmentId === permission.enrollmentId);
+            newQuarterGrade = student?.quarterGrade ?? null;
+
+            // 4. Update frozen student_academic_record_subjects
+            const classSubject = await recordModel.getClassSubjectById(permission.classSubjectId);
+            const record = await recordModel.getRecordByEnrollmentId(permission.enrollmentId);
+            if (record && classSubject && newQuarterGrade !== null) {
+                await recordModel.upsertSubjectQuarterGrade(
+                    record.id,
+                    classSubject.subjectName,
+                    classSubject.subjectCode,
+                    permission.quarter,
+                    newQuarterGrade
+                );
+            }
+        }
+
+        // 5. Consume permission and mark request completed
+        await permModel.consumePermission(permission.id);
+        await reqModel.markCompleted(permission.requestId);
+
+        // 6. Audit log
+        await auditModel.logAudit({
+            requestId: permission.requestId,
+            action: "modified",
+            actorUserId: actorUser.id,
+            actorRole: actorUser.role,
+            recordType: permission.recordType,
+            enrollmentId: permission.enrollmentId,
+            quarter: permission.quarter,
+            targetTable: "student_academic_record_subjects",
+            targetRecordId: String(permission.id),
+            diff: {
+                changes: changesToApply,
+                newQuarterGrade,
+                consumedAt: new Date().toISOString()
+            },
+            reason: "Unified subject amendment applied and quarter grade re-computed",
+            ipAddress: clientMeta?.ipAddress ?? null,
+            userAgent: clientMeta?.userAgent ?? null
+        });
+
+        await connection.commit();
+        return { success: true, newQuarterGrade };
     } catch (err) {
         await connection.rollback();
         throw err;

@@ -7,8 +7,15 @@ import {
     reopenStudentRecordController,
     studentRecordController,
     submitAllStudentRecordsController,
-    submitStudentRecordController
+    submitStudentRecordController,
+    getTeacherAssignedSubjectsController,
+    getSubjectClassRecordsController,
+    submitSubjectRecordsController,
+    submitSingleStudentSubjectRecordController,
+    reopenSubjectRecordController,
+    getSubjectSubmissionSummaryController
 } from "../controller/studentRecord.js";
+import { applyUnifiedSubjectAmendmentController } from "../controller/amendments.js";
 
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
@@ -61,6 +68,32 @@ const classRecordsReaders: RequestHandler[] = [
 // ==================== ADVISER (faculty) ====================
 // The adviser's own advised class (adviser ownership is checked in the service).
 router.get("/student-records/my-class", facultyOnly, getMyClassRecordsController);
+
+// ==================== SUBJECT TEACHER (faculty) ====================
+// Assigned class subjects and subject-specific records
+router.get("/student-records/my-subjects", facultyOnly, getTeacherAssignedSubjectsController);
+router.get("/student-records/class-subjects/:classSubjectId", classRecordsReaders, getSubjectClassRecordsController);
+router.post(
+    "/student-records/class-subjects/:classSubjectId/quarter/:quarter/submit",
+    adminFaculty,
+    submitSubjectRecordsController
+);
+router.post(
+    "/student-records/class-subjects/:classSubjectId/students/:enrollmentId/quarter/:quarter/submit",
+    adminFaculty,
+    submitSingleStudentSubjectRecordController
+);
+router.post(
+    "/student-records/class-subjects/:classSubjectId/quarter/:quarter/reopen",
+    adminFaculty,
+    reopenSubjectRecordController
+);
+router.post(
+    "/student-records/amendments/:permissionId/apply",
+    adminFaculty,
+    applyUnifiedSubjectAmendmentController
+);
+router.get("/student-records/subject-summary", adminRegister, getSubjectSubmissionSummaryController);
 
 // ==================== ADMIN + TEACHER + REGISTER ====================
 // Adviser-scope checks live in the service (teachers must be the class adviser; admin and register inspect all classes).

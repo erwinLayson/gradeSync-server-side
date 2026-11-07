@@ -3,6 +3,10 @@ import { getDBPoolConnection } from "../config/database.js";
 import StudentRecordModel from "../model/studentRecord.js";
 import ClassroomModel from "../model/classrooms.js";
 import AcademicSettingsModel from "../model/academicSettings.js";
+import ClassSubjectSubmissionModel from "../model/classSubjectSubmission.js";
+import AmendmentPermissionModel from "../model/amendmentPermission.js";
+import AmendmentRequestModel from "../model/amendmentRequest.js";
+import AmendmentAuditModel from "../model/amendmentAudit.js";
 
 // Reuse existing services
 import { getStudentByClassroomIdService, getStudentByIdService } from "./students.js";
@@ -35,7 +39,13 @@ import type {
     StudentRecordPdfSubject,
     StudentSubjectGrade,
     SubmissionSummaryRow,
-    SubmitAllResult
+    SubmitAllResult,
+    ClassSubjectSubmissionRow,
+    QuarterSubmissionStatus,
+    TeacherSubjectOption,
+    SubjectClassRecordResponse,
+    SubjectStudentRow,
+    SubjectSubmissionSummaryRow
 } from "../constant/studentRecord.js";
 
 // ==================== helpers ====================
@@ -570,13 +580,14 @@ export async function assertQuarterCompleteService(quarter: number, existingConn
 
         const withoutAdviser = await recordModel.getClassesWithoutAdviser(schoolYearId);
         const incomplete = await recordModel.getIncompleteClasses(quarter, schoolYearId);
+        const incompleteSubjects = await recordModel.getIncompleteClassSubjects(quarter, schoolYearId);
 
         // EMPTY-CLASS POLICY (explicit): a year whose classes all have advisers
         // and no outstanding submissions has nothing blocking it — including the
         // case where the active year has zero eligible classes. Both blocker
         // lists being empty is the single success condition; there is no
         // separate "must have at least one class" rule.
-        if (withoutAdviser.length === 0 && incomplete.length === 0) {
+        if (withoutAdviser.length === 0 && incomplete.length === 0 && incompleteSubjects.length === 0) {
             return;
         }
 
@@ -586,6 +597,9 @@ export async function assertQuarterCompleteService(quarter: number, existingConn
         }
         for (const cls of withoutAdviser) {
             problems.push(`${cls.section} has no assigned class adviser`);
+        }
+        for (const subj of incompleteSubjects) {
+            problems.push(`${subj.subjectName} in ${subj.section} (Teacher: ${subj.teacherName || "Unassigned"}) has not submitted records`);
         }
         throw new ConflictError(
             `Cannot advance the quarter: ${problems.join("; ")}. Submit all student records first.`
@@ -737,6 +751,499 @@ export async function StudentRecordPDFDetailsService(
         const sem2 = academicRecord.slice(2);
 
         return { student, academicRecord: {semester1: sem1, semester2: sem2}, numQuarters };
+    } finally {
+        connection.release();
+    }
+}
+
+// ==================== Subject Teacher Record Ownership Services ====================
+
+export async function getTeacherAssignedSubjectsService(facultyId: number): Promise<TeacherSubjectOption[]> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const recordModel = new StudentRecordModel(connection);
+        const activeSchoolYearId = await recordModel.getActiveSchoolYearId();
+        if (!activeSchoolYearId) {
+            return [];
+        }
+
+        const subjects = await recordModel.getTeacherClassSubjects(facultyId, activeSchoolYearId);
+        if (subjects.length === 0) {
+            return [];
+        }
+
+        const classSubjectSubmissionModel = new ClassSubjectSubmissionModel(connection);
+        const classSubjectIds = subjects.map((s) => s.classSubjectId);
+        const submissions = await classSubjectSubmissionModel.getSubmissionsByClassSubjectIds(classSubjectIds, activeSchoolYearId);
+
+        const subMap = new Map<string, QuarterSubmissionStatus>();
+        for (const sub of submissions) {
+            subMap.set(`${sub.classSubjectId}_${sub.quarter}`, sub.status);
+        }
+
+        return subjects.map((s) => {
+            const submissionStatus: Record<number, QuarterSubmissionStatus> = {
+                1: subMap.get(`${s.classSubjectId}_1`) ?? "pending",
+                2: subMap.get(`${s.classSubjectId}_2`) ?? "pending",
+                3: subMap.get(`${s.classSubjectId}_3`) ?? "pending",
+                4: subMap.get(`${s.classSubjectId}_4`) ?? "pending",
+            };
+            return {
+                ...s,
+                submissionStatus
+            };
+        });
+    } finally {
+        connection.release();
+    }
+}
+
+export async function getSubjectClassRecordsService(
+    classSubjectId: number,
+    quarter: number,
+    actorFacultyId: number | null
+): Promise<SubjectClassRecordResponse> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const recordModel = new StudentRecordModel(connection);
+        const classSubject = await recordModel.getClassSubjectById(classSubjectId);
+        if (!classSubject) {
+            throw new NotFoundError("Class subject assignment not found", 404);
+        }
+
+        if (actorFacultyId !== null && classSubject.facultyId !== actorFacultyId) {
+            throw new ForbiddenError("You are not assigned to teach this class subject");
+        }
+
+        const activeSchoolYearId = await recordModel.getActiveSchoolYearId();
+        if (!activeSchoolYearId) {
+            throw new ConflictError("No active school year is set");
+        }
+
+        const classSubjectSubmissionModel = new ClassSubjectSubmissionModel(connection);
+        const submission = await classSubjectSubmissionModel.getSubmission(classSubjectId, quarter, activeSchoolYearId);
+
+        const permModel = new AmendmentPermissionModel(connection);
+        const activePermissions = await permModel.getActivePermissionsForClassSubject(classSubjectId, quarter);
+        const activePermByEnrollmentId = new Map(activePermissions.map((p) => [p.enrollmentId, p.id]));
+
+        const gradebook = await getGradeBookDetailsByClassSubjectIdService(classSubjectId, quarter);
+
+        // Fetch frozen subject grades if any student was submitted
+        const enrollmentIds = gradebook.student.map((s) => s.enrollmentId);
+        const records = await recordModel.getRecordsByEnrollmentIds(enrollmentIds);
+        const recordByEnrollment = new Map(records.map((r) => [r.enrollmentId, r]));
+        const recordIds = records.map((r) => r.id);
+        const subjectRows = await recordModel.getSubjectRowsByRecordIds(recordIds);
+
+        const frozenGradeByRecordId = new Map<number, number | null>();
+        for (const row of subjectRows) {
+            if (row.subjectName.toLowerCase() === classSubject.subjectName.toLowerCase() || row.subjectCode.toLowerCase() === classSubject.subjectCode.toLowerCase()) {
+                const col = quarter === 1 ? row.q1 : quarter === 2 ? row.q2 : quarter === 3 ? row.q3 : row.q4;
+                frozenGradeByRecordId.set(row.recordId, col !== null && col !== undefined ? Number(col) : null);
+            }
+        }
+
+        const isSubjectSubmitted = submission?.status === "submitted";
+
+        const students: SubjectStudentRow[] = gradebook.student.map((s) => {
+            const record = recordByEnrollment.get(s.enrollmentId);
+            const frozenGrade = record ? (frozenGradeByRecordId.get(record.id) ?? null) : null;
+            const isStudentSubmitted = isSubjectSubmitted || frozenGrade !== null;
+
+            return {
+                enrollmentId: s.enrollmentId,
+                studentId: s.studentId,
+                studentLrn: s.studentLrn,
+                fullname: s.fullname,
+                studentSex: s.studentSex,
+                writtenWorkScore: s.writtenWorkScore ?? null,
+                performanceTaskScore: s.performanceTaskScore ?? null,
+                quarterlyAssessmentScore: s.quarterlyAssessmentScore ?? null,
+                attendancePresentDays: s.attendance?.presentDays ?? 0,
+                attendanceTotalDays: s.attendance?.totalDays ?? 0,
+                attendanceRate: s.attendance?.percentage ?? null,
+                quarterGrade: isStudentSubmitted && frozenGrade !== null ? frozenGrade : s.quarterGrade,
+                source: isStudentSubmitted && frozenGrade !== null ? "frozen" : "computed",
+                isFrozen: isStudentSubmitted,
+                status: isStudentSubmitted ? "submitted" : "pending",
+                submittedAt: submission?.status === "submitted" ? normalizeSubmissionDate(submission.submittedAt) : null,
+                hasActiveAmendment: activePermByEnrollmentId.has(s.enrollmentId),
+                activePermissionId: activePermByEnrollmentId.get(s.enrollmentId) ?? null,
+            };
+        });
+
+        const submittedCount = students.filter((s) => s.status === "submitted").length;
+
+        // Resolve teacher name for submittedBy
+        let submittedByName: string | null = null;
+        if (submission?.submittedBy) {
+            const [fRows] = await connection.execute<import("mysql2/promise").RowDataPacket[]>(
+                `SELECT CONCAT_WS(' ', firstname, middlename, lastname, IF(suffix IS NOT NULL, CONCAT(' ', suffix), '')) AS name FROM faculties WHERE id = ? LIMIT 1`,
+                [submission.submittedBy]
+            );
+            submittedByName = fRows[0]?.name ?? null;
+        }
+
+        return {
+            classSubjectId,
+            subjectId: classSubject.subjectId,
+            subjectName: classSubject.subjectName,
+            subjectCode: classSubject.subjectCode,
+            classId: classSubject.classId,
+            classSection: classSubject.classSection,
+            classGradeLevel: classSubject.classGradeLevel,
+            quarter,
+            isSubjectSubmitted,
+            submittedAt: submission ? normalizeSubmissionDate(submission.submittedAt) : null,
+            submittedBy: submission?.submittedBy ?? null,
+            submittedByName,
+            students,
+            progress: {
+                total: students.length,
+                submitted: submittedCount,
+                pending: students.length - submittedCount
+            }
+        };
+    } finally {
+        connection.release();
+    }
+}
+
+export async function submitSubjectRecordsService(
+    classSubjectId: number,
+    quarter: number,
+    facultyId: number | null,
+    _actorUser?: { id: number; role: string }
+): Promise<{ classSubjectId: number; quarter: number; status: "submitted"; totalStudents: number }> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        await assertSubmissionsNotLocked(connection);
+        const recordModel = new StudentRecordModel(connection);
+        const classSubject = await recordModel.getClassSubjectById(classSubjectId);
+        if (!classSubject) {
+            throw new NotFoundError("Class subject assignment not found", 404);
+        }
+
+        if (facultyId !== null && classSubject.facultyId !== facultyId) {
+            throw new ForbiddenError("You are not assigned to teach this class subject");
+        }
+
+        const activeSchoolYearId = await recordModel.getActiveSchoolYearId();
+        if (!activeSchoolYearId) {
+            throw new ConflictError("No active school year is set");
+        }
+
+        const gradebook = await getGradeBookDetailsByClassSubjectIdService(classSubjectId, quarter);
+        const missingStudents = gradebook.student.filter((s) => s.quarterGrade === null);
+        if (missingStudents.length > 0) {
+            throw new ConflictError(
+                `Record cannot be submitted: missing grades for ${missingStudents.map((s) => s.fullname).join(", ")}`
+            );
+        }
+
+        // Adviser details for header creation if needed
+        const classroom = await getClassroomByIdService(classSubject.classId, connection);
+        const adviser = await getClassAdviserService(classSubject.classId);
+
+        await connection.beginTransaction();
+        try {
+            for (const student of gradebook.student) {
+                let record = await recordModel.getRecordByEnrollmentId(student.enrollmentId);
+                if (!record) {
+                    const recordId = await recordModel.createRecord({
+                        enrollmentId: student.enrollmentId,
+                        classSection: classroom?.section ?? classSubject.classSection,
+                        classGradeLevel: classroom?.gradeLevel ?? classSubject.classGradeLevel,
+                        adviserName: adviser?.adviserFullname ?? ""
+                    });
+                    record = {
+                        id: recordId,
+                        enrollmentId: student.enrollmentId,
+                        classSection: classroom?.section ?? classSubject.classSection,
+                        classGradeLevel: classroom?.gradeLevel ?? classSubject.classGradeLevel,
+                        adviserName: adviser?.adviserFullname ?? ""
+                    };
+                }
+
+                // Freeze subject grade
+                await recordModel.upsertSubjectQuarterGrade(
+                    record.id,
+                    classSubject.subjectName,
+                    classSubject.subjectCode,
+                    quarter,
+                    student.quarterGrade!
+                );
+
+                // Freeze components if composite
+                if (student.componentGrades && student.componentGrades.length > 0) {
+                    const subjectRowId = await recordModel.getSubjectRowId(record.id, classSubject.subjectName);
+                    if (subjectRowId !== null) {
+                        for (const comp of student.componentGrades) {
+                            if (comp.grade !== null) {
+                                await recordModel.upsertSubjectComponentQuarterGrade(
+                                    subjectRowId,
+                                    comp.componentId,
+                                    comp.componentName,
+                                    comp.componentCode,
+                                    quarter,
+                                    comp.grade
+                                );
+                            }
+                        }
+                    }
+                }
+
+                // Check if all enrolled subjects for this student now have submitted grades
+                const enrolledRows = await recordModel.getEnrollmentSubjectIds([student.enrollmentId]);
+                const enrolledSubjectIds = enrolledRows.filter((r) => r.enrollmentId === student.enrollmentId).map((r) => r.subjectId);
+                const subRows = await recordModel.getSubjectRowsByRecordIds([record.id]);
+                const hasGradeForQuarter = (col: number | null | undefined) => col !== null && col !== undefined && !Number.isNaN(Number(col));
+                const allDone = enrolledSubjectIds.every((_subjId) => {
+                    const found = subRows.find((sr) => sr.subjectName === classSubject.subjectName);
+                    return found && hasGradeForQuarter(quarter === 1 ? found.q1 : quarter === 2 ? found.q2 : quarter === 3 ? found.q3 : found.q4);
+                });
+                if (allDone) {
+                    await recordModel.upsertQuarterSubmission(record.id, quarter, facultyId);
+                }
+            }
+
+            const classSubjectSubmissionModel = new ClassSubjectSubmissionModel(connection);
+            await classSubjectSubmissionModel.upsertSubmission({
+                classSubjectId,
+                quarter,
+                schoolYearId: activeSchoolYearId,
+                status: "submitted",
+                submittedBy: facultyId,
+                totalStudents: gradebook.student.length,
+                submittedStudents: gradebook.student.length
+            });
+
+            await connection.commit();
+        } catch (err) {
+            await connection.rollback();
+            throw err;
+        }
+
+        return {
+            classSubjectId,
+            quarter,
+            status: "submitted",
+            totalStudents: gradebook.student.length
+        };
+    } finally {
+        connection.release();
+    }
+}
+
+export async function submitSingleStudentSubjectRecordService(
+    classSubjectId: number,
+    enrollmentId: number,
+    quarter: number,
+    facultyId: number | null
+): Promise<{ enrollmentId: number; quarter: number; status: "submitted" }> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        await assertSubmissionsNotLocked(connection);
+        const recordModel = new StudentRecordModel(connection);
+        const classSubject = await recordModel.getClassSubjectById(classSubjectId);
+        if (!classSubject) {
+            throw new NotFoundError("Class subject assignment not found", 404);
+        }
+
+        if (facultyId !== null && classSubject.facultyId !== facultyId) {
+            throw new ForbiddenError("You are not assigned to teach this class subject");
+        }
+
+        const activeSchoolYearId = await recordModel.getActiveSchoolYearId();
+        if (!activeSchoolYearId) {
+            throw new ConflictError("No active school year is set");
+        }
+
+        const gradebook = await getGradeBookDetailsByClassSubjectIdService(classSubjectId, quarter);
+        const student = gradebook.student.find((s) => s.enrollmentId === enrollmentId);
+        if (!student) {
+            throw new NotFoundError("Student not found in this class subject", 404);
+        }
+        if (student.quarterGrade === null) {
+            throw new ConflictError(`Cannot submit record: no grade computed yet for ${student.fullname}`);
+        }
+
+        const classroom = await getClassroomByIdService(classSubject.classId, connection);
+        const adviser = await getClassAdviserService(classSubject.classId);
+
+        await connection.beginTransaction();
+        try {
+            let record = await recordModel.getRecordByEnrollmentId(enrollmentId);
+            if (!record) {
+                const recordId = await recordModel.createRecord({
+                    enrollmentId,
+                    classSection: classroom?.section ?? classSubject.classSection,
+                    classGradeLevel: classroom?.gradeLevel ?? classSubject.classGradeLevel,
+                    adviserName: adviser?.adviserFullname ?? ""
+                });
+                record = {
+                    id: recordId,
+                    enrollmentId,
+                    classSection: classroom?.section ?? classSubject.classSection,
+                    classGradeLevel: classroom?.gradeLevel ?? classSubject.classGradeLevel,
+                    adviserName: adviser?.adviserFullname ?? ""
+                };
+            }
+
+            await recordModel.upsertSubjectQuarterGrade(
+                record.id,
+                classSubject.subjectName,
+                classSubject.subjectCode,
+                quarter,
+                student.quarterGrade
+            );
+
+            if (student.componentGrades && student.componentGrades.length > 0) {
+                const subjectRowId = await recordModel.getSubjectRowId(record.id, classSubject.subjectName);
+                if (subjectRowId !== null) {
+                    for (const comp of student.componentGrades) {
+                        if (comp.grade !== null) {
+                            await recordModel.upsertSubjectComponentQuarterGrade(
+                                subjectRowId,
+                                comp.componentId,
+                                comp.componentName,
+                                comp.componentCode,
+                                quarter,
+                                comp.grade
+                            );
+                        }
+                    }
+                }
+            }
+
+            const classSubjectSubmissionModel = new ClassSubjectSubmissionModel(connection);
+            const currentSub = await classSubjectSubmissionModel.getSubmission(classSubjectId, quarter, activeSchoolYearId);
+            const nextSubmittedCount = (currentSub?.submittedStudents ?? 0) + 1;
+            const isAllSubmitted = nextSubmittedCount >= gradebook.student.length;
+
+            await classSubjectSubmissionModel.upsertSubmission({
+                classSubjectId,
+                quarter,
+                schoolYearId: activeSchoolYearId,
+                status: isAllSubmitted ? "submitted" : (currentSub?.status ?? "pending"),
+                submittedBy: facultyId,
+                totalStudents: gradebook.student.length,
+                submittedStudents: Math.min(nextSubmittedCount, gradebook.student.length)
+            });
+
+            await connection.commit();
+        } catch (err) {
+            await connection.rollback();
+            throw err;
+        }
+
+        return { enrollmentId, quarter, status: "submitted" };
+    } finally {
+        connection.release();
+    }
+}
+
+export async function reopenSubjectRecordService(
+    classSubjectId: number,
+    quarter: number,
+    facultyId: number | null,
+    _actorUser?: { id: number; role: string }
+): Promise<{ status: "pending" }> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const recordModel = new StudentRecordModel(connection);
+        const classSubject = await recordModel.getClassSubjectById(classSubjectId);
+        if (!classSubject) {
+            throw new NotFoundError("Class subject assignment not found", 404);
+        }
+
+        if (facultyId !== null && classSubject.facultyId !== facultyId) {
+            throw new ForbiddenError("You are not assigned to teach this class subject");
+        }
+
+        const activeSchoolYearId = await recordModel.getActiveSchoolYearId();
+        if (!activeSchoolYearId) {
+            throw new ConflictError("No active school year is set");
+        }
+
+        const classSubjectSubmissionModel = new ClassSubjectSubmissionModel(connection);
+        const currentSub = await classSubjectSubmissionModel.getSubmission(classSubjectId, quarter, activeSchoolYearId);
+        if (!currentSub || currentSub.status !== "submitted") {
+            throw new ConflictError("Class subject record is not currently submitted for this quarter");
+        }
+
+        await classSubjectSubmissionModel.upsertSubmission({
+            classSubjectId,
+            quarter,
+            schoolYearId: activeSchoolYearId,
+            status: "pending",
+            submittedBy: null,
+            totalStudents: currentSub.totalStudents,
+            submittedStudents: 0
+        });
+
+        return { status: "pending" };
+    } finally {
+        connection.release();
+    }
+}
+
+export async function getSubjectSubmissionSummaryService(schoolYearId?: number): Promise<SubjectSubmissionSummaryRow[]> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const recordModel = new StudentRecordModel(connection);
+        let yearId = schoolYearId;
+        if (yearId === undefined) {
+            const activeId = await recordModel.getActiveSchoolYearId();
+            if (activeId === null) {
+                return [];
+            }
+            yearId = activeId;
+        }
+
+        const rows = await recordModel.getSubjectSubmissionSummary(yearId);
+        if (rows.length === 0) {
+            return [];
+        }
+
+        const classSubjectSubmissionModel = new ClassSubjectSubmissionModel(connection);
+        const allSubmissions = await classSubjectSubmissionModel.getAllSubmissionsBySchoolYear(yearId);
+
+        const subMap = new Map<string, ClassSubjectSubmissionRow>();
+        for (const s of allSubmissions) {
+            subMap.set(`${s.classSubjectId}_${s.quarter}`, s);
+        }
+
+        return rows.map((r) => {
+            const submittedCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
+            const statusByQuarter: Record<number, QuarterSubmissionStatus> = {
+                1: "pending",
+                2: "pending",
+                3: "pending",
+                4: "pending"
+            };
+
+            for (let q = 1; q <= 4; q++) {
+                const sub = subMap.get(`${r.classSubjectId}_${q}`);
+                if (sub) {
+                    submittedCounts[q] = sub.submittedStudents;
+                    statusByQuarter[q] = sub.status;
+                }
+            }
+
+            return {
+                ...r,
+                submitted: submittedCounts,
+                statusByQuarter
+            };
+        });
     } finally {
         connection.release();
     }

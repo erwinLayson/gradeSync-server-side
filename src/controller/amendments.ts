@@ -4,7 +4,8 @@ import {
     getAmendmentRequestsService,
     getAmendmentRequestByIdService,
     reviewAmendmentRequestService,
-    revokeAmendmentRequestService
+    revokeAmendmentRequestService,
+    applyUnifiedSubjectAmendmentService
 } from "../service/amendment.js";
 import AmendmentAuditModel from "../model/amendmentAudit.js";
 import { SuccessResponse } from "../helper/response.js";
@@ -40,8 +41,8 @@ export async function submitAmendmentRequestController(
         if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
             throw new BadRequestError(`Quarter must be between 1 and ${numQuarters}`);
         }
-        if (!recordType || !["gradebook_score", "student_record_grade", "attendance"].includes(recordType)) {
-            throw new BadRequestError("Record type must be gradebook_score, student_record_grade, or attendance");
+        if (!recordType || !["gradebook_score", "student_record_grade", "attendance", "subject_record"].includes(recordType)) {
+            throw new BadRequestError("Record type must be gradebook_score, student_record_grade, attendance, or subject_record");
         }
         if (!reason || reason.trim().length < 5) {
             throw new BadRequestError("A detailed reason of at least 5 characters is required");
@@ -301,6 +302,107 @@ export async function getAmendmentAuditLogsController(
             SuccessResponse({
                 message: "Amendment audit logs retrieved successfully",
                 data: logs
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// POST /api/amendments/subject-record
+export async function submitSubjectRecordAmendmentController(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const { enrollmentId, classSubjectId, quarter, reason, changes } = req.body;
+        const rawClassId = req.body.classId;
+
+        if (!enrollmentId || Number.isNaN(Number(enrollmentId))) {
+            throw new BadRequestError("Valid enrollmentId is required");
+        }
+        if (!classSubjectId || Number.isNaN(Number(classSubjectId))) {
+            throw new BadRequestError("Valid classSubjectId is required");
+        }
+
+        const classId = rawClassId ? Number(rawClassId) : 0;
+        const numQuarters = await getNumQuarters();
+        const parsedQuarter = Number(quarter);
+        if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
+            throw new BadRequestError(`Quarter must be between 1 and ${numQuarters}`);
+        }
+        if (!reason || reason.trim().length < 5) {
+            throw new BadRequestError("A detailed reason of at least 5 characters is required");
+        }
+        if (!changes || typeof changes !== "object") {
+            throw new BadRequestError("Changes object is required");
+        }
+
+        const clientMeta = {
+            ipAddress: req.ip || req.socket.remoteAddress || null,
+            userAgent: req.headers["user-agent"] || null
+        };
+
+        const result = await submitAmendmentRequestService(
+            req.user!,
+            {
+                enrollmentId: Number(enrollmentId),
+                classSubjectId: Number(classSubjectId),
+                classId,
+                quarter: parsedQuarter,
+                recordType: "subject_record",
+                reason: reason.trim(),
+                details: {
+                    changes,
+                    classSubjectId: Number(classSubjectId),
+                    quarter: parsedQuarter,
+                    ...req.body.details
+                }
+            },
+            clientMeta
+        );
+
+        res.status(201).json(
+            SuccessResponse({
+                message: "Subject amendment request submitted successfully",
+                data: result
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// POST /api/student-records/amendments/:permissionId/apply
+// or POST /api/amendments/:permissionId/apply
+export async function applyUnifiedSubjectAmendmentController(
+    req: Request<{ permissionId: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const permissionId = Number(req.params.permissionId);
+        if (Number.isNaN(permissionId) || permissionId <= 0) {
+            throw new BadRequestError("Invalid permission id");
+        }
+
+        const clientMeta = {
+            ipAddress: req.ip || req.socket.remoteAddress || null,
+            userAgent: req.headers["user-agent"] || null
+        };
+
+        const result = await applyUnifiedSubjectAmendmentService(
+            req.user!,
+            permissionId,
+            { changes: req.body.changes },
+            clientMeta
+        );
+
+        res.status(200).json(
+            SuccessResponse({
+                message: "Amendment applied and record recalculated successfully",
+                data: result
             })
         );
     } catch (err) {

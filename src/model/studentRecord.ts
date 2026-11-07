@@ -439,4 +439,168 @@ export default class StudentRecord {
             throw new InternalServerError("Failed to fetch submitted counts", 500, err);
         }
     }
+
+    // ---------------- Subject Teacher Record Ownership queries ----------------
+
+    async getTeacherClassSubjects(
+        facultyId: number,
+        schoolYearId: number
+    ): Promise<import("../constant/studentRecord.js").TeacherSubjectOption[]> {
+        try {
+            const query = `
+                SELECT 
+                    cs.id AS classSubjectId,
+                    s.id AS subjectId,
+                    s.name AS subjectName,
+                    s.code AS subjectCode,
+                    s.unit AS subjectUnit,
+                    c.id AS classId,
+                    c.section AS classSection,
+                    c.gradeLevel AS classGradeLevel,
+                    COUNT(DISTINCT e.id) AS totalStudents
+                FROM class_subjects cs
+                JOIN subjects s ON cs.subjectId = s.id
+                JOIN classrooms c ON c.id = cs.classId
+                LEFT JOIN enrollments e ON e.classId = c.id AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed')
+                LEFT JOIN students st ON st.id = e.studentId AND (st.status IS NULL OR st.status <> 'inactive')
+                WHERE cs.facultyId = ? AND (c.status IS NULL OR c.status <> 'inactive')
+                GROUP BY cs.id, s.id, c.id
+                ORDER BY c.gradeLevel ASC, c.section ASC, s.name ASC
+            `;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId, facultyId]);
+            return rows.map((r) => ({
+                classSubjectId: Number(r.classSubjectId),
+                subjectId: Number(r.subjectId),
+                subjectName: r.subjectName,
+                subjectCode: r.subjectCode,
+                subjectUnit: Number(r.subjectUnit ?? 1),
+                classId: Number(r.classId),
+                classSection: r.classSection,
+                classGradeLevel: Number(r.classGradeLevel),
+                totalStudents: Number(r.totalStudents ?? 0),
+                submissionStatus: { 1: "pending", 2: "pending", 3: "pending", 4: "pending" },
+            }));
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch teacher class subjects", 500, err);
+        }
+    }
+
+    async getClassSubjectById(classSubjectId: number): Promise<{
+        classSubjectId: number;
+        classId: number;
+        facultyId: number;
+        subjectId: number;
+        subjectName: string;
+        subjectCode: string;
+        classSection: string;
+        classGradeLevel: number;
+    } | null> {
+        try {
+            const query = `
+                SELECT 
+                    cs.id AS classSubjectId,
+                    cs.classId,
+                    cs.facultyId,
+                    cs.subjectId,
+                    s.name AS subjectName,
+                    s.code AS subjectCode,
+                    c.section AS classSection,
+                    c.gradeLevel AS classGradeLevel
+                FROM class_subjects cs
+                JOIN subjects s ON cs.subjectId = s.id
+                JOIN classrooms c ON c.id = cs.classId
+                WHERE cs.id = ?
+                LIMIT 1
+            `;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [classSubjectId]);
+            if (rows.length === 0 || !rows[0]) return null;
+            const r = rows[0];
+            return {
+                classSubjectId: Number(r.classSubjectId),
+                classId: Number(r.classId),
+                facultyId: Number(r.facultyId),
+                subjectId: Number(r.subjectId),
+                subjectName: r.subjectName,
+                subjectCode: r.subjectCode,
+                classSection: r.classSection,
+                classGradeLevel: Number(r.classGradeLevel),
+            };
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch class subject details", 500, err);
+        }
+    }
+
+    async getIncompleteClassSubjects(
+        quarter: number,
+        schoolYearId: number
+    ): Promise<{ classSubjectId: number; subjectName: string; section: string; teacherName: string }[]> {
+        try {
+            const query = `
+                SELECT 
+                    cs.id AS classSubjectId,
+                    s.name AS subjectName,
+                    c.section,
+                    CONCAT_WS(' ', f.firstname, f.middlename, f.lastname, IF(f.suffix IS NOT NULL, CONCAT(' ', f.suffix), '')) AS teacherName
+                FROM class_subjects cs
+                JOIN subjects s ON cs.subjectId = s.id
+                JOIN classrooms c ON c.id = cs.classId
+                JOIN faculties f ON f.id = cs.facultyId
+                LEFT JOIN class_subject_submissions css
+                    ON css.classSubjectId = cs.id AND css.quarter = ? AND css.schoolYearId = ? AND css.status = 'submitted'
+                WHERE (c.status IS NULL OR c.status <> 'inactive')
+                  AND css.id IS NULL
+                ORDER BY c.gradeLevel ASC, c.section ASC, s.name ASC
+            `;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [quarter, schoolYearId]);
+            return rows as { classSubjectId: number; subjectName: string; section: string; teacherName: string }[];
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch incomplete class subjects", 500, err);
+        }
+    }
+
+    async getSubjectSubmissionSummary(
+        schoolYearId: number
+    ): Promise<import("../constant/studentRecord.js").SubjectSubmissionSummaryRow[]> {
+        try {
+            const query = `
+                SELECT 
+                    cs.id AS classSubjectId,
+                    s.id AS subjectId,
+                    s.name AS subjectName,
+                    s.code AS subjectCode,
+                    c.id AS classId,
+                    c.section AS classSection,
+                    c.gradeLevel AS classGradeLevel,
+                    f.id AS teacherId,
+                    CONCAT_WS(' ', f.firstname, f.middlename, f.lastname, IF(f.suffix IS NOT NULL, CONCAT(' ', f.suffix), '')) AS teacherName,
+                    COUNT(DISTINCT e.id) AS totalStudents
+                FROM class_subjects cs
+                JOIN subjects s ON cs.subjectId = s.id
+                JOIN classrooms c ON c.id = cs.classId
+                JOIN faculties f ON f.id = cs.facultyId
+                LEFT JOIN enrollments e ON e.classId = c.id AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed')
+                LEFT JOIN students st ON st.id = e.studentId AND (st.status IS NULL OR st.status <> 'inactive')
+                WHERE (c.status IS NULL OR c.status <> 'inactive')
+                GROUP BY cs.id, s.id, c.id, f.id
+                ORDER BY c.gradeLevel ASC, c.section ASC, s.name ASC
+            `;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId]);
+            return rows.map((r) => ({
+                classSubjectId: Number(r.classSubjectId),
+                subjectId: Number(r.subjectId),
+                subjectName: r.subjectName,
+                subjectCode: r.subjectCode,
+                classId: Number(r.classId),
+                classSection: r.classSection,
+                classGradeLevel: Number(r.classGradeLevel),
+                teacherId: r.teacherId ? Number(r.teacherId) : null,
+                teacherName: r.teacherName,
+                totalStudents: Number(r.totalStudents ?? 0),
+                submitted: { 1: 0, 2: 0, 3: 0, 4: 0 },
+                statusByQuarter: { 1: "pending", 2: "pending", 3: "pending", 4: "pending" },
+            }));
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch subject submission summary", 500, err);
+        }
+    }
 }

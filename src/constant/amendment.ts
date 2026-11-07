@@ -2,6 +2,7 @@ export const AMENDMENT_RECORD_TYPES = {
     GRADEBOOK_SCORE: "gradebook_score",
     STUDENT_RECORD_GRADE: "student_record_grade",
     ATTENDANCE: "attendance",
+    SUBJECT_RECORD: "subject_record",
 } as const;
 
 export type AmendmentRecordType = typeof AMENDMENT_RECORD_TYPES[keyof typeof AMENDMENT_RECORD_TYPES];
@@ -40,12 +41,34 @@ export const AMENDMENT_AUDIT_ACTIONS = {
 
 export type AmendmentAuditAction = typeof AMENDMENT_AUDIT_ACTIONS[keyof typeof AMENDMENT_AUDIT_ACTIONS];
 
+export interface GradebookChangeItem {
+    assessmentId: number;
+    assessmentTitle?: string;
+    currentScore?: number | null;
+    proposedScore: number;
+    maxScore?: number;
+}
+
+export interface AttendanceChangeItem {
+    date: string;
+    currentStatus?: string | null;
+    proposedStatus: string;
+}
+
+export interface SubjectAmendmentChanges {
+    gradebook?: GradebookChangeItem[];
+    attendance?: AttendanceChangeItem[];
+}
+
 export interface AmendmentRequestDetails {
     assessmentId?: number;
     assessmentTitle?: string;
     attendanceDate?: string;
     currentValue?: number | string | null;
     proposedValue?: number | string | null;
+    currentQuarterGrade?: number | null;
+    projectedQuarterGrade?: number | null;
+    changes?: SubjectAmendmentChanges;
     [key: string]: unknown;
 }
 

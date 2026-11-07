@@ -74,14 +74,18 @@ export async function assertWritePermission(
     }
 
     // 4. Resource is LOCKED (past quarter or frozen finalized record)
-    // Must find an active, non-expired amendment permission matching the 5-point tuple
+    // Must find an active, non-expired amendment permission matching the tuple
     const permModel = new AmendmentPermissionModel(connection);
+    const recordTypesToCheck = (scope.recordType === "gradebook_score" || scope.recordType === "attendance")
+        ? [scope.recordType, "subject_record"]
+        : scope.recordType;
+
     const activePerm = await permModel.getActivePermission(
         actorFacultyId,
         scope.enrollmentId,
         scope.classSubjectId,
         scope.quarter,
-        scope.recordType
+        recordTypesToCheck
     );
 
     if (!activePerm) {

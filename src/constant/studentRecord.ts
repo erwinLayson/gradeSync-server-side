@@ -131,3 +131,83 @@ export interface SubmissionSummaryRow {
     // quarter -> number of students with a submitted record for that quarter
     submitted: Record<number, number>;
 }
+
+export interface ClassSubjectSubmissionRow {
+    id: number;
+    classSubjectId: number;
+    quarter: number;
+    schoolYearId: number;
+    status: QuarterSubmissionStatus;
+    submittedAt: Date | string | null;
+    submittedBy: number | null;
+    totalStudents: number;
+    submittedStudents: number;
+    created_at?: string;
+    updated_at?: string;
+}
+
+export interface TeacherSubjectOption {
+    classSubjectId: number;
+    subjectId: number;
+    subjectName: string;
+    subjectCode: string;
+    subjectUnit: number;
+    classId: number;
+    classSection: string;
+    classGradeLevel: number;
+    totalStudents: number;
+    submissionStatus: Record<number, QuarterSubmissionStatus>;
+}
+
+export interface SubjectStudentRow {
+    enrollmentId: number;
+    studentId: number;
+    studentLrn: string | number;
+    fullname: string;
+    studentSex: string;
+    writtenWorkScore: number | null;
+    performanceTaskScore: number | null;
+    quarterlyAssessmentScore: number | null;
+    attendancePresentDays: number;
+    attendanceTotalDays: number;
+    attendanceRate: number | null;
+    quarterGrade: number | null;
+    source: "computed" | "frozen";
+    isFrozen: boolean;
+    status: QuarterSubmissionStatus;
+    submittedAt: string | null;
+    hasActiveAmendment: boolean;
+    activePermissionId?: number | null;
+}
+
+export interface SubjectClassRecordResponse {
+    classSubjectId: number;
+    subjectId: number;
+    subjectName: string;
+    subjectCode: string;
+    classId: number;
+    classSection: string;
+    classGradeLevel: number;
+    quarter: number;
+    isSubjectSubmitted: boolean;
+    submittedAt: string | null;
+    submittedBy: number | null;
+    submittedByName?: string | null;
+    students: SubjectStudentRow[];
+    progress: { total: number; submitted: number; pending: number };
+}
+
+export interface SubjectSubmissionSummaryRow {
+    classSubjectId: number;
+    subjectId: number;
+    subjectName: string;
+    subjectCode: string;
+    classId: number;
+    classSection: string;
+    classGradeLevel: number;
+    teacherId: number | null;
+    teacherName: string;
+    totalStudents: number;
+    submitted: Record<number, number>;
+    statusByQuarter: Record<number, QuarterSubmissionStatus>;
+}

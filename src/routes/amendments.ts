@@ -7,7 +7,9 @@ import {
     approveAmendmentRequestController,
     rejectAmendmentRequestController,
     revokeAmendmentRequestController,
-    getAmendmentAuditLogsController
+    getAmendmentAuditLogsController,
+    submitSubjectRecordAmendmentController,
+    applyUnifiedSubjectAmendmentController
 } from "../controller/amendments.js";
 
 // Role-based access control
@@ -55,6 +57,8 @@ const staffWithId: RequestHandler<{ id: string }>[] = [
 // ==================== TEACHER (Faculty) ====================
 router.post("/amendments", facultyOnly, submitAmendmentRequestController);
 router.post("/amendments/requests", facultyOnly, submitAmendmentRequestController);
+router.post("/amendments/subject-record", facultyOnly, submitSubjectRecordAmendmentController);
+router.post("/amendments/:permissionId/apply", facultyOnly, applyUnifiedSubjectAmendmentController);
 router.get("/amendments/my-requests", facultyOnly, getMyAmendmentRequestsController);
 
 // ==================== REGISTER & ADMIN REVIEW ====================

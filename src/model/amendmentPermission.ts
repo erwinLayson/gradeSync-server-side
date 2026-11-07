@@ -64,17 +64,21 @@ export default class AmendmentPermissionModel {
         enrollmentId: number,
         classSubjectId: number | null | undefined,
         quarter: number,
-        recordType: string
+        recordType: string | string[]
     ): Promise<AmendmentPermissionRow | null> {
         const { conn, shouldRelease } = await this.getConnection();
         try {
+            const isArray = Array.isArray(recordType);
+            const typeClause = isArray ? `AND recordType IN (${recordType.map(() => "?").join(", ")})` : `AND recordType = ?`;
+            const typeParams = isArray ? recordType : [recordType];
+
             const query = `
                 SELECT * FROM amendment_permissions
                 WHERE facultyId = ?
                   AND enrollmentId = ?
                   AND (classSubjectId = ? OR (? IS NULL AND classSubjectId IS NULL))
                   AND quarter = ?
-                  AND recordType = ?
+                  ${typeClause}
                   AND status = 'active'
                   AND expiresAt > CURRENT_TIMESTAMP
                 LIMIT 1
@@ -85,11 +89,46 @@ export default class AmendmentPermissionModel {
                 classSubjectId ?? null,
                 classSubjectId ?? null,
                 quarter,
-                recordType
+                ...typeParams
             ]);
             return rows.length > 0 ? (rows[0] as AmendmentPermissionRow) : null;
         } catch (err) {
             throw new InternalServerError("Failed to get active amendment permission", 500, err);
+        } finally {
+            if (shouldRelease) conn.release();
+        }
+    }
+
+    async getActivePermissionsForClassSubject(
+        classSubjectId: number,
+        quarter: number
+    ): Promise<AmendmentPermissionRow[]> {
+        const { conn, shouldRelease } = await this.getConnection();
+        try {
+            const query = `
+                SELECT * FROM amendment_permissions
+                WHERE classSubjectId = ?
+                  AND quarter = ?
+                  AND status = 'active'
+                  AND expiresAt > CURRENT_TIMESTAMP
+            `;
+            const [rows] = await conn.execute<RowDataPacket[]>(query, [classSubjectId, quarter]);
+            return rows as AmendmentPermissionRow[];
+        } catch (err) {
+            throw new InternalServerError("Failed to get active permissions for class subject", 500, err);
+        } finally {
+            if (shouldRelease) conn.release();
+        }
+    }
+
+    async getPermissionById(id: number): Promise<AmendmentPermissionRow | null> {
+        const { conn, shouldRelease } = await this.getConnection();
+        try {
+            const query = `SELECT * FROM amendment_permissions WHERE id = ? LIMIT 1`;
+            const [rows] = await conn.execute<RowDataPacket[]>(query, [id]);
+            return rows.length > 0 ? (rows[0] as AmendmentPermissionRow) : null;
+        } catch (err) {
+            throw new InternalServerError("Failed to get permission by ID", 500, err);
         } finally {
             if (shouldRelease) conn.release();
         }

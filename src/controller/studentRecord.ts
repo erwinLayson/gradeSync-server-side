@@ -7,7 +7,13 @@ import {
     resolveFacultyIdByUserIdService,
     submitAllStudentRecordsService,
     submitStudentRecordService,
-    StudentRecordPDFDetailsService
+    StudentRecordPDFDetailsService,
+    getTeacherAssignedSubjectsService,
+    getSubjectClassRecordsService,
+    submitSubjectRecordsService,
+    submitSingleStudentSubjectRecordService,
+    reopenSubjectRecordService,
+    getSubjectSubmissionSummaryService
 } from "../service/studentRecord.js";
 
 import { getSchoolInfoService } from "../service/schoolInfo.js";
@@ -180,6 +186,142 @@ export async function getSubmissionSummaryController(req: Request, res: Response
         return res.status(200).json(
             SuccessResponse({
                 message: "Retrieved successfully",
+                data: result
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ==================== GET /api/student-records/my-subjects ====================
+
+export async function getTeacherAssignedSubjectsController(req: Request, res: Response, next: NextFunction) {
+    try {
+        const facultyId = await resolveActorFacultyId(req);
+        if (!facultyId) {
+            return res.status(200).json(
+                SuccessResponse({
+                    message: "No assigned subjects found",
+                    data: []
+                })
+            );
+        }
+        const result = await getTeacherAssignedSubjectsService(facultyId);
+        return res.status(200).json(
+            SuccessResponse({
+                message: "Assigned subjects retrieved successfully",
+                data: result
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ==================== GET /api/student-records/class-subjects/:classSubjectId ====================
+
+export async function getSubjectClassRecordsController(
+    req: Request<{ classSubjectId: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const classSubjectId = parseIdParam(req.params.classSubjectId, "classSubjectId");
+        const quarter = await parseQuarterParam(req.query.quarter ?? 1);
+        const facultyId = await resolveActorFacultyId(req);
+        const result = await getSubjectClassRecordsService(classSubjectId, quarter, facultyId);
+        return res.status(200).json(
+            SuccessResponse({
+                message: "Subject class records retrieved successfully",
+                data: result
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ==================== POST /api/student-records/class-subjects/:classSubjectId/quarter/:quarter/submit ====================
+
+export async function submitSubjectRecordsController(
+    req: Request<{ classSubjectId: string; quarter: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const classSubjectId = parseIdParam(req.params.classSubjectId, "classSubjectId");
+        const quarter = await parseQuarterParam(req.params.quarter);
+        const facultyId = await resolveActorFacultyId(req);
+        const result = await submitSubjectRecordsService(classSubjectId, quarter, facultyId, req.user);
+        return res.status(200).json(
+            SuccessResponse({
+                message: "Subject records submitted successfully",
+                data: result
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ==================== POST /api/student-records/class-subjects/:classSubjectId/students/:enrollmentId/quarter/:quarter/submit ====================
+
+export async function submitSingleStudentSubjectRecordController(
+    req: Request<{ classSubjectId: string; enrollmentId: string; quarter: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const classSubjectId = parseIdParam(req.params.classSubjectId, "classSubjectId");
+        const enrollmentId = parseIdParam(req.params.enrollmentId, "enrollmentId");
+        const quarter = await parseQuarterParam(req.params.quarter);
+        const facultyId = await resolveActorFacultyId(req);
+        const result = await submitSingleStudentSubjectRecordService(classSubjectId, enrollmentId, quarter, facultyId);
+        return res.status(200).json(
+            SuccessResponse({
+                message: "Student subject record submitted successfully",
+                data: result
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ==================== POST /api/student-records/class-subjects/:classSubjectId/quarter/:quarter/reopen ====================
+
+export async function reopenSubjectRecordController(
+    req: Request<{ classSubjectId: string; quarter: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const classSubjectId = parseIdParam(req.params.classSubjectId, "classSubjectId");
+        const quarter = await parseQuarterParam(req.params.quarter);
+        const facultyId = await resolveActorFacultyId(req);
+        const result = await reopenSubjectRecordService(classSubjectId, quarter, facultyId, req.user);
+        return res.status(200).json(
+            SuccessResponse({
+                message: "Subject record reopened successfully",
+                data: result
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ==================== GET /api/student-records/subject-summary ====================
+
+export async function getSubjectSubmissionSummaryController(req: Request, res: Response, next: NextFunction) {
+    try {
+        const rawSchoolYearId = req.query.schoolYearId;
+        const schoolYearId = rawSchoolYearId !== undefined ? Number(rawSchoolYearId) : undefined;
+        const result = await getSubjectSubmissionSummaryService(Number.isNaN(schoolYearId) ? undefined : schoolYearId);
+        return res.status(200).json(
+            SuccessResponse({
+                message: "Subject submission summary retrieved successfully",
                 data: result
             })
         );
