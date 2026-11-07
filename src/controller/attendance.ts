@@ -7,14 +7,14 @@ import {
     saveAttendanceByClassSubjectAndDateService,
     saveSingleStudentAttendanceService,
 } from "../service/studentAttendance.js";
-import { getNumQuarters } from "../service/academicSettings.js";
+import { getNumQuarters, getAcademicSettingsService } from "../service/academicSettings.js";
 import { assertFacultyOwnsClassSubject, resolveActorFacultyId } from "../service/authorization.js";
 import { isValidQuarter } from "../helper/quarterValidation.js";
 
 import type { AttendanceInput } from "../constant/grade.js";
 
 import { SuccessResponse } from "../helper/response.js";
-import { BadRequestError } from "../middleware/errors.js";
+import { BadRequestError, ForbiddenError } from "../middleware/errors.js";
 
 // GET /api/attendance?classSubjectId=:classSubjectId&date=YYYY-MM-DD
 // Returns every attendance record for the subject on that date (only students
@@ -225,6 +225,17 @@ export async function saveAttendanceController(
         const numQuarters = await getNumQuarters();
         if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
             throw new BadRequestError(`quarter is required and must be a number between 1 and ${numQuarters}`);
+        }
+
+        const settings = await getAcademicSettingsService();
+        const currentQuarter = settings?.currentQuarter ?? 1;
+        if (Boolean(settings?.submissionsLocked)) {
+            throw new ForbiddenError("All attendance submissions are locked by the administrator");
+        }
+        if (parsedQuarter < currentQuarter) {
+            throw new ForbiddenError(
+                `Quarter ${parsedQuarter} is locked. Bulk attendance recording is disabled for past quarters. Submit an Amendment Request to modify an individual student's attendance.`
+            );
         }
         if (!Array.isArray(entries)) {
             throw new BadRequestError("entries must be an array of { enrollmentId, status }");

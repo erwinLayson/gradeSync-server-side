@@ -16,12 +16,12 @@ import {
 import type { AssessmentCreateProps, AssessmentType, AssessmentUpdateProps } from "../constant/assessment.js";
 import type { StudentScoreInput } from "../constant/grade.js";
 
-import { getNumQuarters } from "../service/academicSettings.js";
+import { getNumQuarters, getAcademicSettingsService } from "../service/academicSettings.js";
 import { isValidQuarter } from "../helper/quarterValidation.js";
 
 import { SuccessResponse } from "../helper/response.js";
 import Validate from "../helper/validate.js";
-import { BadRequestError } from "../middleware/errors.js";
+import { BadRequestError, ForbiddenError } from "../middleware/errors.js";
 
 // Create a new assessment for a class subject within a quarter.
 export async function createAssessmentController(
@@ -46,6 +46,17 @@ export async function createAssessmentController(
         const numQuarters = await getNumQuarters();
         if (Number.isNaN(parsedQuarter) || !isValidQuarter(parsedQuarter, numQuarters)) {
             throw new BadRequestError(`Quarter must be a number between 1 and ${numQuarters}`);
+        }
+
+        const settings = await getAcademicSettingsService();
+        const currentQuarter = settings?.currentQuarter ?? 1;
+        if (Boolean(settings?.submissionsLocked)) {
+            throw new ForbiddenError("All assessment creation is locked by the administrator");
+        }
+        if (parsedQuarter < currentQuarter) {
+            throw new ForbiddenError(
+                `Quarter ${parsedQuarter} is locked. Assessments cannot be created for past quarters.`
+            );
         }
         if (!isValidAssessmentType(type)) {
             throw new BadRequestError("Type must be written_work, performance_task, or quarterly_assessment");
