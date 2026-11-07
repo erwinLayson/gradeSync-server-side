@@ -10,6 +10,7 @@ export type AmendmentRecordType = typeof AMENDMENT_RECORD_TYPES[keyof typeof AME
 export const AMENDMENT_STATUSES = {
     PENDING: "pending",
     APPROVED: "approved",
+    IN_PROGRESS: "in_progress",
     REJECTED: "rejected",
     COMPLETED: "completed",
     EXPIRED: "expired",

@@ -13,7 +13,8 @@ import {
     submitSubjectRecordsController,
     submitSingleStudentSubjectRecordController,
     reopenSubjectRecordController,
-    getSubjectSubmissionSummaryController
+    getSubjectSubmissionSummaryController,
+    getSubjectStudentAmendDataController
 } from "../controller/studentRecord.js";
 import { applyUnifiedSubjectAmendmentController } from "../controller/amendments.js";
 
@@ -82,6 +83,11 @@ router.post(
     "/student-records/class-subjects/:classSubjectId/students/:enrollmentId/quarter/:quarter/submit",
     adminFaculty,
     submitSingleStudentSubjectRecordController
+);
+router.get(
+    "/student-records/class-subjects/:classSubjectId/students/:enrollmentId/amend-data",
+    adminFaculty,
+    getSubjectStudentAmendDataController
 );
 router.post(
     "/student-records/class-subjects/:classSubjectId/quarter/:quarter/reopen",

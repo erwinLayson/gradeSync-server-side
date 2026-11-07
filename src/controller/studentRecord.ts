@@ -13,7 +13,8 @@ import {
     submitSubjectRecordsService,
     submitSingleStudentSubjectRecordService,
     reopenSubjectRecordService,
-    getSubjectSubmissionSummaryService
+    getSubjectSubmissionSummaryService,
+    getSubjectStudentAmendDataService
 } from "../service/studentRecord.js";
 
 import { getSchoolInfoService } from "../service/schoolInfo.js";
@@ -398,6 +399,30 @@ export async function studentRecordController(req: Request<{ id: string }>, res:
 
         res.setHeader("Content-Type", "application/pdf");
         res.status(200).send(studentRecordPDF);
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ==================== GET /api/student-records/subject-classes/:classSubjectId/students/:enrollmentId/amend-data ====================
+
+export async function getSubjectStudentAmendDataController(
+    req: Request<{ classSubjectId: string; enrollmentId: string }>,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const classSubjectId = parseIdParam(req.params.classSubjectId, "classSubjectId");
+        const enrollmentId = parseIdParam(req.params.enrollmentId, "enrollmentId");
+        const quarter = await parseQuarterParam(req.query.quarter ?? 1);
+        const facultyId = await resolveActorFacultyId(req);
+        const data = await getSubjectStudentAmendDataService(classSubjectId, enrollmentId, quarter, facultyId);
+        return res.status(200).json(
+            SuccessResponse({
+                message: "Student amendment data retrieved successfully",
+                data
+            })
+        );
     } catch (err) {
         next(err);
     }

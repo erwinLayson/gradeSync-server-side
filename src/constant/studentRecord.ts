@@ -178,6 +178,53 @@ export interface SubjectStudentRow {
     submittedAt: string | null;
     hasActiveAmendment: boolean;
     activePermissionId?: number | null;
+    amendmentStatus?: string | null;
+    amendmentRequestId?: number | null;
+}
+
+export interface StudentAssessmentScoreItem {
+    id: number;
+    title: string;
+    type: "written_work" | "performance_task" | "quarterly_assessment";
+    maxScore: number;
+    currentScore: number | null;
+}
+
+export interface StudentAttendanceItem {
+    id?: number;
+    date: string;
+    status: "present" | "absent" | "late" | "excused";
+}
+
+export interface SubjectStudentAmendData {
+    permission: {
+        id: number;
+        requestId: number;
+        status: string;
+        expiresAt: string;
+        recordType: string;
+    };
+    request: {
+        id: number;
+        requestNumber: string;
+        status: string;
+        reason: string;
+        quarter: number;
+    };
+    student: {
+        enrollmentId: number;
+        fullname: string;
+        studentLrn: string;
+    };
+    classSubject: {
+        id: number;
+        subjectName: string;
+        subjectCode: string;
+        classSection: string;
+        classGradeLevel: number;
+    };
+    assessments: StudentAssessmentScoreItem[];
+    attendance: StudentAttendanceItem[];
 }
 
 export interface SubjectClassRecordResponse {

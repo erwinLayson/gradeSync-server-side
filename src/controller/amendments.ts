@@ -395,7 +395,10 @@ export async function applyUnifiedSubjectAmendmentController(
         const result = await applyUnifiedSubjectAmendmentService(
             req.user!,
             permissionId,
-            { changes: req.body.changes },
+            {
+                changes: req.body.changes,
+                markAsCompleted: Boolean(req.body.markAsCompleted)
+            },
             clientMeta
         );
 

@@ -10,7 +10,7 @@ import AmendmentAuditModel from "../model/amendmentAudit.js";
 
 // Reuse existing services
 import { getStudentByClassroomIdService, getStudentByIdService } from "./students.js";
-import { getGradeBookDetailsByClassSubjectIdService } from "./gradebook.js";
+import { getGradeBookDetailsByClassSubjectIdService, computeAssessmentTypeScore } from "./gradebook.js";
 import { getFacultyByUserIdService } from "./faculties.js";
 import { getClassAdviserService, getClassroomByIdService } from "./classrooms.js";
 import {getAllEnrollmentRecordByStudentId} from "./enrollments.js";
@@ -45,7 +45,8 @@ import type {
     TeacherSubjectOption,
     SubjectClassRecordResponse,
     SubjectStudentRow,
-    SubjectSubmissionSummaryRow
+    SubjectSubmissionSummaryRow,
+    SubjectStudentAmendData
 } from "../constant/studentRecord.js";
 
 // ==================== helpers ====================
@@ -829,6 +830,15 @@ export async function getSubjectClassRecordsService(
         const activePermissions = await permModel.getActivePermissionsForClassSubject(classSubjectId, quarter);
         const activePermByEnrollmentId = new Map(activePermissions.map((p) => [p.enrollmentId, p.id]));
 
+        const reqModel = new AmendmentRequestModel(connection);
+        const subjectRequests = await reqModel.getLatestRequestsForClassSubject(classSubjectId, quarter);
+        const latestRequestByEnrollmentId = new Map<number, { id: number; status: string }>();
+        for (const req of subjectRequests) {
+            if (!latestRequestByEnrollmentId.has(req.enrollmentId)) {
+                latestRequestByEnrollmentId.set(req.enrollmentId, { id: req.id, status: req.status });
+            }
+        }
+
         const gradebook = await getGradeBookDetailsByClassSubjectIdService(classSubjectId, quarter);
 
         // Fetch frozen subject grades if any student was submitted
@@ -852,6 +862,11 @@ export async function getSubjectClassRecordsService(
             const record = recordByEnrollment.get(s.enrollmentId);
             const frozenGrade = record ? (frozenGradeByRecordId.get(record.id) ?? null) : null;
             const isStudentSubmitted = isSubjectSubmitted || frozenGrade !== null;
+            const latestReq = latestRequestByEnrollmentId.get(s.enrollmentId);
+
+            const writtenWorkScore = s.writtenWorkScore ?? (s.scores && gradebook.assessment ? computeAssessmentTypeScore(gradebook.assessment as any, "written_work", s.scores) : null);
+            const performanceTaskScore = s.performanceTaskScore ?? (s.scores && gradebook.assessment ? computeAssessmentTypeScore(gradebook.assessment as any, "performance_task", s.scores) : null);
+            const quarterlyAssessmentScore = s.quarterlyAssessmentScore ?? (s.scores && gradebook.assessment ? computeAssessmentTypeScore(gradebook.assessment as any, "quarterly_assessment", s.scores) : null);
 
             return {
                 enrollmentId: s.enrollmentId,
@@ -859,9 +874,9 @@ export async function getSubjectClassRecordsService(
                 studentLrn: s.studentLrn,
                 fullname: s.fullname,
                 studentSex: s.studentSex,
-                writtenWorkScore: s.writtenWorkScore ?? null,
-                performanceTaskScore: s.performanceTaskScore ?? null,
-                quarterlyAssessmentScore: s.quarterlyAssessmentScore ?? null,
+                writtenWorkScore,
+                performanceTaskScore,
+                quarterlyAssessmentScore,
                 attendancePresentDays: s.attendance?.presentDays ?? 0,
                 attendanceTotalDays: s.attendance?.totalDays ?? 0,
                 attendanceRate: s.attendance?.percentage ?? null,
@@ -872,6 +887,8 @@ export async function getSubjectClassRecordsService(
                 submittedAt: submission?.status === "submitted" ? normalizeSubmissionDate(submission.submittedAt) : null,
                 hasActiveAmendment: activePermByEnrollmentId.has(s.enrollmentId),
                 activePermissionId: activePermByEnrollmentId.get(s.enrollmentId) ?? null,
+                amendmentStatus: latestReq?.status ?? null,
+                amendmentRequestId: latestReq?.id ?? null,
             };
         });
 
@@ -1244,6 +1261,137 @@ export async function getSubjectSubmissionSummaryService(schoolYearId?: number):
                 statusByQuarter
             };
         });
+    } finally {
+        connection.release();
+    }
+}
+
+export async function getSubjectStudentAmendDataService(
+    classSubjectId: number,
+    enrollmentId: number,
+    quarter: number,
+    facultyId: number | null
+): Promise<SubjectStudentAmendData> {
+    const pool = getDBPoolConnection();
+    const connection = await pool.getConnection();
+    try {
+        const recordModel = new StudentRecordModel(connection);
+        const classSubject = await recordModel.getClassSubjectById(classSubjectId);
+        if (!classSubject) {
+            throw new NotFoundError("Class subject not found", 404);
+        }
+
+        if (facultyId !== null && classSubject.facultyId !== facultyId) {
+            throw new ForbiddenError("You are not assigned to teach this class subject");
+        }
+
+        // Check active amendment permission
+        const permModel = new AmendmentPermissionModel(connection);
+        const activePerm = facultyId !== null
+            ? await permModel.getActivePermission(
+                facultyId,
+                enrollmentId,
+                classSubjectId,
+                quarter,
+                ["gradebook_score", "attendance", "subject_record"]
+            )
+            : (await permModel.getActivePermissionsForClassSubject(classSubjectId, quarter)).find((p) => p.enrollmentId === enrollmentId) ?? null;
+
+        if (!activePerm && facultyId !== null) {
+            throw new ForbiddenError("No active amendment permission found for this student and quarter");
+        }
+
+        const reqModel = new AmendmentRequestModel(connection);
+        const request = activePerm ? await reqModel.getRequestById(activePerm.requestId) : null;
+        if (!request && facultyId !== null) {
+            throw new NotFoundError("Associated amendment request not found", 404);
+        }
+
+        // Student details
+        const [studentRows] = await connection.execute<import("mysql2/promise").RowDataPacket[]>(
+            `SELECT e.id AS enrollmentId, s.lrn AS studentLrn,
+                    CONCAT_WS(' ', s.firstname, s.middlename, s.lastname, s.suffix) AS fullname
+             FROM enrollments e
+             JOIN students s ON s.id = e.studentId
+             WHERE e.id = ? LIMIT 1`,
+            [enrollmentId]
+        );
+        if (studentRows.length === 0 || !studentRows[0]) {
+            throw new NotFoundError("Student not found", 404);
+        }
+        const studentInfo = studentRows[0] as { enrollmentId: number; studentLrn: string; fullname: string };
+
+        // Assessments for this subject and quarter
+        const [assessmentRows] = await connection.execute<import("mysql2/promise").RowDataPacket[]>(
+            `SELECT a.id, a.title, a.type, a.maxScore, ss.score AS currentScore
+             FROM assessments a
+             LEFT JOIN student_scores ss ON ss.assessmentId = a.id AND ss.enrollmentId = ?
+             WHERE a.classSubjectId = ? AND a.quarter = ?
+             ORDER BY a.type ASC, a.id ASC`,
+            [enrollmentId, classSubjectId, quarter]
+        );
+
+        const assessments = assessmentRows.map((a) => ({
+            id: Number(a.id),
+            title: String(a.title),
+            type: a.type as "written_work" | "performance_task" | "quarterly_assessment",
+            maxScore: Number(a.maxScore),
+            currentScore: a.currentScore !== null && a.currentScore !== undefined ? Number(a.currentScore) : null
+        }));
+
+        // Attendance for this student, subject, and quarter
+        const [attendanceRows] = await connection.execute<import("mysql2/promise").RowDataPacket[]>(
+            `SELECT id, DATE_FORMAT(date, '%Y-%m-%d') AS date, status
+             FROM student_attendance
+             WHERE classSubjectId = ? AND enrollmentId = ? AND quarter = ?
+             ORDER BY date ASC`,
+            [classSubjectId, enrollmentId, quarter]
+        );
+
+        const attendance = attendanceRows.map((att) => ({
+            id: Number(att.id),
+            date: String(att.date),
+            status: att.status as "present" | "absent" | "late" | "excused"
+        }));
+
+        return {
+            permission: activePerm ? {
+                id: activePerm.id,
+                requestId: activePerm.requestId,
+                status: activePerm.status,
+                expiresAt: activePerm.expiresAt,
+                recordType: activePerm.recordType
+            } : {
+                id: 0,
+                requestId: 0,
+                status: "active",
+                expiresAt: new Date(Date.now() + 86400000).toISOString(),
+                recordType: "subject_record"
+            },
+            request: request ? {
+                id: request.id,
+                requestNumber: request.requestNumber,
+                status: request.status,
+                reason: request.reason,
+                quarter: request.quarter
+            } : {
+                id: 0,
+                requestNumber: "AMD-DIRECT",
+                status: "approved",
+                reason: "Direct Administrative Correction",
+                quarter
+            },
+            student: studentInfo,
+            classSubject: {
+                id: classSubject.classSubjectId,
+                subjectName: classSubject.subjectName,
+                subjectCode: classSubject.subjectCode,
+                classSection: classSubject.classSection,
+                classGradeLevel: classSubject.classGradeLevel
+            },
+            assessments,
+            attendance
+        };
     } finally {
         connection.release();
     }

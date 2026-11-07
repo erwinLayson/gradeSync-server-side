@@ -130,11 +130,10 @@ export async function executeWithAmendmentAudit<T>(
         const reqModel = new AmendmentRequestModel(connection);
         const auditModel = new AmendmentAuditModel(connection);
 
-        const perm = await permModel.getPermissionByRequestId(permissionId);
-        await permModel.consumePermission(permissionId);
+        const perm = await permModel.getPermissionById(permissionId);
 
         if (perm) {
-            await reqModel.markCompleted(perm.requestId);
+            await reqModel.markInProgress(perm.requestId);
         }
 
         const diff = computeAuditDiff(auditMeta.beforeState, afterState);

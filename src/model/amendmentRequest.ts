@@ -209,6 +209,44 @@ export default class AmendmentRequestModel {
         }
     }
 
+    async markInProgress(id: number): Promise<boolean> {
+        const { conn, shouldRelease } = await this.getConnection();
+        try {
+            const query = `
+                UPDATE amendment_requests
+                SET status = 'in_progress'
+                WHERE id = ? AND status = 'approved'
+            `;
+            const [result] = await conn.execute<ResultSetHeader>(query, [id]);
+            return result.affectedRows > 0;
+        } catch (err) {
+            throw new InternalServerError("Failed to mark amendment request in progress", 500, err);
+        } finally {
+            if (shouldRelease) conn.release();
+        }
+    }
+
+    async getLatestRequestsForClassSubject(
+        classSubjectId: number,
+        quarter: number
+    ): Promise<Array<{ id: number; enrollmentId: number; status: AmendmentStatus }>> {
+        const { conn, shouldRelease } = await this.getConnection();
+        try {
+            const query = `
+                SELECT id, enrollmentId, status
+                FROM amendment_requests
+                WHERE classSubjectId = ? AND quarter = ?
+                ORDER BY id DESC
+            `;
+            const [rows] = await conn.execute<RowDataPacket[]>(query, [classSubjectId, quarter]);
+            return rows as Array<{ id: number; enrollmentId: number; status: AmendmentStatus }>;
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch subject amendment requests", 500, err);
+        } finally {
+            if (shouldRelease) conn.release();
+        }
+    }
+
     async markCompleted(id: number): Promise<boolean> {
         const { conn, shouldRelease } = await this.getConnection();
         try {
@@ -241,7 +279,7 @@ export default class AmendmentRequestModel {
                   AND (classSubjectId = ? OR (? IS NULL AND classSubjectId IS NULL))
                   AND quarter = ?
                   AND recordType = ?
-                  AND status IN ('pending', 'approved')
+                  AND status IN ('pending', 'approved', 'in_progress')
                 LIMIT 1
             `;
             const [rows] = await conn.execute<RowDataPacket[]>(query, [

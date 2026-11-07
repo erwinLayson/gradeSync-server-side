@@ -362,10 +362,14 @@ export async function applyUnifiedSubjectAmendmentService(
     actorUser: { id: number; role: UserRoles },
     permissionId: number,
     data: {
-        changes?: SubjectAmendmentChanges;
+        changes?: {
+            gradebook?: Array<{ assessmentId: number; score?: number | string | null; proposedScore?: number | string | null }>;
+            attendance?: Array<{ date: string; status?: string; proposedStatus?: string }>;
+        };
+        markAsCompleted?: boolean;
     },
     clientMeta?: { ipAddress?: string | null; userAgent?: string | null }
-): Promise<{ success: boolean; newQuarterGrade: number | null }> {
+): Promise<{ success: boolean; modifiedCount: number; newQuarterGrade: number | null; status: AmendmentStatus }> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
 
@@ -405,50 +409,166 @@ export async function applyUnifiedSubjectAmendmentService(
 
         let details: AmendmentRequestDetails = {};
         try {
-            details = JSON.parse(request.details);
+            details = typeof request.details === "string" ? JSON.parse(request.details) : (request.details as any);
         } catch {
             details = {};
         }
 
-        const changesToApply = data.changes ?? details.changes ?? {};
+        const changesToApply = data.changes ?? (details.changes as any) ?? {};
+        let modifiedCount = 0;
 
-        // 1. Apply Gradebook Score changes
+        // 1. Gradebook score modifications (only if permitted)
         if (changesToApply.gradebook && changesToApply.gradebook.length > 0) {
+            if (permission.recordType === "attendance") {
+                throw new ForbiddenError("This amendment permission only authorizes attendance corrections");
+            }
+
             const StudentScoreModel = (await import("../model/studentScore.js")).default;
             const scoreModel = new StudentScoreModel(connection);
+
             for (const item of changesToApply.gradebook) {
-                await scoreModel.upsertScoresBatch(item.assessmentId, [
-                    { enrollmentId: permission.enrollmentId, score: Number(item.proposedScore) }
-                ]);
+                const targetScoreRaw = item.score !== undefined ? item.score : item.proposedScore;
+                if (targetScoreRaw === undefined || targetScoreRaw === null || targetScoreRaw === "") {
+                    continue;
+                }
+                const targetScore = Number(targetScoreRaw);
+
+                // Fetch assessment details
+                const [assRows] = await connection.execute<RowDataPacket[]>(
+                    "SELECT title, maxScore FROM assessments WHERE id = ? LIMIT 1",
+                    [item.assessmentId]
+                );
+                if (assRows.length === 0 || !assRows[0]) {
+                    continue;
+                }
+                const assessmentTitle = String(assRows[0].title);
+                const maxScore = Number(assRows[0].maxScore);
+
+                if (targetScore < 0 || targetScore > maxScore) {
+                    throw new BadRequestError(`Score ${targetScore} for "${assessmentTitle}" must be between 0 and ${maxScore}`);
+                }
+
+                // Query current score in DB
+                const [existingRows] = await connection.execute<RowDataPacket[]>(
+                    "SELECT score FROM student_scores WHERE assessmentId = ? AND enrollmentId = ? LIMIT 1",
+                    [item.assessmentId, permission.enrollmentId]
+                );
+                const previousScore = existingRows[0]?.score !== undefined && existingRows[0]?.score !== null
+                    ? Number(existingRows[0].score)
+                    : null;
+
+                // Compare actual values
+                if (previousScore !== targetScore) {
+                    modifiedCount++;
+                    await scoreModel.upsertScoresBatch(item.assessmentId, [
+                        { enrollmentId: permission.enrollmentId, score: targetScore }
+                    ]);
+
+                    await auditModel.logAudit({
+                        requestId: permission.requestId,
+                        action: "modified",
+                        actorUserId: actorUser.id,
+                        actorRole: actorUser.role,
+                        recordType: "gradebook_score",
+                        enrollmentId: permission.enrollmentId,
+                        quarter: permission.quarter,
+                        targetTable: "student_scores",
+                        targetRecordId: `${item.assessmentId}-${permission.enrollmentId}`,
+                        beforeState: { field: assessmentTitle, assessmentId: item.assessmentId, score: previousScore },
+                        afterState: { field: assessmentTitle, assessmentId: item.assessmentId, score: targetScore },
+                        diff: {
+                            record: "Gradebook",
+                            field: assessmentTitle,
+                            assessmentId: item.assessmentId,
+                            previousValue: previousScore,
+                            updatedValue: targetScore,
+                            before: previousScore,
+                            after: targetScore
+                        },
+                        reason: `Amended score for ${assessmentTitle} (${previousScore ?? "—"} → ${targetScore}) under ${request.requestNumber}`,
+                        ipAddress: clientMeta?.ipAddress ?? null,
+                        userAgent: clientMeta?.userAgent ?? null
+                    });
+                }
             }
         }
 
-        // 2. Apply Attendance changes
+        // 2. Attendance modifications (only if permitted)
         if (changesToApply.attendance && changesToApply.attendance.length > 0 && permission.classSubjectId) {
+            if (permission.recordType === "gradebook_score") {
+                throw new ForbiddenError("This amendment permission only authorizes gradebook corrections");
+            }
+
             for (const item of changesToApply.attendance) {
-                const query = `
-                    INSERT INTO student_attendance (classSubjectId, enrollmentId, date, status, quarter)
-                    VALUES (?, ?, ?, ?, ?)
-                    ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = CURRENT_TIMESTAMP
-                `;
-                await connection.execute(query, [
-                    permission.classSubjectId,
-                    permission.enrollmentId,
-                    item.date,
-                    item.proposedStatus,
-                    permission.quarter
-                ]);
+                const targetStatus = (item.status ?? item.proposedStatus)?.trim().toLowerCase();
+                if (!targetStatus) continue;
+
+                // Query current attendance
+                const [existingRows] = await connection.execute<RowDataPacket[]>(
+                    "SELECT status FROM student_attendance WHERE classSubjectId = ? AND enrollmentId = ? AND date = ? LIMIT 1",
+                    [permission.classSubjectId, permission.enrollmentId, item.date]
+                );
+                const previousStatus = existingRows[0]?.status ? String(existingRows[0].status).toLowerCase() : null;
+
+                if (previousStatus !== targetStatus) {
+                    modifiedCount++;
+                    const query = `
+                        INSERT INTO student_attendance (classSubjectId, enrollmentId, date, status, quarter)
+                        VALUES (?, ?, ?, ?, ?)
+                        ON DUPLICATE KEY UPDATE status = VALUES(status), updated_at = CURRENT_TIMESTAMP
+                    `;
+                    await connection.execute(query, [
+                        permission.classSubjectId,
+                        permission.enrollmentId,
+                        item.date,
+                        targetStatus,
+                        permission.quarter
+                    ]);
+
+                    await auditModel.logAudit({
+                        requestId: permission.requestId,
+                        action: "modified",
+                        actorUserId: actorUser.id,
+                        actorRole: actorUser.role,
+                        recordType: "attendance",
+                        enrollmentId: permission.enrollmentId,
+                        quarter: permission.quarter,
+                        targetTable: "student_attendance",
+                        targetRecordId: `${permission.classSubjectId}-${permission.enrollmentId}-${item.date}`,
+                        beforeState: { field: item.date, date: item.date, status: previousStatus },
+                        afterState: { field: item.date, date: item.date, status: targetStatus },
+                        diff: {
+                            record: "Attendance",
+                            field: item.date,
+                            date: item.date,
+                            previousValue: previousStatus,
+                            updatedValue: targetStatus,
+                            before: previousStatus,
+                            after: targetStatus
+                        },
+                        reason: `Amended attendance for ${item.date} (${previousStatus ?? "—"} → ${targetStatus}) under ${request.requestNumber}`,
+                        ipAddress: clientMeta?.ipAddress ?? null,
+                        userAgent: clientMeta?.userAgent ?? null
+                    });
+                }
             }
         }
 
-        // 3. Auto-Recompute Quarter Grade
+        // 3. Status transition & Quarter Grade Recomputation
+        let currentStatus: AmendmentStatus = request.status;
+
+        if (modifiedCount > 0 && currentStatus === "approved") {
+            await reqModel.markInProgress(permission.requestId);
+            currentStatus = "in_progress";
+        }
+
         let newQuarterGrade: number | null = null;
         if (permission.classSubjectId) {
             const gradebook = await getGradeBookDetailsByClassSubjectIdService(permission.classSubjectId, permission.quarter);
             const student = gradebook.student.find((s) => s.enrollmentId === permission.enrollmentId);
             newQuarterGrade = student?.quarterGrade ?? null;
 
-            // 4. Update frozen student_academic_record_subjects
+            // Update frozen student_academic_record_subjects if record exists
             const classSubject = await recordModel.getClassSubjectById(permission.classSubjectId);
             const record = await recordModel.getRecordByEnrollmentId(permission.enrollmentId);
             if (record && classSubject && newQuarterGrade !== null) {
@@ -462,33 +582,31 @@ export async function applyUnifiedSubjectAmendmentService(
             }
         }
 
-        // 5. Consume permission and mark request completed
-        await permModel.consumePermission(permission.id);
-        await reqModel.markCompleted(permission.requestId);
+        // 4. Handle Completion if requested
+        if (data.markAsCompleted) {
+            await permModel.consumePermission(permission.id);
+            await reqModel.markCompleted(permission.requestId);
+            currentStatus = "completed";
 
-        // 6. Audit log
-        await auditModel.logAudit({
-            requestId: permission.requestId,
-            action: "modified",
-            actorUserId: actorUser.id,
-            actorRole: actorUser.role,
-            recordType: permission.recordType,
-            enrollmentId: permission.enrollmentId,
-            quarter: permission.quarter,
-            targetTable: "student_academic_record_subjects",
-            targetRecordId: String(permission.id),
-            diff: {
-                changes: changesToApply,
-                newQuarterGrade,
-                consumedAt: new Date().toISOString()
-            },
-            reason: "Unified subject amendment applied and quarter grade re-computed",
-            ipAddress: clientMeta?.ipAddress ?? null,
-            userAgent: clientMeta?.userAgent ?? null
-        });
+            await auditModel.logAudit({
+                requestId: permission.requestId,
+                action: "consumed",
+                actorUserId: actorUser.id,
+                actorRole: actorUser.role,
+                recordType: permission.recordType,
+                enrollmentId: permission.enrollmentId,
+                quarter: permission.quarter,
+                targetTable: "amendment_requests",
+                targetRecordId: String(permission.requestId),
+                diff: { modifiedCount, newQuarterGrade, completedAt: new Date().toISOString() },
+                reason: "Teacher finalized and completed all authorized amendment corrections",
+                ipAddress: clientMeta?.ipAddress ?? null,
+                userAgent: clientMeta?.userAgent ?? null
+            });
+        }
 
         await connection.commit();
-        return { success: true, newQuarterGrade };
+        return { success: true, modifiedCount, newQuarterGrade, status: currentStatus };
     } catch (err) {
         await connection.rollback();
         throw err;

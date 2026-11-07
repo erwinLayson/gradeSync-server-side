@@ -100,6 +100,38 @@ function getGradedAssessments(
     return assessments.filter((assessment) => studentScoresByAssessmentId[assessment.id] !== undefined);
 }
 
+export function computeAssessmentTypeScore(
+    assessments: AssessmentProps[],
+    type: AssessmentType,
+    studentScoresByAssessmentId: Record<number, number>
+): number | null {
+    const typeAssessments = assessments.filter((assessment) => assessment.type === type);
+    if (typeAssessments.length === 0) {
+        return null;
+    }
+
+    const gradedAssessments = getGradedAssessments(typeAssessments, studentScoresByAssessmentId);
+    if (gradedAssessments.length === 0) {
+        return null;
+    }
+
+    const earnedScoreSum = gradedAssessments.reduce(
+        (runningSum, assessment) => runningSum + studentScoresByAssessmentId[assessment.id]!,
+        0
+    );
+
+    const maxScoreSum = gradedAssessments.reduce(
+        (runningSum, assessment) => runningSum + Number(assessment.maxScore),
+        0
+    );
+
+    if (maxScoreSum === 0) {
+        return null;
+    }
+
+    return Math.round(((earnedScoreSum / maxScoreSum) * 100) * 100) / 100;
+}
+
 function buildStudent(
     studentRoaster: StudentWithClassroom[],
     assessment: AssessmentProps[],
@@ -178,11 +210,19 @@ function buildStudent(
             0
         );
 
+        const writtenWorkScore = computeAssessmentTypeScore(assessment, "written_work", studentScoreAssessmentById);
+        const performanceTaskScore = computeAssessmentTypeScore(assessment, "performance_task", studentScoreAssessmentById);
+        const quarterlyAssessmentScore = computeAssessmentTypeScore(assessment, "quarterly_assessment", studentScoreAssessmentById);
+
         const result: any = {
             enrollmentId: sr.enrollmentId,
             studentId: sr.studentId,
             studentLrn: sr.studentLrn,
             fullname: sr.fullname,
+            studentSex: sr.studentSex,
+            writtenWorkScore,
+            performanceTaskScore,
+            quarterlyAssessmentScore,
             scores: studentScoreAssessmentById,
             totalScore,
             totalMaxScore,
