@@ -40,6 +40,7 @@ import LandingContentRoutes from "./routes/landingContent.js";
 import UploadRoutes from "./routes/uploads.js";
 import DashboardRoutes from "./routes/dashboard.js";
 import AmendmentRoutes from "./routes/amendments.js";
+import ActivityAuditRoutes from "./routes/activityAudit.js";
 
 
 import getEnv from "./helper/getEnv.js";
@@ -94,6 +95,7 @@ app.use("/api", UploadRoutes);
 app.use("/api", SystemWipeRoutes);
 app.use("/api", DashboardRoutes);
 app.use("/api", AmendmentRoutes);
+app.use("/api", ActivityAuditRoutes);
 
 // Error middleware
 app.use(ErrorHandler)

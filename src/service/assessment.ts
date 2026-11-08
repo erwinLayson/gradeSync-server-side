@@ -40,6 +40,18 @@ export async function getAssessmentService(details: {classSubjectId: number, qua
     }
 }
 
+export async function getAssessmentByIdService(assessmentId: number, conn?: PoolConnection) {
+    const pool = getDBPoolConnection();
+    const connection = conn ?? await pool.getConnection();
+    const ownConnection = !conn;
+    try {
+        const assessmentModel = new AssessmentModel(connection);
+        return await assessmentModel.getAssessmentById(assessmentId);
+    } finally {
+        if (ownConnection) connection.release();
+    }
+}
+
 // Create a new assessment and return its auto-generated id.
 export async function createAssessmentService(assessmentData: AssessmentCreateProps): Promise<number> {
     const pool = getDBPoolConnection();

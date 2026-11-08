@@ -37,7 +37,7 @@ export async function createEnrollmentController(
         // Validate enrollment data
         Validate(enrollment);
 
-        await createEnrollmentService(enrollment);
+        await createEnrollmentService(enrollment, req.user);
 
         return res.status(201).json(
             SuccessResponse({
@@ -67,7 +67,8 @@ export async function bulkRemoveEnrollmentsController(
 
         const removedIds = await bulkRemoveStudentsFromClassService(
             classId,
-            enrollmentIds.map((id) => Number(id))
+            enrollmentIds.map((id) => Number(id)),
+            req.user
         );
 
         return res.status(200).json(

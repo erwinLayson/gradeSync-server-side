@@ -9,12 +9,17 @@ import { ConflictError, ForbiddenError, NotFoundError, BadRequestError } from ".
 // Service function to create a new enrollment
 import {updateStudentByIdService} from "./students.js"
 import { getAcademicSettingsService, getNumQuarters } from "./academicSettings.js";
+import { logActivityService } from "./activityAudit.js";
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "../constant/activityAudit.js";
 
 
 // Create a new enrollment: enrollments + enrollment_details
 // If the student was previously unenrolled in the same school year, this
 // updates the existing enrollment (Option A) instead of creating a duplicate.
-export async function createEnrollmentService(enrollment: EnrollmentCreateProps) {
+export async function createEnrollmentService(
+    enrollment: EnrollmentCreateProps,
+    actorUser?: { id: number; role: string }
+) {
     // Enforce the admin-controlled enrollment window (fail-open if no settings row).
     const settings = await getAcademicSettingsService();
     if (settings && !settings.enrollmentOpen) {
@@ -97,6 +102,38 @@ export async function createEnrollmentService(enrollment: EnrollmentCreateProps)
             await updateStudentByIdService(enrollment.studentId, { status: "active" }, connection);
 
             await connection.commit();
+
+            if (actorUser?.id) {
+                const [studentRows] = await connection.execute<RowDataPacket[]>(
+                    "SELECT CONCAT_WS(' ', firstname, middlename, lastname, suffix) AS fullname, lrn FROM students WHERE id = ? LIMIT 1",
+                    [enrollment.studentId]
+                );
+                const studentInfo = studentRows[0];
+
+                await logActivityService({
+                    actorUserId: actorUser.id,
+                    action: AUDIT_ACTIONS.ENROLLMENT_STATUS_UPDATED,
+                    description: `Transferred / re-enrolled student ${studentInfo?.fullname ?? `#${enrollment.studentId}`} (LRN: ${studentInfo?.lrn ?? ""}) to Grade ${classroom.gradeLevel} - ${classroom.section}`,
+                    entityType: AUDIT_ENTITY_TYPES.ENROLLMENT,
+                    entityId: String(existingEnrollment.id),
+                    schoolYearId: enrollment.schoolYearId,
+                    classroomId: enrollment.classId,
+                    gradeLevel: enrollment.gradeLevel,
+                    classroomName: `Grade ${classroom.gradeLevel} - ${classroom.section}`,
+                    status: "success",
+                    metadata: {
+                        isTransfer: true,
+                        enrollmentId: existingEnrollment.id,
+                        studentId: enrollment.studentId,
+                        studentName: studentInfo?.fullname,
+                        studentLrn: studentInfo?.lrn,
+                        classId: enrollment.classId,
+                        gradeLevel: enrollment.gradeLevel,
+                        subjectCount: enrollment.subjectIds.length,
+                    },
+                }, connection);
+            }
+
             return existingEnrollment.id;
         }
 
@@ -115,6 +152,38 @@ export async function createEnrollmentService(enrollment: EnrollmentCreateProps)
         await updateStudentByIdService(enrollment.studentId, { status: "active" }, connection);
 
         await connection.commit();
+
+        if (actorUser?.id) {
+            const [studentRows] = await connection.execute<RowDataPacket[]>(
+                "SELECT CONCAT_WS(' ', firstname, middlename, lastname, suffix) AS fullname, lrn FROM students WHERE id = ? LIMIT 1",
+                [enrollment.studentId]
+            );
+            const studentInfo = studentRows[0];
+
+            await logActivityService({
+                actorUserId: actorUser.id,
+                action: AUDIT_ACTIONS.STUDENT_ENROLLED,
+                description: `Enrolled student ${studentInfo?.fullname ?? `#${enrollment.studentId}`} (LRN: ${studentInfo?.lrn ?? ""}) into Grade ${classroom.gradeLevel} - ${classroom.section}`,
+                entityType: AUDIT_ENTITY_TYPES.ENROLLMENT,
+                entityId: String(enrollmentId),
+                schoolYearId: enrollment.schoolYearId,
+                classroomId: enrollment.classId,
+                gradeLevel: enrollment.gradeLevel,
+                classroomName: `Grade ${classroom.gradeLevel} - ${classroom.section}`,
+                status: "success",
+                metadata: {
+                    isTransfer: false,
+                    enrollmentId,
+                    studentId: enrollment.studentId,
+                    studentName: studentInfo?.fullname,
+                    studentLrn: studentInfo?.lrn,
+                    classId: enrollment.classId,
+                    gradeLevel: enrollment.gradeLevel,
+                    subjectCount: enrollment.subjectIds.length,
+                },
+            }, connection);
+        }
+
         return enrollmentId;
     } catch (err) {
         await connection.rollback();
@@ -167,7 +236,11 @@ export async function removeStudentFromClassService(classId: number, enrollmentI
 }
 
 // Bulk-remove students from a classroom
-export async function bulkRemoveStudentsFromClassService(classId: number, enrollmentIds: number[]) {
+export async function bulkRemoveStudentsFromClassService(
+    classId: number,
+    enrollmentIds: number[],
+    actorUser?: { id: number; role: string }
+) {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
@@ -204,6 +277,24 @@ export async function bulkRemoveStudentsFromClassService(classId: number, enroll
         }
 
         await connection.commit();
+
+        if (actorUser?.id && removedIds.length > 0) {
+            await logActivityService({
+                actorUserId: actorUser.id,
+                action: AUDIT_ACTIONS.ENROLLMENT_STATUS_UPDATED,
+                description: `Removed ${removedIds.length} student(s) from classroom #${classId} (marked unenrolled)`,
+                entityType: AUDIT_ENTITY_TYPES.ENROLLMENT,
+                entityId: String(classId),
+                classroomId: classId,
+                status: "success",
+                metadata: {
+                    status: "unenrolled",
+                    classId,
+                    enrollmentIds: removedIds,
+                },
+            }, connection);
+        }
+
         return removedIds;
     } catch (err) {
         await connection.rollback();

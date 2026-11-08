@@ -1,11 +1,16 @@
 import type { Request, Response, NextFunction } from "express";
+import type { RowDataPacket } from "mysql2/promise";
+import { getDBPoolConnection } from "../config/database.js";
 
 import {
     createAssessmentService,
+    getAssessmentByIdService,
     getAssessmentService,
     updateAssessmentService,
     deleteAssessmentService
 } from "../service/assessment.js";
+import { logActivityService } from "../service/activityAudit.js";
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "../constant/activityAudit.js";
 import { saveAssessmentScoresService, saveSingleStudentScoreService } from "../service/studentScore.js";
 import {
     assertFacultyOwnsAssessment,
@@ -80,6 +85,50 @@ export async function createAssessmentController(
         };
 
         const assessmentId = await createAssessmentService(assessmentData);
+
+        // Academic context and audit log
+        try {
+            const pool = getDBPoolConnection();
+            const conn = await pool.getConnection();
+            try {
+                const [csRows] = await conn.execute<RowDataPacket[]>(
+                    `SELECT cs.classId, cs.subjectId, c.gradeLevel, c.section, s.name AS subjectName,
+                            sy.id AS schoolYearId, CONCAT(sy.startYear, '-', sy.endYear) AS schoolYear
+                     FROM class_subjects cs
+                     JOIN classrooms c ON c.id = cs.classId
+                     JOIN subjects s ON s.id = cs.subjectId
+                     LEFT JOIN schoolyear sy ON sy.isActive = 1
+                     WHERE cs.id = ? LIMIT 1`,
+                    [parsedClassSubjectId]
+                );
+                const cs = csRows[0];
+
+                await logActivityService({
+                    actorUserId: req.user!.id,
+                    actorFacultyId: facultyId,
+                    action: AUDIT_ACTIONS.ACTIVITY_CREATED,
+                    description: `Created assessment "${assessmentData.title}" (${assessmentData.type}, max score: ${assessmentData.maxScore})`,
+                    entityType: AUDIT_ENTITY_TYPES.ASSESSMENT,
+                    entityId: String(assessmentId),
+                    schoolYearId: cs?.schoolYearId ? Number(cs.schoolYearId) : null,
+                    schoolYear: cs?.schoolYear ? String(cs.schoolYear) : null,
+                    classroomId: cs?.classId ? Number(cs.classId) : null,
+                    classroomName: cs ? `Grade ${cs.gradeLevel} - ${cs.section}` : null,
+                    gradeLevel: cs?.gradeLevel ? Number(cs.gradeLevel) : null,
+                    subjectId: cs?.subjectId ? Number(cs.subjectId) : null,
+                    subjectName: cs?.subjectName ? String(cs.subjectName) : null,
+                    quarter: parsedQuarter,
+                    status: "success",
+                    afterState: { id: assessmentId, ...assessmentData },
+                    ipAddress: req.ip || (req.headers["x-forwarded-for"] as string) || null,
+                    userAgent: req.headers["user-agent"] || null,
+                }, conn);
+            } finally {
+                conn.release();
+            }
+        } catch (auditErr) {
+            console.error("[ActivityAudit] Failed to audit assessment creation:", auditErr);
+        }
 
         res.status(201).json(
             SuccessResponse({
@@ -166,7 +215,40 @@ export async function updateAssessmentController(
             updateData.dateGiven = dateGiven === "" ? null : dateGiven;
         }
 
+        const existingAssessment = await getAssessmentByIdService(Number(id));
+
         await updateAssessmentService(Number(id), updateData);
+
+        const updatedAssessment = await getAssessmentByIdService(Number(id));
+
+        try {
+            const diff: Record<string, { from: unknown; to: unknown }> = {};
+            if (existingAssessment && updatedAssessment) {
+                for (const key of Object.keys(updateData) as (keyof typeof updateData)[]) {
+                    if (existingAssessment[key] !== updatedAssessment[key]) {
+                        diff[key] = { from: existingAssessment[key], to: updatedAssessment[key] };
+                    }
+                }
+            }
+
+            await logActivityService({
+                actorUserId: req.user!.id,
+                actorFacultyId: facultyId,
+                action: AUDIT_ACTIONS.ACTIVITY_UPDATED,
+                description: `Updated assessment "${updatedAssessment?.title ?? existingAssessment?.title ?? id}"`,
+                entityType: AUDIT_ENTITY_TYPES.ASSESSMENT,
+                entityId: String(id),
+                quarter: existingAssessment?.quarter ?? null,
+                beforeState: existingAssessment,
+                afterState: updatedAssessment,
+                diff,
+                status: "success",
+                ipAddress: req.ip || (req.headers["x-forwarded-for"] as string) || null,
+                userAgent: req.headers["user-agent"] || null,
+            });
+        } catch (auditErr) {
+            console.error("[ActivityAudit] Failed to audit assessment update:", auditErr);
+        }
 
         res.status(200).json(
             SuccessResponse({
@@ -187,7 +269,27 @@ export async function deleteAssessmentController(req: Request<{ id: number }>, r
         const facultyId = await resolveActorFacultyId(req.user!);
         await assertFacultyOwnsAssessment(facultyId, Number(id));
 
+        const existingAssessment = await getAssessmentByIdService(Number(id));
+
         await deleteAssessmentService(Number(id));
+
+        try {
+            await logActivityService({
+                actorUserId: req.user!.id,
+                actorFacultyId: facultyId,
+                action: AUDIT_ACTIONS.ACTIVITY_DELETED,
+                description: `Deleted assessment "${existingAssessment?.title ?? id}" (${existingAssessment?.type ?? "activity"})`,
+                entityType: AUDIT_ENTITY_TYPES.ASSESSMENT,
+                entityId: String(id),
+                quarter: existingAssessment?.quarter ?? null,
+                beforeState: existingAssessment,
+                status: "success",
+                ipAddress: req.ip || (req.headers["x-forwarded-for"] as string) || null,
+                userAgent: req.headers["user-agent"] || null,
+            });
+        } catch (auditErr) {
+            console.error("[ActivityAudit] Failed to audit assessment deletion:", auditErr);
+        }
 
         res.status(200).json(
             SuccessResponse({

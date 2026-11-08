@@ -49,7 +49,26 @@ import type {
     SubjectStudentAmendData
 } from "../constant/studentRecord.js";
 
+import { logActivityService } from "./activityAudit.js";
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "../constant/activityAudit.js";
+
 // ==================== helpers ====================
+
+async function resolveActorUserId(
+    conn: PoolConnection,
+    facultyId: number | null,
+    actorUser?: { id: number; role: string }
+): Promise<number> {
+    if (actorUser?.id) return actorUser.id;
+    if (facultyId) {
+        const [rows] = await conn.execute<import("mysql2/promise").RowDataPacket[]>(
+            "SELECT userId FROM faculties WHERE id = ? LIMIT 1",
+            [facultyId]
+        );
+        if (rows[0]?.userId) return Number(rows[0].userId);
+    }
+    return 0;
+}
 
 export async function resolveFacultyIdByUserIdService(userId: number): Promise<number> {
     const faculty = await getFacultyByUserIdService(userId);
@@ -320,7 +339,8 @@ export async function submitStudentRecordService(
     classId: number,
     enrollmentId: number,
     quarter: number,
-    facultyId: number | null
+    facultyId: number | null,
+    actorUser?: { id: number; role: string }
 ): Promise<{ recordId: number; status: "submitted" }> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
@@ -333,7 +353,8 @@ export async function submitStudentRecordService(
             throw new NotFoundError("Classroom not found", 404);
         }
         const roster = await getStudentByClassroomIdService(classId, connection);
-        if (!roster.some((s) => s.enrollmentId === enrollmentId)) {
+        const student = roster.find((s) => s.enrollmentId === enrollmentId);
+        if (!student) {
             throw new NotFoundError("Student is not enrolled in this class", 404);
         }
 
@@ -362,13 +383,43 @@ export async function submitStudentRecordService(
         }
 
         const record = await recordModel.getRecordByEnrollmentId(enrollmentId);
+
+        const actorUserId = await resolveActorUserId(connection, facultyId, actorUser);
+        if (actorUserId > 0) {
+            await logActivityService({
+                actorUserId,
+                actorFacultyId: facultyId,
+                action: AUDIT_ACTIONS.GRADE_SUBMITTED,
+                description: `Submitted quarter ${quarter} records for student ${student.fullname} in Grade ${classroom.gradeLevel} - ${classroom.section}`,
+                entityType: AUDIT_ENTITY_TYPES.GRADE_SUBMISSION,
+                entityId: String(enrollmentId),
+                schoolYearId: (await recordModel.getActiveSchoolYearId()) ?? null,
+                classroomId: classId,
+                gradeLevel: classroom.gradeLevel,
+                classroomName: `Grade ${classroom.gradeLevel} - ${classroom.section}`,
+                quarter,
+                status: "success",
+                metadata: {
+                    submissionType: "adviser_single",
+                    classId,
+                    enrollmentId,
+                    studentName: student.fullname,
+                },
+            }, connection);
+        }
+
         return { recordId: record?.id ?? 0, status: "submitted" };
     } finally {
         connection.release();
     }
 }
 
-export async function submitAllStudentRecordsService(classId: number, quarter: number, facultyId: number | null): Promise<SubmitAllResult> {
+export async function submitAllStudentRecordsService(
+    classId: number,
+    quarter: number,
+    facultyId: number | null,
+    actorUser?: { id: number; role: string }
+): Promise<SubmitAllResult> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
@@ -436,6 +487,31 @@ export async function submitAllStudentRecordsService(classId: number, quarter: n
         } catch (err) {
             await connection.rollback();
             throw err;
+        }
+
+        const actorUserId = await resolveActorUserId(connection, facultyId, actorUser);
+        if (actorUserId > 0) {
+            await logActivityService({
+                actorUserId,
+                actorFacultyId: facultyId,
+                action: AUDIT_ACTIONS.GRADE_SUBMITTED,
+                description: `Submitted quarter ${quarter} records for classroom "${classroom.section}" (${submittedCount} submitted, ${blocked.length} blocked)`,
+                entityType: AUDIT_ENTITY_TYPES.GRADE_SUBMISSION,
+                entityId: String(classId),
+                schoolYearId: (await recordModel.getActiveSchoolYearId()) ?? null,
+                classroomId: classId,
+                gradeLevel: classroom.gradeLevel,
+                classroomName: `Grade ${classroom.gradeLevel} - ${classroom.section}`,
+                quarter,
+                status: "success",
+                metadata: {
+                    submissionType: "adviser_all",
+                    classId,
+                    submittedCount,
+                    blockedCount: blocked.length,
+                    blockedStudents: blocked.map((b) => b.fullname),
+                },
+            }, connection);
         }
 
         return { submitted: submittedCount, alreadySubmitted: submittedEnrollmentIds.size, blocked };
@@ -1040,6 +1116,37 @@ export async function submitSubjectRecordsService(
             });
 
             await connection.commit();
+
+            const actorUserId = await resolveActorUserId(connection, facultyId, _actorUser);
+            if (actorUserId > 0) {
+                await logActivityService({
+                    actorUserId,
+                    actorFacultyId: facultyId,
+                    action: AUDIT_ACTIONS.GRADE_SUBMITTED,
+                    description: `Submitted quarter ${quarter} grades for ${classSubject.subjectName} in Grade ${classSubject.classGradeLevel} - ${classSubject.classSection} (${gradebook.student.length} students)`,
+                    entityType: AUDIT_ENTITY_TYPES.GRADE_SUBMISSION,
+                    entityId: String(classSubjectId),
+                    schoolYearId: activeSchoolYearId,
+                    classroomId: classSubject.classId,
+                    gradeLevel: classroom?.gradeLevel ?? classSubject.classGradeLevel,
+                    classroomName: `Grade ${classroom?.gradeLevel ?? classSubject.classGradeLevel} - ${classroom?.section ?? classSubject.classSection}`,
+                    subjectId: classSubject.subjectId,
+                    subjectName: classSubject.subjectName,
+                    quarter,
+                    status: "success",
+                    metadata: {
+                        submissionType: "subject",
+                        classSubjectId,
+                        totalStudents: gradebook.student.length,
+                        studentEnrollmentIds: gradebook.student.map((s) => s.enrollmentId),
+                        grades: gradebook.student.map((s) => ({
+                            enrollmentId: s.enrollmentId,
+                            fullname: s.fullname,
+                            quarterGrade: s.quarterGrade,
+                        })),
+                    },
+                }, connection);
+            }
         } catch (err) {
             await connection.rollback();
             throw err;
@@ -1060,7 +1167,8 @@ export async function submitSingleStudentSubjectRecordService(
     classSubjectId: number,
     enrollmentId: number,
     quarter: number,
-    facultyId: number | null
+    facultyId: number | null,
+    actorUser?: { id: number; role: string }
 ): Promise<{ enrollmentId: number; quarter: number; status: "submitted" }> {
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
@@ -1154,6 +1262,33 @@ export async function submitSingleStudentSubjectRecordService(
             });
 
             await connection.commit();
+
+            const actorUserId = await resolveActorUserId(connection, facultyId, actorUser);
+            if (actorUserId > 0) {
+                await logActivityService({
+                    actorUserId,
+                    actorFacultyId: facultyId,
+                    action: AUDIT_ACTIONS.GRADE_SUBMITTED,
+                    description: `Submitted quarter ${quarter} grade for student ${student.fullname} in ${classSubject.subjectName} (${student.quarterGrade})`,
+                    entityType: AUDIT_ENTITY_TYPES.GRADE_SUBMISSION,
+                    entityId: `${classSubjectId}_${enrollmentId}`,
+                    schoolYearId: activeSchoolYearId,
+                    classroomId: classSubject.classId,
+                    gradeLevel: classSubject.classGradeLevel,
+                    classroomName: `Grade ${classSubject.classGradeLevel} - ${classSubject.classSection}`,
+                    subjectId: classSubject.subjectId,
+                    subjectName: classSubject.subjectName,
+                    quarter,
+                    status: "success",
+                    metadata: {
+                        submissionType: "single_student_subject",
+                        classSubjectId,
+                        enrollmentId,
+                        studentName: student.fullname,
+                        quarterGrade: student.quarterGrade,
+                    },
+                }, connection);
+            }
         } catch (err) {
             await connection.rollback();
             throw err;

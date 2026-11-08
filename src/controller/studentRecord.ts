@@ -118,7 +118,7 @@ export async function submitStudentRecordController(
         const enrollmentId = parseIdParam(req.params.enrollmentId, "enrollmentId");
         const quarter = await parseQuarterParam(req.params.quarter);
         const facultyId = await resolveActorFacultyId(req);
-        const result = await submitStudentRecordService(classId, enrollmentId, quarter, facultyId);
+        const result = await submitStudentRecordService(classId, enrollmentId, quarter, facultyId, req.user);
         return res.status(200).json(
             SuccessResponse({
                 message: "Student record submitted successfully",
@@ -141,7 +141,7 @@ export async function submitAllStudentRecordsController(
         const classId = parseIdParam(req.params.classId, "classId");
         const quarter = await parseQuarterParam(req.params.quarter);
         const facultyId = await resolveActorFacultyId(req);
-        const result = await submitAllStudentRecordsService(classId, quarter, facultyId);
+        const result = await submitAllStudentRecordsService(classId, quarter, facultyId, req.user);
         return res.status(200).json(
             SuccessResponse({
                 message: "Student records submitted",
@@ -278,7 +278,7 @@ export async function submitSingleStudentSubjectRecordController(
         const enrollmentId = parseIdParam(req.params.enrollmentId, "enrollmentId");
         const quarter = await parseQuarterParam(req.params.quarter);
         const facultyId = await resolveActorFacultyId(req);
-        const result = await submitSingleStudentSubjectRecordService(classSubjectId, enrollmentId, quarter, facultyId);
+        const result = await submitSingleStudentSubjectRecordService(classSubjectId, enrollmentId, quarter, facultyId, req.user);
         return res.status(200).json(
             SuccessResponse({
                 message: "Student subject record submitted successfully",

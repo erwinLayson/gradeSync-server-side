@@ -9,6 +9,8 @@ import type { RowDataPacket } from "mysql2/promise";
 import type { AttendanceInput, AttendanceRecord, AttendanceStatus } from "../constant/grade.js";
 import { getNumQuarters, getCurrentQuarter, getAcademicSettingsService } from "./academicSettings.js";
 import { executeWithAmendmentAudit } from "./amendmentPermission.js";
+import { logActivityService } from "./activityAudit.js";
+import { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from "../constant/activityAudit.js";
 
 // Shared helpers — never re-implement quarter bounds or the present rate here.
 import { isValidQuarter } from "../helper/quarterValidation.js";
@@ -261,6 +263,51 @@ export async function saveAttendanceByClassSubjectAndDateService(
     }
 
     await connection.commit();
+
+    try {
+      const presentCount = entries.filter((e) => e.status === "present").length;
+      const absentCount = entries.filter((e) => e.status === "absent").length;
+
+      const [csRows] = await connection.execute<RowDataPacket[]>(
+        `SELECT cs.classId, cs.subjectId, c.gradeLevel, c.section, s.name AS subjectName,
+                sy.id AS schoolYearId, CONCAT(sy.startYear, '-', sy.endYear) AS schoolYear
+         FROM class_subjects cs
+         JOIN classrooms c ON c.id = cs.classId
+         JOIN subjects s ON s.id = cs.subjectId
+         LEFT JOIN schoolyear sy ON sy.isActive = 1
+         WHERE cs.id = ? LIMIT 1`,
+        [classSubjectId]
+      );
+      const cs = csRows[0];
+
+      if (facultyUserId) {
+        await logActivityService({
+          actorUserId: facultyUserId,
+          action: AUDIT_ACTIONS.ATTENDANCE_RECORDED,
+          description: `Recorded attendance for ${date} (${entries.length} students: ${presentCount} present, ${absentCount} absent)`,
+          entityType: AUDIT_ENTITY_TYPES.ATTENDANCE,
+          entityId: `${classSubjectId}_${date}`,
+          schoolYearId: cs?.schoolYearId ? Number(cs.schoolYearId) : null,
+          schoolYear: cs?.schoolYear ? String(cs.schoolYear) : null,
+          classroomId: cs?.classId ? Number(cs.classId) : null,
+          classroomName: cs ? `Grade ${cs.gradeLevel} - ${cs.section}` : null,
+          gradeLevel: cs?.gradeLevel ? Number(cs.gradeLevel) : null,
+          subjectId: cs?.subjectId ? Number(cs.subjectId) : null,
+          subjectName: cs?.subjectName ? String(cs.subjectName) : null,
+          quarter,
+          status: "success",
+          metadata: {
+            date,
+            totalEntries: entries.length,
+            present: presentCount,
+            absent: absentCount,
+            enrollmentIds: entries.map((e) => e.enrollmentId),
+          },
+        }, connection);
+      }
+    } catch (auditErr) {
+      console.error("[ActivityAudit] Failed to record attendance audit log:", auditErr);
+    }
   } catch (err) {
     if (transactionStarted) {
       await connection.rollback();
@@ -491,6 +538,44 @@ export async function saveSingleStudentAttendanceService(
     );
 
     await connection.commit();
+
+    try {
+      const [csRows] = await connection.execute<RowDataPacket[]>(
+        `SELECT cs.classId, cs.subjectId, c.gradeLevel, c.section, s.name AS subjectName,
+                sy.id AS schoolYearId, CONCAT(sy.startYear, '-', sy.endYear) AS schoolYear
+         FROM class_subjects cs
+         JOIN classrooms c ON c.id = cs.classId
+         JOIN subjects s ON s.id = cs.subjectId
+         LEFT JOIN schoolyear sy ON sy.isActive = 1
+         WHERE cs.id = ? LIMIT 1`,
+        [classSubjectId]
+      );
+      const cs = csRows[0];
+
+      await logActivityService({
+        actorUserId: actor.id,
+        action: AUDIT_ACTIONS.ATTENDANCE_UPDATED,
+        description: `Updated attendance for enrollment #${enrollmentId} on ${date} to "${status}"`,
+        entityType: AUDIT_ENTITY_TYPES.ATTENDANCE,
+        entityId: `${classSubjectId}_${enrollmentId}_${date}`,
+        schoolYearId: cs?.schoolYearId ? Number(cs.schoolYearId) : null,
+        schoolYear: cs?.schoolYear ? String(cs.schoolYear) : null,
+        classroomId: cs?.classId ? Number(cs.classId) : null,
+        classroomName: cs ? `Grade ${cs.gradeLevel} - ${cs.section}` : null,
+        gradeLevel: cs?.gradeLevel ? Number(cs.gradeLevel) : null,
+        subjectId: cs?.subjectId ? Number(cs.subjectId) : null,
+        subjectName: cs?.subjectName ? String(cs.subjectName) : null,
+        quarter,
+        beforeState,
+        afterState,
+        diff: { from: beforeState?.status ?? null, to: status },
+        status: "success",
+        ipAddress: clientMeta?.ipAddress ?? null,
+        userAgent: clientMeta?.userAgent ?? null,
+      }, connection);
+    } catch (auditErr) {
+      console.error("[ActivityAudit] Failed to record single attendance audit log:", auditErr);
+    }
   } catch (err) {
     await connection.rollback();
     throw err;
