@@ -10,11 +10,11 @@ export default class Faculty {
 
     // Create a new faculty
     async createFaculty(faculty: FacultyProps): Promise<number> {
-        const {userId, email, firstname, middlename, lastname, suffix, role} = faculty;
+        const {userId, email, firstname, middlename, lastname, suffix, gender, role} = faculty;
         try {
-            const query = `INSERT INTO faculties (userId, email, firstname, middlename, lastname, suffix, role) VALUES (?, ?, ?, ?, ?, ?, ?)`;
+            const query = `INSERT INTO faculties (userId, email, firstname, middlename, lastname, suffix, gender, role) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
 
-            const values = [userId, email, firstname, middlename, lastname, suffix ?? null, role];
+            const values = [userId, email, firstname, middlename, lastname, suffix ?? null, gender ?? null, role];
             const [result] = await this.connection.execute<ResultSetHeader>(query, values);
             return result.insertId;
         }catch(err) {
@@ -33,6 +33,7 @@ export default class Faculty {
             id,
             role,
             email,
+            gender,
             CONCAT(firstname, ' ', middlename, ' ', lastname, IF(suffix IS NOT NULL, CONCAT(' ', suffix), '')) AS fullname
             FROM faculties${where}`;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, role ? [role] : []);
@@ -55,6 +56,7 @@ export default class Faculty {
             middlename,
             lastname,
             suffix,
+            gender,
             CONCAT(firstname, ' ', middlename, ' ', lastname, IF(suffix IS NOT NULL, CONCAT(' ', suffix), '')) AS fullname
             FROM faculties WHERE userId = ?`;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [userId]);
@@ -81,6 +83,7 @@ export default class Faculty {
             middlename,
             lastname,
             suffix,
+            gender,
             CONCAT(firstname, ' ', middlename, ' ', lastname, IF(suffix IS NOT NULL, CONCAT(' ', suffix), '')) AS fullname
             FROM faculties WHERE id = ?`;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [facultyId]);
@@ -146,7 +149,7 @@ export default class Faculty {
         const updateFields: string[] = [];
         const values: (string | null)[] = [];
 
-        for (const field of ["email", "firstname", "middlename", "lastname", "suffix", "role"] as const) {
+        for (const field of ["email", "firstname", "middlename", "lastname", "suffix", "gender", "role"] as const) {
             if (field in faculty) {
                 updateFields.push(`${field} = ?`);
                 values.push((faculty as Record<string, string | null | undefined>)[field] ?? null);
@@ -177,6 +180,7 @@ export default class Faculty {
             id,
             role,
             email,
+            gender,
             CONCAT(firstname, ' ', middlename, ' ', lastname, IF(suffix IS NOT NULL, CONCAT(' ', suffix), '')) AS fullname
             FROM faculties WHERE email = ?`;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [email]);
@@ -198,6 +202,7 @@ export default class Faculty {
                 t.id,
                 t.role,
                 t.email,
+                t.gender,
                 CONCAT(t.firstname, ' ', t.middlename, ' ', t.lastname, IF(t.suffix IS NOT NULL, CONCAT(' ', t.suffix), '')) AS fullname
                 FROM faculty_subject_assignment tsa
                 JOIN faculties t 

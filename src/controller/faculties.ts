@@ -27,7 +27,7 @@ import { BadRequestError, ForbiddenError } from "../middleware/errors.js";
 // `role` (teacher | register) is REQUIRED: an unknown or missing role is a
 // 400, never a silent default (plan §3).
 export async function CreateFacultyController(req: Request<{}, {}, Omit<FacultyProps, "id" | "userId">>, res: Response, next: NextFunction) {
-    const {email, firstname, middlename, lastname, suffix, role} = req.body;
+    const {email, firstname, middlename, lastname, suffix, gender, role} = req.body;
     // The request body is untrusted — treat it as unknown before validating.
     const rawRole: unknown = role;
 
@@ -44,6 +44,7 @@ export async function CreateFacultyController(req: Request<{}, {}, Omit<FacultyP
         middlename: NormalizedData(middlename, true),
         lastname: NormalizedData(lastname, true), 
         ...(suffix && {suffix: NormalizedData(suffix, true)}),
+        gender: NormalizedData(gender ?? "", true),
         role: rawRole
     };
 
@@ -85,13 +86,14 @@ export async function getAllFacultiesController(req: Request<{}, {}, {}, {role?:
 // Update faculty by ID controller
 export async function UpdateFacultyController(req: Request<{id: number}, {}, FacultyUpdateProps>, res: Response, next: NextFunction) {
     const {id} = req.params;
-    const {email, firstname, middlename, lastname, suffix, role} = req.body;
+    const {email, firstname, middlename, lastname, suffix, gender, role} = req.body;
     const faculty: FacultyUpdateProps = {
         ...(email !== undefined && { email: NormalizedData(email) }),
         ...(firstname !== undefined && { firstname: NormalizedData(firstname, true) }),
         ...(middlename !== undefined && { middlename: NormalizedData(middlename, true) }),
         ...(lastname !== undefined && { lastname: NormalizedData(lastname, true) }),
         ...(suffix !== undefined && { suffix: suffix ? NormalizedData(suffix, true) : null }),
+        ...(gender !== undefined && { gender: gender ? NormalizedData(gender, true) : null }),
         ...(role !== undefined && { role })
     };
 
@@ -102,8 +104,8 @@ export async function UpdateFacultyController(req: Request<{id: number}, {}, Fac
     }
 
     const validatedFields: Record<string, unknown> = { id };
-    for (const field of ["email", "firstname", "middlename", "lastname"] as const) {
-        if (faculty[field] !== undefined) {
+    for (const field of ["email", "firstname", "middlename", "lastname", "gender"] as const) {
+        if (faculty[field] !== undefined && faculty[field] !== null) {
             validatedFields[field] = faculty[field];
         }
     }

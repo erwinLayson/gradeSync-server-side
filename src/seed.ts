@@ -121,23 +121,23 @@ async function seed() {
     // ──────────────────────────────────────────────────────
     console.log("Seeding faculties...");
     const facultyData = [
-      { firstname: "Juan", middlename: "M.", lastname: "Dela Cruz", suffix: null },
-      { firstname: "Maria", middlename: "L.", lastname: "Santos", suffix: null },
-      { firstname: "Carlos", middlename: "R.", lastname: "Reyes", suffix: "Jr." },
-      { firstname: "Ana", middlename: "P.", lastname: "Gonzales", suffix: null },
-      { firstname: "Pedro", middlename: "S.", lastname: "Ramos", suffix: null },
-      { firstname: "Luz", middlename: "T.", lastname: "Villanueva", suffix: null },
-      { firstname: "Miguel", middlename: "D.", lastname: "Angeles", suffix: "III" },
-      { firstname: "Rosa", middlename: "C.", lastname: "Lopez", suffix: null },
-      { firstname: "Antonio", middlename: "B.", lastname: "Flores", suffix: null },
-      { firstname: "Elena", middlename: "G.", lastname: "Garcia", suffix: null },
+      { firstname: "Juan", middlename: "M.", lastname: "Dela Cruz", suffix: null, gender: "Male" },
+      { firstname: "Maria", middlename: "L.", lastname: "Santos", suffix: null, gender: "Female" },
+      { firstname: "Carlos", middlename: "R.", lastname: "Reyes", suffix: "Jr.", gender: "Male" },
+      { firstname: "Ana", middlename: "P.", lastname: "Gonzales", suffix: null, gender: "Female" },
+      { firstname: "Pedro", middlename: "S.", lastname: "Ramos", suffix: null, gender: "Male" },
+      { firstname: "Luz", middlename: "T.", lastname: "Villanueva", suffix: null, gender: "Female" },
+      { firstname: "Miguel", middlename: "D.", lastname: "Angeles", suffix: "III", gender: "Male" },
+      { firstname: "Rosa", middlename: "C.", lastname: "Lopez", suffix: null, gender: "Female" },
+      { firstname: "Antonio", middlename: "B.", lastname: "Flores", suffix: null, gender: "Male" },
+      { firstname: "Elena", middlename: "G.", lastname: "Garcia", suffix: null, gender: "Female" },
     ];
     const facultyIds: number[] = [];
     for (let i = 0; i < facultyData.length; i++) {
       const t = facultyData[i]!;
       const [result] = await connection.execute<ResultSetHeader>(
-        "INSERT INTO faculties(email, firstname, middlename, lastname, suffix, role, userId) VALUES(?,?,?,?,?,?,?)",
-        sql(facultyEmails[i]!, t.firstname, t.middlename, t.lastname, t.suffix, "teacher", facultyUserIds[i]!)
+        "INSERT INTO faculties(email, firstname, middlename, lastname, suffix, gender, role, userId) VALUES(?,?,?,?,?,?,?,?)",
+        sql(facultyEmails[i]!, t.firstname, t.middlename, t.lastname, t.suffix, t.gender, "teacher", facultyUserIds[i]!)
       );
       facultyIds.push(result.insertId);
     }
@@ -147,8 +147,8 @@ async function seed() {
     // list, and every teaching-assignment endpoint refuses them by that role.
     // Deliberately NOT pushed into `facultyIds` — that array seeds teaching work.
     await connection.execute<ResultSetHeader>(
-      "INSERT INTO faculties(email, firstname, middlename, lastname, suffix, role, userId) VALUES(?,?,?,?,?,?,?)",
-      sql("register@gradesync.edu", "Rosario", "M.", "Dizon", null, "register", registerUserId)
+      "INSERT INTO faculties(email, firstname, middlename, lastname, suffix, gender, role, userId) VALUES(?,?,?,?,?,?,?,?)",
+      sql("register@gradesync.edu", "Rosario", "M.", "Dizon", null, "Female", "register", registerUserId)
     );
 
     // ──────────────────────────────────────────────────────

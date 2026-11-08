@@ -60,8 +60,8 @@ export async function createScenario(connection: PoolConnection): Promise<Scenar
     const facultyUserId = await nextUserId(connection, facultyEmail, "teacher");
     const facultyId = await insert(
         connection,
-        "INSERT INTO faculties(email, firstname, middlename, lastname, userId) VALUES(?,?,?,?,?)",
-        [facultyEmail, "Test", "T", `Faculty${short}`, facultyUserId]
+        "INSERT INTO faculties(email, firstname, middlename, lastname, gender, userId) VALUES(?,?,?,?,?,?)",
+        [facultyEmail, "Test", "T", `Faculty${short}`, "Female", facultyUserId]
     );
 
     const studentEmail = `s.${suffix}@test.local`;

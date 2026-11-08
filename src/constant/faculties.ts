@@ -43,6 +43,7 @@ export interface FacultyProps {
     middlename: string,
     lastname: string,
     suffix?: string,
+    gender?: string | null,
     // Required: every faculty row must declare teacher | register.
     role: FacultyRole,
 }
@@ -53,13 +54,15 @@ export interface FacultyWithId extends FacultyProps {
 
 export interface FacultyResponse {
     id: number,
-    userId: number,
+    userId?: number,
     email: string,
     fullname: string,
+    gender?: string | null,
     role: FacultyRole,
 }
 
 export interface FacultyDetails extends FacultyResponse {
+    userId: number,
     firstname: string,
     middlename: string,
     lastname: string,
@@ -72,6 +75,7 @@ export interface FacultyUpdateProps {
     middlename?: string,
     lastname?: string,
     suffix?: string | null,
+    gender?: string | null,
     // Optional so unrelated profile edits keep working during an active school
     // year - but when present it MUST be valid, and CHANGING it is gated by the
     // school-year completion rule (service/faculties.ts).
