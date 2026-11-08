@@ -91,17 +91,19 @@ describe("Administrative Activity Audit and Monitoring Module", () => {
         body?: unknown,
         token?: string
     ) {
-        const headers: Record<string, string> = {
-            "Content-Type": "application/json",
-        };
+        const headers: Record<string, string> = {};
         if (token) {
             headers["Cookie"] = `login_token=${token}`;
         }
-        const res = await fetch(`${baseUrl}${path}`, {
+        const init: RequestInit = {
             method,
             headers,
-            body: body ? JSON.stringify(body) : undefined,
-        });
+        };
+        if (body !== undefined) {
+            headers["Content-Type"] = "application/json";
+            init.body = JSON.stringify(body);
+        }
+        const res = await fetch(`${baseUrl}${path}`, init);
         const contentType = res.headers.get("content-type") || "";
         let json: any = null;
         if (contentType.includes("application/json")) {
@@ -122,7 +124,7 @@ describe("Administrative Activity Audit and Monitoring Module", () => {
                 [AUDIT_ACTIONS.REPORT_CARD_GENERATED, String(scenario.enrollmentId)]
             );
             expect(logs.length).toBe(1);
-            const log = logs[0];
+            const log = logs[0]!;
             expect(Number(log.actorUserId)).toBe(scenario.facultyUserId);
             expect(log.actorRole).toBe("teacher");
             expect(log.entityType).toBe(AUDIT_ENTITY_TYPES.REPORT_CARD);
@@ -143,7 +145,7 @@ describe("Administrative Activity Audit and Monitoring Module", () => {
                 [AUDIT_ACTIONS.REPORT_CARD_GENERATED, String(scenario.classroomId)]
             );
             expect(logs.length).toBe(1);
-            const log = logs[0];
+            const log = logs[0]!;
             expect(Number(log.actorUserId)).toBe(scenario.facultyUserId);
             expect(log.actorRole).toBe("teacher");
             expect(Number(log.classroomId)).toBe(scenario.classroomId);
@@ -173,9 +175,10 @@ describe("Administrative Activity Audit and Monitoring Module", () => {
                 [AUDIT_ACTIONS.ACTIVITY_CREATED, String(assessmentId)]
             );
             expect(createLogs.length).toBe(1);
-            expect(createLogs[0].entityType).toBe(AUDIT_ENTITY_TYPES.ASSESSMENT);
-            expect(Number(createLogs[0].quarter)).toBe(1);
-            expect(createLogs[0].description).toContain(`Audit Assessment ${scenario.suffix}`);
+            const createLog = createLogs[0]!;
+            expect(createLog.entityType).toBe(AUDIT_ENTITY_TYPES.ASSESSMENT);
+            expect(Number(createLog.quarter)).toBe(1);
+            expect(createLog.description).toContain(`Audit Assessment ${scenario.suffix}`);
 
             // 2. Update assessment
             const updateRes = await reqApi("PATCH", `/assessments/${assessmentId}`, {
@@ -190,7 +193,8 @@ describe("Administrative Activity Audit and Monitoring Module", () => {
                 [AUDIT_ACTIONS.ACTIVITY_UPDATED, String(assessmentId)]
             );
             expect(updateLogs.length).toBe(1);
-            const diff = typeof updateLogs[0].diff === "string" ? JSON.parse(updateLogs[0].diff) : updateLogs[0].diff;
+            const updateLog = updateLogs[0]!;
+            const diff = typeof updateLog.diff === "string" ? JSON.parse(updateLog.diff) : updateLog.diff;
             expect(diff).toBeDefined();
             expect(diff.title.to).toBe(`Audit Assessment Updated ${scenario.suffix}`);
             expect(Number(diff.maxScore.to)).toBe(60);
@@ -205,7 +209,8 @@ describe("Administrative Activity Audit and Monitoring Module", () => {
                 [AUDIT_ACTIONS.ACTIVITY_DELETED, String(assessmentId)]
             );
             expect(deleteLogs.length).toBe(1);
-            expect(deleteLogs[0].description).toContain("Deleted assessment");
+            const deleteLog = deleteLogs[0]!;
+            expect(deleteLog.description).toContain("Deleted assessment");
         });
 
         it("records audit log when teacher records daily attendance", async () => {
@@ -226,7 +231,7 @@ describe("Administrative Activity Audit and Monitoring Module", () => {
                 [AUDIT_ACTIONS.ATTENDANCE_RECORDED, `${scenario.classSubjectId}_${today}`]
             );
             expect(logs.length).toBe(1);
-            const log = logs[0];
+            const log = logs[0]!;
             expect(Number(log.actorUserId)).toBe(scenario.facultyUserId);
             expect(log.entityType).toBe(AUDIT_ENTITY_TYPES.ATTENDANCE);
             const meta = typeof log.metadata === "string" ? JSON.parse(log.metadata) : log.metadata;
@@ -250,7 +255,7 @@ describe("Administrative Activity Audit and Monitoring Module", () => {
                 [AUDIT_ACTIONS.GRADE_SUBMITTED, String(scenario.classSubjectId)]
             );
             expect(logs.length).toBe(1);
-            const log = logs[0];
+            const log = logs[0]!;
             expect(Number(log.actorUserId)).toBe(scenario.facultyUserId);
             expect(log.entityType).toBe(AUDIT_ENTITY_TYPES.GRADE_SUBMISSION);
             expect(Number(log.quarter)).toBe(1);
@@ -291,7 +296,7 @@ describe("Administrative Activity Audit and Monitoring Module", () => {
                 [AUDIT_ACTIONS.STUDENT_ENROLLED, scenario.classroomId]
             );
             expect(logs.length).toBe(1);
-            const log = logs[0];
+            const log = logs[0]!;
             expect(Number(log.actorUserId)).toBe(registerUserId);
             expect(log.actorRole).toBe("register");
             expect(log.entityType).toBe(AUDIT_ENTITY_TYPES.ENROLLMENT);
