@@ -26,8 +26,6 @@ export interface RunMigrationsOptions {
     database?: string;
     /** Folder holding the `.sql` files. Defaults to `server/migrations/`. */
     migrationsDir?: string;
-    /** Mark pending files as applied WITHOUT executing them. */
-    baseline?: boolean;
     /** Drop all existing tables before running migrations (fresh start). */
     fresh?: boolean;
     /** Sink for progress output. Defaults to `console.log`. */
@@ -65,6 +63,9 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
         log(`Target database: ${database} @ ${host}\n`);
 
         if (options.fresh) {
+            if (process.env.NODE_ENV === "production") {
+                throw new Error("Cannot run migrations with --fresh in production: this would drop all database tables.");
+            }
             await dropAllDatabaseTables(connection, database, log);
         }
 
@@ -74,17 +75,6 @@ export async function runMigrations(options: RunMigrationsOptions = {}): Promise
 
         if (files.length === 0) {
             log(`No migration files found in ${migrationsDir}.`);
-        }
-
-        const pending = files.filter((file) => !applied.has(nameOf(file)));
-
-        if (options.baseline) {
-            for (const file of pending) {
-                await recordMigration(connection, nameOf(file));
-                log(`  baselined (not run): ${file}`);
-            }
-            log(`\nBaselined ${pending.length} migration(s); nothing was executed.`);
-            return;
         }
 
         let ran = 0;

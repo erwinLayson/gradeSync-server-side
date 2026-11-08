@@ -14,10 +14,7 @@
     "seed:students": "tsx src/seed.ts --students-only",
     "seed:pdf": "tsx src/seed.ts --pdf-only",
     "migrate": "tsx src/migrate.ts",
-    "migrate:fresh": "tsx src/migrate.ts --fresh",
-    "migrate:fresh:seed": "tsx src/migrate.ts --fresh && tsx src/seed.ts",
-    "migrate:baseline": "tsx src/migrate.ts --baseline",
-    "migrate:tidb": "node scripts/migrate-to-tidb.mjs"
+    "migrate:reset": "tsx src/migrate.ts --fresh && tsx src/seed.ts"
   },
   "keywords": [],
   "author": "",
