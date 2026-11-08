@@ -272,11 +272,11 @@ export async function reviewAmendmentRequestService(
             durationHours: Math.max(1, Math.min(168, durationHours)) // between 1h and 7 days
         });
 
-        // Regulatory Gate: Invalidate existing SF10 registrar sign-off if record was previously confirmed
+        // Regulatory Gate: Invalidate existing submission if record was previously submitted
         await connection.execute<ResultSetHeader>(
             `UPDATE student_academic_record_quarters sarq
              JOIN student_academic_records sar ON sar.id = sarq.recordId
-             SET sarq.confirmedAt = NULL, sarq.confirmedBy = NULL
+             SET sarq.status = 'pending'
              WHERE sar.enrollmentId = ? AND sarq.quarter = ?`,
             [request.enrollmentId, request.quarter]
         );
