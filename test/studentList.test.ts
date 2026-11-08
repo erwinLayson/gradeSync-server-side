@@ -45,7 +45,6 @@ describe("student registry list (server-side)", () => {
         // FK-safe teardown: enrollments -> class_students -> students -> users,
         // then classrooms and school years.
         for (const id of createdEnrollmentIds) {
-            await connection.execute("DELETE FROM class_students WHERE enrollmentId = ?", [id]);
             await connection.execute("DELETE FROM enrollment_details WHERE enrollmentId = ?", [id]);
             await connection.execute("DELETE FROM enrollments WHERE id = ?", [id]);
         }

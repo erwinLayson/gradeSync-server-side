@@ -24,10 +24,6 @@ export const ALLOWED_LOGO_MIME_TYPES: readonly string[] = [
     "image/webp",
 ];
 
-// Cap the upload at 5 MB - enough for a high-resolution school logo while
-// staying comfortably within the database's MEDIUMBLOB limit.
-export const MAX_LOGO_BYTES = 5 * 1024 * 1024;
-
-// Persist logos in chunks so no single INSERT exceeds MySQL's default 1 MB
-// max_allowed_packet (see migrations/0035_create_school_logo_chunks.sql).
-export const LOGO_CHUNK_BYTES = 256 * 1024;
+// Cap the upload at 1 MB — matching school signature, ensuring single-statement
+// persistence stays comfortably within database packet limits without chunking.
+export const MAX_LOGO_BYTES = 1024 * 1024;

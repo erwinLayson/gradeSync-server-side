@@ -111,10 +111,6 @@ export async function createScenario(connection: PoolConnection): Promise<Scenar
         enrollmentId,
         subjectId,
     ]);
-    await insert(connection, "INSERT INTO class_students(classId, enrollmentId) VALUES(?,?)", [
-        classroomId,
-        enrollmentId,
-    ]);
 
     const assessmentId = await insert(
         connection,
@@ -220,6 +216,13 @@ export async function finalizeScenario(
              VALUES(?,?,'submitted',NOW(),?)`,
             [recordId, quarter, scenario.facultyId]
         );
+        await insert(
+            connection,
+            `INSERT INTO class_subject_submissions(classSubjectId, quarter, schoolYearId, status, submittedAt, submittedBy, totalStudents, submittedStudents)
+             VALUES(?,?,?,'submitted',NOW(),?,1,1)
+             ON DUPLICATE KEY UPDATE status = 'submitted'`,
+            [scenario.classSubjectId, quarter, scenario.schoolYearId, scenario.facultyId]
+        );
     }
 
     return recordId;
@@ -247,12 +250,11 @@ export async function teardownScenario(connection: PoolConnection, scenario: Sce
     await connection.execute("DELETE FROM student_attendance WHERE enrollmentId = ?", [enrollmentId]);
     await connection.execute("DELETE FROM class_daily_attendance WHERE enrollmentId = ?", [enrollmentId]);
     await connection.execute("DELETE FROM enrollment_details WHERE enrollmentId = ?", [enrollmentId]);
-    await connection.execute("DELETE FROM class_students WHERE enrollmentId = ?", [enrollmentId]);
     await connection.execute("DELETE FROM enrollments WHERE id = ?", [enrollmentId]);
 
     await connection.execute("DELETE FROM assessments WHERE classSubjectId = ?", [classSubjectId]);
+    await connection.execute("DELETE FROM class_subject_submissions WHERE classSubjectId = ?", [classSubjectId]);
     await connection.execute("DELETE FROM grading_weights WHERE classSubjectId = ?", [classSubjectId]);
-    await connection.execute("DELETE FROM class_adviser WHERE classId = ?", [classroomId]);
     await connection.execute("DELETE FROM class_subjects WHERE id = ?", [classSubjectId]);
     await connection.execute("DELETE FROM classrooms WHERE id = ?", [classroomId]);
     await connection.execute("DELETE FROM faculty_subject_assignment WHERE subjectId = ?", [subjectId]);

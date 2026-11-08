@@ -11,7 +11,7 @@ import {updateStudentByIdService} from "./students.js"
 import { getAcademicSettingsService, getNumQuarters } from "./academicSettings.js";
 
 
-// Create a new enrollment: enrollments + class_students + enrollment_details
+// Create a new enrollment: enrollments + enrollment_details
 // If the student was previously unenrolled in the same school year, this
 // updates the existing enrollment (Option A) instead of creating a duplicate.
 export async function createEnrollmentService(enrollment: EnrollmentCreateProps) {
@@ -81,7 +81,6 @@ export async function createEnrollmentService(enrollment: EnrollmentCreateProps)
             await enrollmentModel.deleteEnrollmentDetailsByEnrollmentId(existingEnrollment.id);
             await enrollmentModel.deleteStudentScoresByEnrollmentId(existingEnrollment.id);
             await enrollmentModel.deleteStudentAttendanceByEnrollmentId(existingEnrollment.id);
-            await enrollmentModel.deleteClassStudentByEnrollmentId(existingEnrollment.id);
 
             // 2. Update enrollment to new class
             await enrollmentModel.updateEnrollmentClass(existingEnrollment.id, enrollment.classId);
@@ -89,10 +88,7 @@ export async function createEnrollmentService(enrollment: EnrollmentCreateProps)
             // 3. Set status back to 'enrolled'
             await enrollmentModel.updateEnrollmentStatus(existingEnrollment.id, "enrolled");
 
-            // 4. Create new class link
-            await enrollmentModel.createClassStudent(enrollment.classId, existingEnrollment.id);
-
-            // 5. Create new subject links
+            // 4. Create new subject links
             for (const subjectId of enrollment.subjectIds) {
                 await enrollmentModel.createEnrollmentDetail(existingEnrollment.id, subjectId);
             }
@@ -110,8 +106,6 @@ export async function createEnrollmentService(enrollment: EnrollmentCreateProps)
             enrollment.schoolYearId,
             enrollment.studentId
         );
-
-        await enrollmentModel.createClassStudent(enrollment.classId, enrollmentId);
 
         for (const subjectId of enrollment.subjectIds) {
             await enrollmentModel.createEnrollmentDetail(enrollmentId, subjectId);
@@ -156,13 +150,10 @@ export async function removeStudentFromClassService(classId: number, enrollmentI
         // 1. Delete enrollment_details (subjects linked to this enrollment)
         await enrollmentModel.deleteEnrollmentDetailsByEnrollmentId(enrollmentId);
 
-        // 2. Delete class_students (unlink student from classroom)
-        await enrollmentModel.deleteClassStudentByEnrollmentId(enrollmentId);
-
-        // 3. Soft-delete the enrollment (set status to 'unenrolled')
+        // 2. Soft-delete the enrollment (set status to 'unenrolled')
         await enrollmentModel.softDeleteEnrollment(enrollmentId);
 
-        // 4. Student status remains "active" (they can be re-enrolled later)
+        // 3. Student status remains "active" (they can be re-enrolled later)
         await updateStudentByIdService(studentId, { status: "active" }, connection);
 
         await connection.commit();
@@ -203,13 +194,10 @@ export async function bulkRemoveStudentsFromClassService(classId: number, enroll
             // 1. Delete enrollment_details
             await enrollmentModel.deleteEnrollmentDetailsByEnrollmentId(enrollmentId);
 
-            // 2. Delete class_students
-            await enrollmentModel.deleteClassStudentByEnrollmentId(enrollmentId);
-
-            // 3. Soft-delete the enrollment
+            // 2. Soft-delete the enrollment
             await enrollmentModel.softDeleteEnrollment(enrollmentId);
 
-            // 4. Student status remains "active"
+            // 3. Student status remains "active"
             await updateStudentByIdService(studentId, { status: "active" }, connection);
 
             removedIds.push(enrollmentId);
@@ -322,9 +310,6 @@ export async function clearAllFromClassService(classId: number): Promise<number>
 
                 // Delete enrollment details (subject links)
                 await enrollmentModel.deleteEnrollmentDetailsByEnrollmentId(enrollmentId);
-
-                // Delete class_students (class-enrollment link)
-                await enrollmentModel.deleteClassStudentByEnrollmentId(enrollmentId);
 
                 // NOTE: student_academic_record_quarters is intentionally NOT
                 // deleted here — the submission ledger is historical audit data.

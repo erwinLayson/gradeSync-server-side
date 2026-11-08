@@ -58,7 +58,6 @@ describe("semester-end cleanup precondition (F-4)", () => {
         // Nothing may be deleted by a rejected cleanup.
         expect(await count(connection, "SELECT COUNT(*) AS cnt FROM student_scores WHERE enrollmentId = ?", [scenario.enrollmentId])).toBe(1);
         expect(await count(connection, "SELECT COUNT(*) AS cnt FROM enrollment_details WHERE enrollmentId = ?", [scenario.enrollmentId])).toBe(1);
-        expect(await count(connection, "SELECT COUNT(*) AS cnt FROM class_students WHERE enrollmentId = ?", [scenario.enrollmentId])).toBe(1);
         expect(await count(connection, "SELECT COUNT(*) AS cnt FROM enrollments WHERE id = ? AND status = 'enrolled'", [scenario.enrollmentId])).toBe(1);
     });
 
@@ -95,7 +94,6 @@ describe("semester-end cleanup precondition (F-4)", () => {
         // Operational data is gone...
         expect(await count(connection, "SELECT COUNT(*) AS cnt FROM student_scores WHERE enrollmentId = ?", [scenario.enrollmentId])).toBe(0);
         expect(await count(connection, "SELECT COUNT(*) AS cnt FROM enrollment_details WHERE enrollmentId = ?", [scenario.enrollmentId])).toBe(0);
-        expect(await count(connection, "SELECT COUNT(*) AS cnt FROM class_students WHERE enrollmentId = ?", [scenario.enrollmentId])).toBe(0);
         expect(await count(connection, "SELECT COUNT(*) AS cnt FROM assessments WHERE classSubjectId = ?", [scenario.classSubjectId])).toBe(0);
 
         // ...the enrollment becomes completed history...
@@ -134,12 +132,12 @@ describe("semester-end cleanup precondition (F-4)", () => {
 
         // Inject a deterministic failure AFTER the first deletes have run
         // (student_scores / student_attendance / enrollment_details are deleted
-        // before class_students).
+        // before enrollments status update).
         await connection.query(
-            `CREATE TRIGGER test_block_class_students_delete BEFORE DELETE ON class_students
+            `CREATE TRIGGER test_block_enrollment_update BEFORE UPDATE ON enrollments
              FOR EACH ROW
              BEGIN
-               IF OLD.enrollmentId = ${Number(scenario.enrollmentId)} THEN
+               IF OLD.id = ${Number(scenario.enrollmentId)} THEN
                  SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'test-injected cleanup failure';
                END IF;
              END`
@@ -152,10 +150,9 @@ describe("semester-end cleanup precondition (F-4)", () => {
             expect(await count(connection, "SELECT COUNT(*) AS cnt FROM student_scores WHERE enrollmentId = ?", [scenario.enrollmentId])).toBe(1);
             expect(await count(connection, "SELECT COUNT(*) AS cnt FROM student_attendance WHERE enrollmentId = ?", [scenario.enrollmentId])).toBe(1);
             expect(await count(connection, "SELECT COUNT(*) AS cnt FROM enrollment_details WHERE enrollmentId = ?", [scenario.enrollmentId])).toBe(1);
-            expect(await count(connection, "SELECT COUNT(*) AS cnt FROM class_students WHERE enrollmentId = ?", [scenario.enrollmentId])).toBe(1);
             expect(await count(connection, "SELECT COUNT(*) AS cnt FROM enrollments WHERE id = ? AND status = 'enrolled'", [scenario.enrollmentId])).toBe(1);
         } finally {
-            await connection.query("DROP TRIGGER IF EXISTS test_block_class_students_delete");
+            await connection.query("DROP TRIGGER IF EXISTS test_block_enrollment_update");
         }
     });
 

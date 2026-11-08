@@ -44,9 +44,7 @@ export default class StudentReportCard {
                 LEFT JOIN
                     classrooms c ON c.id = e.classId
                 LEFT JOIN
-                    class_adviser ct ON ct.classId = c.id
-                LEFT JOIN
-                    faculties t ON ct.facultyId = t.id
+                    faculties t ON c.adviserFacultyId = t.id
                 WHERE e.id = ?
                 -- There must be SOMETHING to render: a frozen record or a live
                 -- classroom. An enrollment whose classroom was deleted and that

@@ -41,7 +41,15 @@ export default class StudentDetailsModel {
 
     async getStudentDetailsByStudentId(studentId: number): Promise<StudentDetailsProps | null> {
         try {
-            const query = "SELECT * FROM student_details WHERE studentId = ? LIMIT 1";
+            const query = `
+                SELECT 
+                    id, id AS studentId, birthplace, permanentAddress, religion, contactNumber,
+                    guardianName, guardianRelation, guardianContact, guardianOccupation,
+                    created_at, updated_at
+                FROM students 
+                WHERE id = ? 
+                LIMIT 1
+            `;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [studentId]);
             const row = rows[0];
             return row !== undefined ? (row as StudentDetailsProps) : null;
@@ -50,7 +58,7 @@ export default class StudentDetailsModel {
         }
     }
 
-    // 1:1 upsert — INSERT when the student has no row yet, UPDATE otherwise.
+    // Update details directly on the student record.
     async upsertStudentDetails(studentId: number, details: StudentDetailsUpdateProps): Promise<void> {
         const fields = AllowedStudentDetailsFields.filter((field) => field in details);
         if (fields.length === 0) {
@@ -61,12 +69,8 @@ export default class StudentDetailsModel {
         const values = fields.map((field) => (details as any)[field] ?? null);
 
         try {
-            const query = `
-                INSERT INTO student_details (studentId, ${fields.join(", ")})
-                VALUES (?, ${fields.map(() => "?").join(", ")})
-                ON DUPLICATE KEY UPDATE ${assignments.join(", ")}
-            `;
-            await this.connection.execute<ResultSetHeader>(query, [studentId, ...values, ...values]);
+            const query = `UPDATE students SET ${assignments.join(", ")}, updated_at = NOW() WHERE id = ?`;
+            await this.connection.execute<ResultSetHeader>(query, [...values, studentId]);
         } catch (err) {
             throw new InternalServerError("Failed to save student details", 500, err);
         }

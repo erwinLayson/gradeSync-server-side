@@ -196,12 +196,12 @@ export default class Students {
             s.birthdate AS studentBirthdate,
             TIMESTAMPDIFF(YEAR, s.birthdate, CURDATE()) AS studentAge,
             s.sex AS studentSex
-            FROM class_students cs 
-            INNER JOIN enrollments e
-            ON cs.enrollmentId = e.id AND e.status = 'enrolled'
+            FROM enrollments e
+
+
             INNER JOIN students s
             ON e.studentId = s.id
-            WHERE cs.classId = ?
+            WHERE e.classId = ? AND e.status = 'enrolled'
             -- Hide soft-deleted students from faculty rosters
             AND (s.status IS NULL OR s.status <> "inactive")
             ORDER BY fullname ASC, s.id ASC

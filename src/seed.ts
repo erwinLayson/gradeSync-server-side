@@ -44,13 +44,10 @@ async function seed() {
     await connection.execute("DELETE FROM subject_components");
     await connection.execute("DELETE FROM class_subjects");
     await connection.execute("DELETE FROM enrollment_details");
-    await connection.execute("DELETE FROM class_students");
     await connection.execute("DELETE FROM enrollments");
     await connection.execute("DELETE FROM faculty_subject_assignment");
-    await connection.execute("DELETE FROM class_adviser");
     await connection.execute("DELETE FROM classrooms");
     await connection.execute("DELETE FROM subjects");
-    await connection.execute("DELETE FROM student_details");
     await connection.execute("DELETE FROM students");
     await connection.execute("DELETE FROM faculties");
     await connection.execute("DELETE FROM users");
@@ -283,12 +280,12 @@ async function seed() {
     }
 
     // ──────────────────────────────────────────────────────
-    // 8. class_adviser (10 — assign each faculty to a classroom)
+    // 8. Assign each faculty as classroom adviser
     // ──────────────────────────────────────────────────────
-    console.log("Seeding class_adviser (advisers)...");
+    console.log("Setting classroom advisers...");
     for (let i = 0; i < Math.min(facultyIds.length, classroomIds.length); i++) {
       await connection.execute(
-        "INSERT INTO class_adviser(facultyId, classId) VALUES(?,?)",
+        "UPDATE classrooms SET adviserFacultyId = ? WHERE id = ?",
         sql(facultyIds[i]!, classroomIds[i]!)
       );
     }
@@ -344,18 +341,6 @@ async function seed() {
         sql(classroomIds[ci]!, schoolYearIds[schoolYearIds.length - 1]!, studentIds[i]!)
       );
       enrollmentIds.push(result.insertId);
-    }
-
-    // ──────────────────────────────────────────────────────
-    // 11. class_students (link enrollments to classrooms)
-    // ──────────────────────────────────────────────────────
-    console.log("Seeding class_students...");
-    for (let i = 0; i < enrollmentIds.length; i++) {
-      const ci = getStudentClassroomIndex(i, classroomIds.length);
-      await connection.execute(
-        "INSERT INTO class_students(classId, enrollmentId) VALUES(?,?)",
-        sql(classroomIds[ci]!, enrollmentIds[i]!)
-      );
     }
 
     // ──────────────────────────────────────────────────────
@@ -476,6 +461,9 @@ async function seed() {
     //     enrolls Beatriz and Gabriel, in the default seed distribution.
     // ──────────────────────────────────────────────────────
     console.log("Seeding grading demo data...");
+    await connection.execute(
+      "INSERT INTO grading_weights(classSubjectId, writtenWorkWeight, performanceTaskWeight, quarterlyAssessmentWeight, attendanceWeight) VALUES(NULL, 20.00, 60.00, 20.00, 0.00)"
+    );
 
     // DepEd DO 8 s. 2015 component weights for the demo class subjects in
     // Section A - G7 (classroom index 0) and Section B - G7 (classroom index 1).
@@ -802,7 +790,6 @@ async function seed() {
     console.log(`  class_adviser:      ${Math.min(facultyIds.length, classroomIds.length)} (adviser assignments)`);
     console.log(`  TSA:                ${tsaIds.flat().length} (faculty-subject assignments)`);
     console.log(`  Enrollments:        ${enrollmentIds.length}`);
-    console.log(`  class_students:     ${enrollmentIds.length}`);
     console.log(`  class_subjects:     ${csCount} (${csPlan.reduce((sum, [, idxs]) => sum + idxs.length, 0)} planned, ${csPlan.reduce((sum, [, idxs]) => sum + idxs.length, 0) - csCount} skipped due to unique constraint)`);
     console.log(`  enrollment_details: ${enrollmentIds.length * 2}`);
     console.log(`  student_academic_records: ${recordIds.length}`);

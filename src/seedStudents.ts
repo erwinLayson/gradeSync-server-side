@@ -178,12 +178,6 @@ export async function seedStudentsOnly(): Promise<{ totalProcessed: number; newl
         );
         enrollmentId = enRes.insertId;
 
-        // Link class_students
-        await connection.execute(
-          "INSERT IGNORE INTO class_students(classId, enrollmentId) VALUES(?,?)",
-          sql(targetClassroom.id, enrollmentId)
-        );
-
         // Link subjects to enrollment_details (first 2 subjects if available)
         for (let si = 0; si < Math.min(2, subjectIds.length); si++) {
           await connection.execute(

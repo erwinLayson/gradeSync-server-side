@@ -40,10 +40,9 @@ export default class Classroom {
             CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS adviserFullname
             FROM  
             classrooms c
-            LEFT JOIN class_adviser ct ON ct.classId = c.id
-            LEFT JOIN faculties t ON t.id = ct.facultyId
-            LEFT JOIN class_students cst ON cst.classId = c.id
-            LEFT JOIN enrollments e ON e.id = cst.enrollmentId AND e.status = 'enrolled'
+            LEFT JOIN faculties t ON t.id = c.adviserFacultyId
+
+            LEFT JOIN enrollments e ON e.classId = c.id AND e.status = 'enrolled'
             -- Status filter lives in the JOIN so classrooms with only
             -- soft-deleted students still appear (with a count of 0).
             LEFT JOIN students s ON s.id = e.studentId
@@ -68,9 +67,9 @@ export default class Classroom {
                 SELECT
                     t.id AS adviserId,
                     CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS adviserFullname
-                FROM class_adviser ct
-                LEFT JOIN faculties t ON t.id = ct.facultyId
-                WHERE ct.classId = ?
+                FROM classrooms c
+                LEFT JOIN faculties t ON t.id = c.adviserFacultyId
+                WHERE c.id = ?
                 LIMIT 1
             `;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [classId]);
@@ -89,20 +88,13 @@ export default class Classroom {
     // setClassAdviser, which deletes the class rows first, so no new dupes arise).
     async getClassIdByAdviser(facultyId: number): Promise<number | null> {
         try {
-            const query = "SELECT classId FROM class_adviser WHERE facultyId = ? LIMIT 2";
+            const query = "SELECT id AS classId FROM classrooms WHERE adviserFacultyId = ? LIMIT 1";
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [facultyId]);
             if (rows.length === 0 || rows[0] === undefined) {
                 return null;
             }
-            const first = Number(rows[0].classId);
-            if (rows.length > 1 && rows[1] !== undefined && Number(rows[1].classId) !== first) {
-                throw new InternalServerError("Faculty has duplicate adviser assignments across multiple classes", 500);
-            }
-            return first;
+            return Number(rows[0].classId);
         } catch (err) {
-            if (err instanceof InternalServerError) {
-                throw err;
-            }
             throw new InternalServerError("Failed to fetch adviser assignment", 500, err);
         }
     }
@@ -113,11 +105,8 @@ export default class Classroom {
     // one-adviser-per-class rule enforced here in the application.
     async setClassAdviser(classId: number, facultyId: number | null): Promise<void> {
         try {
-            await this.connection.execute("DELETE FROM class_adviser WHERE classId = ?", [classId]);
-            if (facultyId !== null) {
-                const query = "INSERT INTO class_adviser (classId, facultyId) VALUES (?, ?)";
-                await this.connection.execute<ResultSetHeader>(query, [classId, facultyId]);
-            }
+            const query = "UPDATE classrooms SET adviserFacultyId = ? WHERE id = ?";
+            await this.connection.execute<ResultSetHeader>(query, [facultyId, classId]);
         } catch (err) {
             throw new InternalServerError("Failed to assign class adviser", 500, err);
         }
@@ -235,7 +224,7 @@ export default class Classroom {
     // Remove the adviser assignment(s) for a class (frees the faculty when archiving).
     async clearClassAdviserAssignment(classId: number): Promise<void> {
         try {
-            await this.connection.execute("DELETE FROM class_adviser WHERE classId = ?", [classId]);
+            await this.connection.execute("UPDATE classrooms SET adviserFacultyId = NULL WHERE id = ?", [classId]);
         } catch (err) {
             throw new InternalServerError("Failed to clear class adviser", 500, err);
         }

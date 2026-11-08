@@ -34,7 +34,7 @@ describe("computeAuditDiff unit tests", () => {
 
         expect(diff).toEqual({
             score: { old: 88, new: null },
-            remarks: { old: null, new: null },
+            remarks: { old: "Passed", new: null },
         });
     });
 

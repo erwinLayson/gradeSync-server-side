@@ -72,10 +72,7 @@ describe("School Year Completion & Classroom Cleanup Integration", () => {
             await count(connection, "SELECT COUNT(*) AS cnt FROM enrollments WHERE id = ? AND status = 'completed'", [scenario.enrollmentId])
         ).toBe(1);
 
-        // Operational classroom links and scores are removed
-        expect(
-            await count(connection, "SELECT COUNT(*) AS cnt FROM class_students WHERE enrollmentId = ?", [scenario.enrollmentId])
-        ).toBe(0);
+        // Operational scores are removed
         expect(
             await count(connection, "SELECT COUNT(*) AS cnt FROM student_scores WHERE enrollmentId = ?", [scenario.enrollmentId])
         ).toBe(0);

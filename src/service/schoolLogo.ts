@@ -9,7 +9,7 @@ import SchoolLogoModel, { type SchoolLogoRow } from "../model/schoolLogo.js";
 
 import { MAX_LOGO_BYTES, type SchoolLogoProps } from "../constant/schoolLogo.js";
 
-function toProps(row: SchoolLogoRow, image: Buffer): SchoolLogoProps {
+function toProps(row: SchoolLogoRow): SchoolLogoProps {
     const updatedAt = row.updatedAt instanceof Date
         ? row.updatedAt.toISOString()
         : new Date(row.updatedAt).toISOString();
@@ -18,19 +18,8 @@ function toProps(row: SchoolLogoRow, image: Buffer): SchoolLogoProps {
         mimeType: row.mimeType,
         byteSize: row.byteSize,
         updatedAt,
-        dataUrl: `data:${row.mimeType};base64,${image.toString("base64")}`,
+        dataUrl: `data:${row.mimeType};base64,${row.image.toString("base64")}`,
     };
-}
-
-// New saves store the bytes in chunks; fall back to the legacy image column for
-// logos saved before the chunk table existed.
-async function readLogoImage(
-    logoModel: SchoolLogoModel,
-    schoolInfoId: number,
-    row: SchoolLogoRow,
-): Promise<Buffer> {
-    const chunks = await logoModel.getChunks(schoolInfoId);
-    return chunks.length > 0 ? Buffer.concat(chunks) : row.image;
 }
 
 // Read the school's saved logo (null when none exists yet).
@@ -49,8 +38,7 @@ export async function getSchoolLogoService(existingConnection?: PoolConnection):
         const row = await logoModel.getLogo(schoolInfo.id);
         if (!row) return null;
 
-        const image = await readLogoImage(logoModel, schoolInfo.id, row);
-        return toProps(row, image);
+        return toProps(row);
     } finally {
         if (ownConnection) {
             connection.release();
@@ -88,17 +76,15 @@ export async function saveSchoolLogoService(input: SaveSchoolLogoInput, updatedB
         const schoolInfo = await new SchoolInfoModel(connection).ensureSchoolInfo();
         const logoModel = new SchoolLogoModel(connection);
 
-        await logoModel.upsertLogoMetadata(schoolInfo.id, mimeType, buffer.length, updatedBy);
-        await logoModel.replaceChunks(schoolInfo.id, buffer);
+        await logoModel.upsertLogo(schoolInfo.id, buffer, mimeType, buffer.length, updatedBy);
 
         const saved = await logoModel.getLogo(schoolInfo.id);
         if (!saved) {
             throw new InternalServerError("Logo was not persisted", 500);
         }
-        const image = await readLogoImage(logoModel, schoolInfo.id, saved);
 
         await connection.commit();
-        return toProps(saved, image);
+        return toProps(saved);
     } catch (err) {
         await connection.rollback();
         throw err;

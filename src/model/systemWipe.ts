@@ -52,7 +52,7 @@ const ACADEMICS: WipeStep[] = [
     { table: "grading_weights", sql: "DELETE FROM grading_weights" },
     { table: "class_subjects", sql: "DELETE FROM class_subjects" },
     { table: "faculty_subject_assignment", sql: "DELETE FROM faculty_subject_assignment" },
-    { table: "class_adviser", sql: "DELETE FROM class_adviser" },
+    { table: "classrooms (clear advisers)", sql: "UPDATE classrooms SET adviserFacultyId = NULL" },
 ];
 
 const ATTENDANCE: WipeStep[] = [
@@ -62,7 +62,6 @@ const ATTENDANCE: WipeStep[] = [
 
 const ENROLLMENTS: WipeStep[] = [
     { table: "enrollment_details", sql: "DELETE FROM enrollment_details" },
-    { table: "class_students", sql: "DELETE FROM class_students" },
     { table: "enrollments", sql: "DELETE FROM enrollments" },
 ];
 
@@ -71,7 +70,7 @@ const USERS_STEPS: WipeStep[] = [
     // still exist, so every RESTRICT reference into users/faculties/students
     // must be cleared first (the master "all" scope already removed most of
     // these; DELETEs are idempotent so the extra steps are harmless there).
-    { table: "class_adviser", sql: "DELETE FROM class_adviser" },
+    { table: "classrooms (clear advisers)", sql: "UPDATE classrooms SET adviserFacultyId = NULL" },
     { table: "faculty_subject_assignment", sql: "DELETE FROM faculty_subject_assignment" },
     // students.userId → users is ON DELETE CASCADE, so removing the users rows
     // deletes students (→ student_details, enrollments via RESTRICT rows must
@@ -92,7 +91,7 @@ const STRUCTURE: WipeStep[] = [
 ];
 
 const SETTINGS: WipeStep[] = [
-    { table: "grading_weight_defaults", sql: "DELETE FROM grading_weight_defaults" },
+    { table: "grading_weights (defaults)", sql: "DELETE FROM grading_weights WHERE classSubjectId IS NULL" },
     { table: "academic_settings", sql: "DELETE FROM academic_settings" },
     { table: "school_info", sql: "DELETE FROM school_info" },
     { table: "schoolyear", sql: "DELETE FROM schoolyear" },
@@ -109,8 +108,8 @@ const RESEED_DEFAULTS: { table: string; sql: string }[] = [
         sql: "INSERT INTO academic_settings(currentQuarter, numQuarters, enrollmentOpen, submissionsLocked) VALUES(1, 4, 1, 0)",
     },
     {
-        table: "grading_weight_defaults",
-        sql: "INSERT INTO grading_weight_defaults(writtenWorkWeight, performanceTaskWeight, quarterlyAssessmentWeight, attendanceWeight) VALUES(20.00, 60.00, 20.00, 0.00)",
+        table: "grading_weights",
+        sql: "INSERT INTO grading_weights(classSubjectId, writtenWorkWeight, performanceTaskWeight, quarterlyAssessmentWeight, attendanceWeight) VALUES(NULL, 20.00, 60.00, 20.00, 0.00)",
     },
 ];
 
@@ -249,12 +248,10 @@ export async function getWipeStatus(): Promise<{ table: string; rows: number }[]
     try {
         const statusTables = [
             "students",
-            "student_details",
             "faculties",
             "classrooms",
             "subjects",
             "class_subjects",
-            "class_students",
             "enrollments",
             "enrollment_details",
             "assessments",
@@ -265,7 +262,6 @@ export async function getWipeStatus(): Promise<{ table: string; rows: number }[]
             "schoolyear",
             "academic_settings",
             "grading_weights",
-            "grading_weight_defaults",
         ];
 
         const counts: { table: string; rows: number }[] = [];

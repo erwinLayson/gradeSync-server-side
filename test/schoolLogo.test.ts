@@ -11,7 +11,7 @@ import { MAX_LOGO_BYTES } from "../src/constant/schoolLogo.js";
 /**
  * Service-level contract tests for GET/POST /api/school-info/logo.
  *
- * The logo is validated and persisted by the service (the controller just
+ * The logo is validated and persisted directly in school_logo (the controller just
  * forwards the multer buffer), so exercising the service directly covers the
  * endpoint contract without an HTTP harness - same approach as the signature
  * tests.
@@ -54,26 +54,25 @@ describe("school logo service", () => {
         expect(fetched?.dataUrl).toBe(saved.dataUrl);
     });
 
-    it("stores a logo larger than MySQL's default packet limit in chunks", async () => {
+    it("stores a logo up to the maximum allowed size directly in school_logo", async () => {
         await connection.execute("DELETE FROM school_logo");
 
-        // 2 MB exceeds the test database's 1 MB max_allowed_packet; the service
-        // must split it across school_logo_chunk rows.
-        const largeLogo = Buffer.concat([PNG_1x1, Buffer.alloc(2 * 1024 * 1024, 0x01)]);
-        const saved = await saveSchoolLogoService({ buffer: largeLogo }, null);
+        // 512 KB logo stored directly in school_logo.image
+        const mediumLogo = Buffer.concat([PNG_1x1, Buffer.alloc(512 * 1024, 0x01)]);
+        const saved = await saveSchoolLogoService({ buffer: mediumLogo }, null);
 
-        expect(saved.byteSize).toBe(largeLogo.length);
-        expect(saved.dataUrl).toBe(`data:image/png;base64,${largeLogo.toString("base64")}`);
+        expect(saved.byteSize).toBe(mediumLogo.length);
+        expect(saved.dataUrl).toBe(`data:image/png;base64,${mediumLogo.toString("base64")}`);
 
         const fetched = await getSchoolLogoService();
-        expect(fetched?.byteSize).toBe(largeLogo.length);
+        expect(fetched?.byteSize).toBe(mediumLogo.length);
         expect(fetched?.dataUrl).toBe(saved.dataUrl);
 
-        const chunks = await select<{ cnt: number }>(
+        const rows = await select<{ cnt: number }>(
             connection,
-            "SELECT COUNT(*) AS cnt FROM school_logo_chunk",
+            "SELECT COUNT(*) AS cnt FROM school_logo",
         );
-        expect(Number(chunks[0]?.cnt ?? 0)).toBeGreaterThan(1);
+        expect(Number(rows[0]?.cnt ?? 0)).toBe(1);
     });
 
     it("keeps a single row and returns the latest logo when replaced", async () => {

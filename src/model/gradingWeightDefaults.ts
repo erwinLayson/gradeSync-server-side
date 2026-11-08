@@ -15,7 +15,8 @@ export default class GradingWeightDefaults {
         try {
             const query = `
                 SELECT id, writtenWorkWeight, performanceTaskWeight, quarterlyAssessmentWeight, attendanceWeight
-                FROM grading_weight_defaults
+                FROM grading_weights
+                WHERE classSubjectId IS NULL
                 LIMIT 1
             `;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query);
@@ -34,7 +35,7 @@ export default class GradingWeightDefaults {
         if (existing) return existing;
 
         await this.connection.execute<ResultSetHeader>(
-            "INSERT INTO grading_weight_defaults(writtenWorkWeight, performanceTaskWeight, quarterlyAssessmentWeight, attendanceWeight) VALUES(20.00, 60.00, 20.00, 0.00)"
+            "INSERT INTO grading_weights(classSubjectId, writtenWorkWeight, performanceTaskWeight, quarterlyAssessmentWeight, attendanceWeight) VALUES(NULL, 20.00, 60.00, 20.00, 0.00)"
         );
 
         const seeded = await this.getDefaults();
@@ -61,7 +62,7 @@ export default class GradingWeightDefaults {
         }
 
         try {
-            const query = `UPDATE grading_weight_defaults SET ${updateFields.join(", ")} WHERE id = ?`;
+            const query = `UPDATE grading_weights SET ${updateFields.join(", ")} WHERE (id = ? OR classSubjectId IS NULL) AND classSubjectId IS NULL`;
             await this.connection.execute<ResultSetHeader>(query, [...values, id]);
         } catch (err) {
             throw new InternalServerError("Failed to update grading weight defaults", 500, err);

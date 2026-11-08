@@ -125,11 +125,11 @@ describe("quarter advancement workflow", () => {
         await connection.execute("UPDATE schoolyear SET isActive = 0 WHERE isActive = 1");
         await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [scenario.schoolYearId]);
 
-        // Assign an adviser so the scenario's classroom has a class_adviser row
+        // Assign an adviser so the scenario's classroom has an adviser assigned
         // (createScenario does not create one).
         await connection.execute(
-            "INSERT INTO class_adviser(classId, facultyId) VALUES(?, ?)",
-            [scenario.classroomId, scenario.facultyId],
+            "UPDATE classrooms SET adviserFacultyId = ? WHERE id = ?",
+            [scenario.facultyId, scenario.classroomId],
         );
 
         // Write the frozen record so the submission ledger exists.
@@ -174,10 +174,10 @@ describe("quarter advancement workflow", () => {
 
         // Write the frozen record so the submission ledger exists, then remove the
         // class's adviser row. `getClassesWithoutAdviser` is intentionally strict:
-        // it reports a class whose `LEFT JOIN class_adviser ct ... ct.id IS NULL`,
+        // it reports a class whose adviserFacultyId IS NULL,
         // even when a frozen adviser name exists on the record.
         await finalizeScenario(connection, scenario, { quarters: numQuarters, withSubjects: false });
-        await connection.execute("DELETE FROM class_adviser WHERE classId = ?", [scenario.classroomId]);
+        await connection.execute("UPDATE classrooms SET adviserFacultyId = NULL WHERE id = ?", [scenario.classroomId]);
 
         await connection.execute("UPDATE schoolyear SET isActive = 0 WHERE isActive = 1");
         await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [scenario.schoolYearId]);
@@ -195,7 +195,7 @@ describe("quarter advancement workflow", () => {
         // Make A incomplete and strip its adviser. B is fully complete, so only A
         // contributes blockers.
         await finalizeScenario(connection, scenarioA, { quarters: numQuarters, nullGrades: true });
-        await connection.execute("DELETE FROM class_adviser WHERE classId = ?", [scenarioA.classroomId]);
+        await connection.execute("UPDATE classrooms SET adviserFacultyId = NULL WHERE id = ?", [scenarioA.classroomId]);
 
         // Only mark A's year active; B stays inactive so its complete rows don't
         // qualify as blockers inside the active year.

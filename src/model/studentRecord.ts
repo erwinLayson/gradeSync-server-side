@@ -357,8 +357,7 @@ export default class StudentRecord {
                 FROM enrollments e
                 JOIN classrooms c ON c.id = e.classId
                 JOIN students s ON s.id = e.studentId AND (s.status IS NULL OR s.status <> 'inactive')
-                LEFT JOIN class_adviser ct ON ct.classId = c.id
-                WHERE e.schoolYearId = ? AND e.status IN ('enrolled', 'completed') AND ct.id IS NULL
+                WHERE e.schoolYearId = ? AND e.status IN ('enrolled', 'completed') AND c.adviserFacultyId IS NULL
             `;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId]);
             return rows as { classId: number; section: string }[];
@@ -405,8 +404,7 @@ export default class StudentRecord {
                        CONCAT_WS(" ", t.firstname, t.middlename, t.lastname, IF(t.suffix IS NOT NULL, CONCAT(" ", t.suffix), "")) AS adviserFullname,
                        COUNT(DISTINCT CASE WHEN (s.status IS NULL OR s.status <> 'inactive') THEN e.id END) AS totalStudents
                 FROM classrooms c
-                LEFT JOIN class_adviser ct ON ct.classId = c.id
-                LEFT JOIN faculties t ON t.id = ct.facultyId
+                LEFT JOIN faculties t ON t.id = c.adviserFacultyId
                 LEFT JOIN enrollments e ON e.classId = c.id AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed')
                 LEFT JOIN students s ON s.id = e.studentId
                 -- Archived classes are hidden from the tracker (soft delete).
@@ -545,13 +543,16 @@ export default class StudentRecord {
                 JOIN subjects s ON cs.subjectId = s.id
                 JOIN classrooms c ON c.id = cs.classId
                 JOIN faculties f ON f.id = cs.facultyId
+                JOIN enrollments e ON e.classId = c.id AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed')
+                JOIN students st ON st.id = e.studentId AND (st.status IS NULL OR st.status <> 'inactive')
                 LEFT JOIN class_subject_submissions css
                     ON css.classSubjectId = cs.id AND css.quarter = ? AND css.schoolYearId = ? AND css.status = 'submitted'
                 WHERE (c.status IS NULL OR c.status <> 'inactive')
                   AND css.id IS NULL
+                GROUP BY cs.id, s.name, c.section, f.firstname, f.middlename, f.lastname, f.suffix
                 ORDER BY c.gradeLevel ASC, c.section ASC, s.name ASC
             `;
-            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [quarter, schoolYearId]);
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId, quarter, schoolYearId]);
             return rows as { classSubjectId: number; subjectName: string; section: string; teacherName: string }[];
         } catch (err) {
             throw new InternalServerError("Failed to fetch incomplete class subjects", 500, err);

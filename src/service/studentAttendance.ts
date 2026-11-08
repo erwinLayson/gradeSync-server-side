@@ -74,10 +74,10 @@ async function getAdviserUserIdOfClass(
 ): Promise<number | null> {
   const [rows] = await connection.execute<RowDataPacket[]>(
     `SELECT u.id AS userId
-     FROM class_adviser ct
-     JOIN faculties t ON t.id = ct.facultyId
+     FROM classrooms c
+     JOIN faculties t ON t.id = c.adviserFacultyId
      JOIN users u ON u.id = t.userId
-     WHERE ct.classId = ?
+     WHERE c.id = ?
      LIMIT 1`,
     [classId],
   );

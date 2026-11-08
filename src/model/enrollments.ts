@@ -33,17 +33,6 @@ export default class Enrollments {
         }
     }
 
-    // Link the enrollment to a classroom
-    async createClassStudent(classId: number, enrollmentId: number): Promise<void> {
-        try {
-            const query = "INSERT INTO class_students(classId, enrollmentId) VALUES(?, ?)";
-
-            await this.connection.execute(query, [classId, enrollmentId]);
-        } catch (err) {
-            throw new InternalServerError("Failed to link student to classroom", 500, err);
-        }
-    }
-
     // Link a subject to the enrollment
     async createEnrollmentDetail(enrollmentId: number, subjectId: number): Promise<void> {
         try {
@@ -85,16 +74,6 @@ export default class Enrollments {
             await this.connection.execute(query, [enrollmentId]);
         } catch (err) {
             throw new InternalServerError("Failed to soft-delete enrollment", 500, err);
-        }
-    }
-
-    // Delete class_students record by enrollmentId
-    async deleteClassStudentByEnrollmentId(enrollmentId: number): Promise<void> {
-        try {
-            const query = "DELETE FROM class_students WHERE enrollmentId = ?";
-            await this.connection.execute(query, [enrollmentId]);
-        } catch (err) {
-            throw new InternalServerError("Failed to remove student from classroom", 500, err);
         }
     }
 

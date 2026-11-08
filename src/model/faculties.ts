@@ -100,7 +100,7 @@ export default class Faculty {
     // Count class-adviser assignments for a faculty (class_adviser is ON DELETE RESTRICT)
     async getClassFacultyAssignmentCount(facultyId: number): Promise<number> {
         try {
-            const query = "SELECT COUNT(*) AS count FROM class_adviser WHERE facultyId = ?";
+            const query = "SELECT COUNT(*) AS count FROM classrooms WHERE adviserFacultyId = ?";
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [facultyId]);
             return Number((rows[0] as { count: number }).count);
         }catch(err) {

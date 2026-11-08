@@ -214,7 +214,7 @@ export async function assertFacultyCanReadClassSubject(
         }
 
         const [adviserRows] = await connection.execute<RowDataPacket[]>(
-            "SELECT facultyId FROM class_adviser WHERE classId = ? LIMIT 1",
+            "SELECT adviserFacultyId AS facultyId FROM classrooms WHERE id = ? LIMIT 1",
             [Number(row.classId)],
         );
         const adviserRow = adviserRows[0];
@@ -301,7 +301,7 @@ export async function assertCanAccessEnrollment(
         const classId = Number(enrollmentRow.classId);
 
         const [adviserRows] = await connection.execute<RowDataPacket[]>(
-            "SELECT facultyId FROM class_adviser WHERE classId = ? LIMIT 1",
+            "SELECT adviserFacultyId AS facultyId FROM classrooms WHERE id = ? LIMIT 1",
             [classId],
         );
         const adviserRow = adviserRows[0];

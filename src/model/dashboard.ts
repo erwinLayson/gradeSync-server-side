@@ -123,8 +123,7 @@ export default class Dashboard {
                 FROM enrollments e
                 JOIN classrooms c ON c.id = e.classId
                 JOIN students s ON s.id = e.studentId AND (s.status IS NULL OR s.status <> 'inactive')
-                LEFT JOIN class_adviser ct ON ct.classId = c.id
-                WHERE e.schoolYearId = ? AND e.status IN ('enrolled', 'completed') AND ct.id IS NULL
+                WHERE e.schoolYearId = ? AND e.status IN ('enrolled', 'completed') AND c.adviserFacultyId IS NULL
             `;
             const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId]);
             return rows as { classId: number; section: string }[];

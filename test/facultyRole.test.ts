@@ -80,7 +80,8 @@ async function withGoverningSchoolYear(
     );
     const previousActiveId = activeRows[0]?.id ?? null;
 
-    await connection.execute("UPDATE schoolyear SET isActive = (id = ?)", [scenario.schoolYearId]);
+    await connection.execute("UPDATE schoolyear SET isActive = 0");
+    await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [scenario.schoolYearId]);
     await connection.execute("UPDATE schoolyear SET status = ? WHERE id = ?", [
         status,
         scenario.schoolYearId,
@@ -91,9 +92,10 @@ async function withGoverningSchoolYear(
         await connection.execute("UPDATE schoolyear SET status = 'ongoing' WHERE id = ?", [
             scenario.schoolYearId,
         ]);
-        await connection.execute("UPDATE schoolyear SET isActive = (id = ?)", [
-            previousActiveId ?? 0,
-        ]);
+        await connection.execute("UPDATE schoolyear SET isActive = 0");
+        if (previousActiveId !== null) {
+            await connection.execute("UPDATE schoolyear SET isActive = 1 WHERE id = ?", [previousActiveId]);
+        }
     }
 }
 
@@ -122,7 +124,7 @@ afterEach(async () => {
     for (const facultyId of createdFacultyIds) {
         await connection.execute("DELETE FROM faculty_subject_assignment WHERE facultyId = ?", [facultyId]);
         await connection.execute("DELETE FROM class_subjects WHERE facultyId = ?", [facultyId]);
-        await connection.execute("DELETE FROM class_adviser WHERE facultyId = ?", [facultyId]);
+        await connection.execute("UPDATE classrooms SET adviserFacultyId = NULL WHERE adviserFacultyId = ?", [facultyId]);
         await connection.execute("DELETE FROM student_academic_record_quarters WHERE submittedBy = ?", [facultyId]);
         await connection.execute("DELETE FROM faculties WHERE id = ?", [facultyId]);
     }
@@ -221,16 +223,17 @@ describe("school-year completion gate", () => {
 
     it("keeps unrelated profile edits possible during an active year", async () => {
         const facultyId = await createTestFaculty(TEACHER);
+        const uniqueEmail = `renamed.${Date.now()}@test.local`;
 
         await withGoverningSchoolYear("ongoing", async () => {
-            await updateFacultyService(facultyId, { email: "renamed@test.local" }, ROLES.ADMIN);
+            await updateFacultyService(facultyId, { email: uniqueEmail }, ROLES.ADMIN);
         });
 
         const [rows] = await connection.execute<RowDataPacket[]>(
             "SELECT email, role FROM faculties WHERE id = ?",
             [facultyId],
         );
-        expect(rows[0]?.email).toBe("renamed@test.local");
+        expect(rows[0]?.email).toBe(uniqueEmail);
         expect(rows[0]?.role).toBe(TEACHER);
     });
 
