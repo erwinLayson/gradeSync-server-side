@@ -20,7 +20,7 @@
     "declarationMap": false
   },
   // Paths are relative to this folder. `../vitest.config.ts` is covered here
-  // too; loose root-level utility scripts (e.g. seed_pdf_history.ts) stay out.
+  // too; loose root-level utility scripts stay out.
   "include": ["./**/*.ts", "../src/**/*.ts", "../vitest.config.ts"],
   "exclude": ["../node_modules", "../dist", "../dist-test"]
 }

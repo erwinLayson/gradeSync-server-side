@@ -41,7 +41,7 @@
     "moduleDetection": "force",
     "skipLibCheck": true,
   },
-  // Loose utility scripts at the repo root (e.g. seed_pdf_history.ts) are run
+  // Loose utility scripts at the repo root are run
   // with tsx, not compiled — keep them out of the tsc/build program.
   // The test suite lives outside rootDir (./src) and is type-checked
   // separately by its own project, test/tsconfig.json
