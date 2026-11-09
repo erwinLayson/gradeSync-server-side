@@ -4,6 +4,8 @@ import {
     getAttendanceByClassSubjectAndDateService,
     getAttendanceHistoryService,
     getAttendanceRangeService,
+    getAttendanceSessionDetailService,
+    getTeacherAttendanceMonitoringService,
     saveAttendanceByClassSubjectAndDateService,
     saveSingleStudentAttendanceService,
 } from "../service/studentAttendance.js";
@@ -332,6 +334,88 @@ export async function saveSingleStudentAttendanceController(
         res.status(200).json(
             SuccessResponse({
                 message: "Student attendance amended successfully"
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// GET /api/attendance/monitoring?schoolYearId=&month=&year=&classId=&gradeLevel=&subjectId=&facultyId=
+// Retrieves the spreadsheet-style teacher attendance monitoring matrix and summary KPIs for Admins.
+export async function getTeacherAttendanceMonitoringController(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const parseOptionalNumber = (val: unknown, name: string): number | undefined => {
+            if (val === undefined || val === null || val === "") return undefined;
+            const parsed = Number(val);
+            if (Number.isNaN(parsed)) {
+                throw new BadRequestError(`${name} query parameter must be a valid number`);
+            }
+            return parsed;
+        };
+
+        const schoolYearId = parseOptionalNumber(req.query.schoolYearId, "schoolYearId");
+        const month = parseOptionalNumber(req.query.month, "month");
+        const year = parseOptionalNumber(req.query.year, "year");
+        const classId = parseOptionalNumber(req.query.classId, "classId");
+        const gradeLevel = parseOptionalNumber(req.query.gradeLevel, "gradeLevel");
+        const subjectId = parseOptionalNumber(req.query.subjectId, "subjectId");
+        const facultyId = parseOptionalNumber(req.query.facultyId, "facultyId");
+
+        const data = await getTeacherAttendanceMonitoringService({
+            schoolYearId,
+            month,
+            year,
+            classId,
+            gradeLevel,
+            subjectId,
+            facultyId,
+        });
+
+        res.status(200).json(
+            SuccessResponse({
+                message: "Teacher attendance monitoring data retrieved successfully",
+                data,
+            })
+        );
+    } catch (err) {
+        next(err);
+    }
+}
+
+// GET /api/attendance/monitoring/session-detail?classSubjectId=&date=&schoolYearId=
+// Retrieves detailed information for an attendance session including student records and breakdown.
+export async function getAttendanceSessionDetailController(
+    req: Request,
+    res: Response,
+    next: NextFunction
+) {
+    try {
+        const classSubjectId = Number(req.query.classSubjectId);
+        const date = String(req.query.date ?? "");
+        const schoolYearRaw = req.query.schoolYearId;
+        const schoolYearId = schoolYearRaw ? Number(schoolYearRaw) : undefined;
+
+        if (Number.isNaN(classSubjectId)) {
+            throw new BadRequestError("classSubjectId query parameter is required and must be a number");
+        }
+        if (!date) {
+            throw new BadRequestError("date query parameter is required (YYYY-MM-DD)");
+        }
+        if (schoolYearId !== undefined && Number.isNaN(schoolYearId)) {
+            throw new BadRequestError("schoolYearId query parameter must be a number");
+        }
+
+        const data = await getAttendanceSessionDetailService(classSubjectId, date, schoolYearId);
+
+        res.status(200).json(
+            SuccessResponse({
+                message: "Attendance session detail retrieved successfully",
+                data,
             })
         );
     } catch (err) {

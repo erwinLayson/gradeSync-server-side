@@ -4,6 +4,8 @@ import {
     getAttendanceByClassSubjectAndDateController,
     getAttendanceHistoryController,
     getAttendanceRangeController,
+    getAttendanceSessionDetailController,
+    getTeacherAttendanceMonitoringController,
     saveAttendanceController,
     saveSingleStudentAttendanceController,
 } from "../controller/attendance.js";
@@ -16,6 +18,11 @@ import { ROLES } from "../constant/users.js";
 import { FACULTY_ROLES } from "../constant/faculties.js";
 
 const route: Router = Router();
+
+const adminOnly: RequestHandler[] = [
+    ValidateToken,
+    allowedRoles([ROLES.ADMIN]),
+];
 
 const adminFaculty: RequestHandler[] = [
     ValidateToken,
@@ -41,6 +48,11 @@ route.patch("/attendance/class-subjects/:classSubjectId/students/:enrollmentId",
 // Registered before the parameterized history route so "/attendance/range" is
 // never read as an enrollmentId.
 route.get("/attendance/range", adminFaculty, getAttendanceRangeController);
+
+// ==================== ADMIN MONITORING ====================
+// Teacher Attendance Monitoring matrix and detail
+route.get("/attendance/monitoring", adminOnly, getTeacherAttendanceMonitoringController);
+route.get("/attendance/monitoring/session-detail", adminOnly, getAttendanceSessionDetailController);
 
 // Per-student attendance history
 route.get("/attendance/:enrollmentId/history", adminFacultyWithEnrollmentId, getAttendanceHistoryController);

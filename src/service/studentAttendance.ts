@@ -3,7 +3,7 @@ import ClassDailyAttendanceModel from "../model/classDailyAttendance.js";
 
 import type { PoolConnection } from "mysql2/promise";
 import { getDBPoolConnection } from "../config/database.js";
-import { BadRequestError, ForbiddenError } from "../middleware/errors.js";
+import { BadRequestError, ForbiddenError, NotFoundError } from "../middleware/errors.js";
 import type { RowDataPacket } from "mysql2/promise";
 
 import type { AttendanceInput, AttendanceRecord, AttendanceStatus } from "../constant/grade.js";
@@ -581,5 +581,395 @@ export async function saveSingleStudentAttendanceService(
     throw err;
   } finally {
     connection.release();
+  }
+}
+
+// ==================== Admin Teacher Attendance Monitoring ====================
+
+export interface AttendanceMonitoringQuery {
+  schoolYearId?: number | undefined;
+  month?: number | undefined;
+  year?: number | undefined;
+  classId?: number | undefined;
+  gradeLevel?: number | undefined;
+  subjectId?: number | undefined;
+  facultyId?: number | undefined;
+}
+
+export interface MonitoringDateInfo {
+  date: string;
+  dayNumber: number;
+  dayOfWeek: number;
+  dayAbbr: string;
+  isWeekend: boolean;
+}
+
+export interface MonitoringSubjectCell {
+  hasSession: boolean;
+  presentCount: number;
+  totalEnrolled: number;
+  attendanceRate: number;
+  statusType: "submitted" | "missing" | "weekend" | "no_schedule";
+  sessionCount: number;
+  classSubjectId: number;
+  date: string;
+}
+
+export interface MonitoringSubjectRow {
+  classSubjectId: number;
+  subjectId: number;
+  subjectName: string;
+  subjectCode: string;
+  facultyId: number;
+  teacherName: string;
+  attendanceByDate: Record<string, MonitoringSubjectCell>;
+}
+
+export interface MonitoringClassroomGroup {
+  classId: number;
+  section: string;
+  gradeLevel: number;
+  totalEnrolled: number;
+  subjects: MonitoringSubjectRow[];
+}
+
+export interface MonitoringSummaryStats {
+  totalClassrooms: number;
+  totalSubjects: number;
+  totalPresent: number;
+  totalAbsent: number;
+  overallAttendanceRate: number | null;
+}
+
+export interface AttendanceMonitoringResult {
+  schoolYear: {
+    id: number;
+    startYear: string;
+    endYear: string;
+    isActive: boolean;
+  } | null;
+  selectedMonth: number;
+  selectedYear: number;
+  summary: MonitoringSummaryStats;
+  dates: MonitoringDateInfo[];
+  classrooms: MonitoringClassroomGroup[];
+}
+
+export interface AttendanceSessionDetailResult {
+  sessionInfo: {
+    classSubjectId: number;
+    classId: number;
+    classroomName: string;
+    section: string;
+    gradeLevel: number;
+    subjectId: number;
+    subjectName: string;
+    subjectCode: string;
+    facultyId: number;
+    teacherName: string;
+    date: string;
+    submissionTimestamp: string | null;
+    quarter: number | null;
+    status: string;
+  };
+  summary: {
+    totalEnrolled: number;
+    present: number;
+    absent: number;
+    late: number;
+    excused: number;
+    attendanceRate: number;
+  };
+  students: {
+    studentId: number;
+    lrn: string;
+    studentName: string;
+    status: AttendanceStatus | "unmarked";
+    recordedAt: string | null;
+  }[];
+}
+
+export async function getTeacherAttendanceMonitoringService(
+  query: AttendanceMonitoringQuery = {},
+  conn?: PoolConnection,
+): Promise<AttendanceMonitoringResult> {
+  const pool = getDBPoolConnection();
+  const connection = conn ?? await pool.getConnection();
+  const ownConn = !conn;
+  try {
+    // 1. Resolve school year
+    let schoolYearRow: { id: number; startYear: string; endYear: string; isActive: number } | null = null;
+    if (query.schoolYearId !== undefined) {
+      const [syRows] = await connection.execute<RowDataPacket[]>(
+        "SELECT id, startYear, endYear, isActive FROM schoolyear WHERE id = ? LIMIT 1",
+        [query.schoolYearId],
+      );
+      if (syRows.length > 0 && syRows[0]) {
+        schoolYearRow = syRows[0] as { id: number; startYear: string; endYear: string; isActive: number };
+      }
+    }
+    if (!schoolYearRow) {
+      const [syRows] = await connection.execute<RowDataPacket[]>(
+        "SELECT id, startYear, endYear, isActive FROM schoolyear WHERE isActive = 1 LIMIT 1",
+      );
+      if (syRows.length > 0 && syRows[0]) {
+        schoolYearRow = syRows[0] as { id: number; startYear: string; endYear: string; isActive: number };
+      } else {
+        const [fallbackRows] = await connection.execute<RowDataPacket[]>(
+          "SELECT id, startYear, endYear, isActive FROM schoolyear ORDER BY startYear DESC LIMIT 1",
+        );
+        if (fallbackRows.length > 0 && fallbackRows[0]) {
+          schoolYearRow = fallbackRows[0] as { id: number; startYear: string; endYear: string; isActive: number };
+        }
+      }
+    }
+
+    const schoolYearId = schoolYearRow ? Number(schoolYearRow.id) : 0;
+
+    // 2. Resolve month and year
+    const now = new Date();
+    let month = query.month !== undefined ? Number(query.month) : (now.getMonth() + 1);
+    if (Number.isNaN(month) || month < 1 || month > 12) {
+      throw new BadRequestError("month must be a valid number between 1 and 12");
+    }
+
+    let year = query.year !== undefined ? Number(query.year) : NaN;
+    if (Number.isNaN(year) || year < 2000 || year > 2100) {
+      if (schoolYearRow) {
+        const startY = parseInt(schoolYearRow.startYear, 10);
+        const endY = parseInt(schoolYearRow.endYear, 10);
+        year = month >= 8
+          ? (Number.isNaN(startY) ? now.getFullYear() : startY)
+          : (Number.isNaN(endY) ? now.getFullYear() : endY);
+      } else {
+        year = now.getFullYear();
+      }
+    }
+
+    // 3. Dynamic dates for the selected month
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const startDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const endDate = `${year}-${String(month).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+
+    const dates: MonitoringDateInfo[] = [];
+    const DAY_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(year, month - 1, day);
+      const dayOfWeek = d.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+      const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      dates.push({
+        date: dateStr,
+        dayNumber: day,
+        dayOfWeek,
+        dayAbbr: DAY_NAMES[dayOfWeek] ?? "DAY",
+        isWeekend,
+      });
+    }
+
+    // 4. Retrieve data from database
+    const studentAttendanceModel = new StudentAttendanceModel(connection);
+    const [enrollmentMap, classSubjectRows, aggregates] = await Promise.all([
+      studentAttendanceModel.getMonitoringEnrollmentCounts(schoolYearId),
+      studentAttendanceModel.getMonitoringClassSubjects({
+        classId: query.classId,
+        gradeLevel: query.gradeLevel,
+        subjectId: query.subjectId,
+        facultyId: query.facultyId,
+      }),
+      studentAttendanceModel.getMonitoringAttendanceAggregates(schoolYearId, startDate, endDate, {
+        classId: query.classId,
+        gradeLevel: query.gradeLevel,
+        subjectId: query.subjectId,
+        facultyId: query.facultyId,
+      }),
+    ]);
+
+    // 5. Index aggregates
+    const aggMap = new Map<string, { presentCount: number; absentCount: number; totalRecorded: number }>();
+    let totalPresent = 0;
+    let totalAbsent = 0;
+
+    for (const agg of aggregates) {
+      aggMap.set(`${agg.classSubjectId}_${agg.dateStr}`, {
+        presentCount: Number(agg.presentCount),
+        absentCount: Number(agg.absentCount),
+        totalRecorded: Number(agg.totalRecorded),
+      });
+      totalPresent += Number(agg.presentCount);
+      totalAbsent += Number(agg.absentCount);
+    }
+
+    const totalStudentsRecorded = totalPresent + totalAbsent;
+    const overallAttendanceRate = totalStudentsRecorded > 0
+      ? Math.round((totalPresent / totalStudentsRecorded) * 1000) / 10
+      : null;
+
+    // 6. Group by classroom hierarchically
+    const classroomMap = new Map<number, MonitoringClassroomGroup>();
+    for (const row of classSubjectRows) {
+      let group = classroomMap.get(row.classId);
+      if (!group) {
+        const totalEnrolled = enrollmentMap.get(row.classId) ?? 0;
+        group = {
+          classId: row.classId,
+          section: row.section,
+          gradeLevel: row.gradeLevel,
+          totalEnrolled,
+          subjects: [],
+        };
+        classroomMap.set(row.classId, group);
+      }
+
+      const attendanceByDate: Record<string, MonitoringSubjectCell> = {};
+      const classEnrolled = group.totalEnrolled;
+
+      for (const d of dates) {
+        if (d.isWeekend) {
+          attendanceByDate[d.date] = {
+            hasSession: false,
+            presentCount: 0,
+            totalEnrolled: classEnrolled,
+            attendanceRate: 0,
+            statusType: "weekend",
+            sessionCount: 0,
+            classSubjectId: row.classSubjectId,
+            date: d.date,
+          };
+        } else {
+          const agg = aggMap.get(`${row.classSubjectId}_${d.date}`);
+          if (agg) {
+            const pCount = agg.presentCount;
+            const enrolled = classEnrolled > 0 ? classEnrolled : agg.totalRecorded;
+            const rate = enrolled > 0 ? Math.round((pCount / enrolled) * 1000) / 10 : 0;
+            attendanceByDate[d.date] = {
+              hasSession: true,
+              presentCount: pCount,
+              totalEnrolled: enrolled,
+              attendanceRate: rate,
+              statusType: "submitted",
+              sessionCount: 1,
+              classSubjectId: row.classSubjectId,
+              date: d.date,
+            };
+          } else {
+            attendanceByDate[d.date] = {
+              hasSession: false,
+              presentCount: 0,
+              totalEnrolled: classEnrolled,
+              attendanceRate: 0,
+              statusType: "missing",
+              sessionCount: 0,
+              classSubjectId: row.classSubjectId,
+              date: d.date,
+            };
+          }
+        }
+      }
+
+      group.subjects.push({
+        classSubjectId: row.classSubjectId,
+        subjectId: row.subjectId,
+        subjectName: row.subjectName,
+        subjectCode: row.subjectCode,
+        facultyId: row.facultyId,
+        teacherName: `${row.teacherLastname}, ${row.teacherFirstname}`,
+        attendanceByDate,
+      });
+    }
+
+    return {
+      schoolYear: schoolYearRow
+        ? {
+            id: Number(schoolYearRow.id),
+            startYear: String(schoolYearRow.startYear),
+            endYear: String(schoolYearRow.endYear),
+            isActive: Boolean(schoolYearRow.isActive),
+          }
+        : null,
+      selectedMonth: month,
+      selectedYear: year,
+      summary: {
+        totalClassrooms: classroomMap.size,
+        totalSubjects: classSubjectRows.length,
+        totalPresent,
+        totalAbsent,
+        overallAttendanceRate,
+      },
+      dates,
+      classrooms: Array.from(classroomMap.values()),
+    };
+  } finally {
+    if (ownConn) connection.release();
+  }
+}
+
+export async function getAttendanceSessionDetailService(
+  classSubjectId: number,
+  date: string,
+  schoolYearId?: number,
+  conn?: PoolConnection,
+): Promise<AttendanceSessionDetailResult> {
+  const pool = getDBPoolConnection();
+  const connection = conn ?? await pool.getConnection();
+  const ownConn = !conn;
+  try {
+    if (!isValidDate(date)) {
+      throw new BadRequestError("date must be a valid YYYY-MM-DD string");
+    }
+    const studentAttendanceModel = new StudentAttendanceModel(connection);
+    const sessionRow = await studentAttendanceModel.getMonitoringSessionDetail(classSubjectId, date);
+    if (!sessionRow) {
+      throw new NotFoundError(`Class subject #${classSubjectId} not found`, 404);
+    }
+
+    const students = await studentAttendanceModel.getMonitoringSessionStudents(classSubjectId, date, schoolYearId);
+
+    const presentCount = students.filter((s) => s.attendanceStatus === "present").length;
+    const absentCount = students.filter((s) => s.attendanceStatus === "absent").length;
+    const totalEnrolled = students.length;
+    const rate = totalEnrolled > 0 ? Math.round((presentCount / totalEnrolled) * 1000) / 10 : 0;
+
+    let formattedTimestamp: string | null = null;
+    if (sessionRow.submissionTimestamp) {
+      const ts = new Date(sessionRow.submissionTimestamp);
+      formattedTimestamp = !Number.isNaN(ts.getTime()) ? ts.toISOString() : String(sessionRow.submissionTimestamp);
+    }
+
+    return {
+      sessionInfo: {
+        classSubjectId: Number(sessionRow.classSubjectId),
+        classId: Number(sessionRow.classId),
+        classroomName: `Grade ${sessionRow.gradeLevel} - ${sessionRow.section}`,
+        section: sessionRow.section,
+        gradeLevel: Number(sessionRow.gradeLevel),
+        subjectId: Number(sessionRow.subjectId),
+        subjectName: sessionRow.subjectName,
+        subjectCode: sessionRow.subjectCode,
+        facultyId: Number(sessionRow.facultyId),
+        teacherName: `${sessionRow.teacherLastname}, ${sessionRow.teacherFirstname}`,
+        date,
+        submissionTimestamp: formattedTimestamp,
+        quarter: sessionRow.quarter ? Number(sessionRow.quarter) : null,
+        status: "Submitted",
+      },
+      summary: {
+        totalEnrolled,
+        present: presentCount,
+        absent: absentCount,
+        late: 0,
+        excused: 0,
+        attendanceRate: rate,
+      },
+      students: students.map((s) => ({
+        studentId: Number(s.studentId),
+        lrn: s.lrn,
+        studentName: `${s.lastname}, ${s.firstname}${s.middlename ? ` ${s.middlename}` : ""}${s.suffix ? ` ${s.suffix}` : ""}`,
+        status: (s.attendanceStatus as AttendanceStatus) ?? "unmarked",
+        recordedAt: s.recordedAt ? String(s.recordedAt) : null,
+      })),
+    };
+  } finally {
+    if (ownConn) connection.release();
   }
 }

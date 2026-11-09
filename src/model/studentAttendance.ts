@@ -34,6 +34,61 @@ export interface AttendanceRangeFilters {
   dateTo?: string | undefined;
 }
 
+export interface MonitoringClassSubjectRow {
+  classId: number;
+  section: string;
+  gradeLevel: number;
+  classSubjectId: number;
+  subjectId: number;
+  subjectName: string;
+  subjectCode: string;
+  facultyId: number;
+  teacherFirstname: string;
+  teacherLastname: string;
+}
+
+export interface MonitoringEnrollmentCountRow {
+  classId: number;
+  enrolledCount: number;
+}
+
+export interface MonitoringAttendanceAggregateRow {
+  classSubjectId: number;
+  dateStr: string;
+  totalRecorded: number;
+  presentCount: number;
+  absentCount: number;
+  firstCreatedAt: string | Date | null;
+  lastCreatedAt: string | Date | null;
+}
+
+export interface MonitoringSessionDetailRow {
+  classSubjectId: number;
+  classId: number;
+  section: string;
+  gradeLevel: number;
+  subjectId: number;
+  subjectName: string;
+  subjectCode: string;
+  facultyId: number;
+  teacherFirstname: string;
+  teacherLastname: string;
+  submissionTimestamp: string | Date | null;
+  quarter: number | null;
+}
+
+export interface MonitoringStudentAttendanceRow {
+  enrollmentId: number;
+  studentId: number;
+  lrn: string;
+  firstname: string;
+  middlename: string | null;
+  lastname: string;
+  suffix: string | null;
+  attendanceStatus: AttendanceStatus | null;
+  recordedAt: string | Date | null;
+}
+
 export default class StudentAttendance {
   constructor(private connection: PoolConnection) {}
 
@@ -280,6 +335,222 @@ export default class StudentAttendance {
       return rows as AttendanceRecord[];
     } catch (err) {
       throw new InternalServerError("Failed to fetch attendance history", 500, err);
+    }
+  }
+
+  // Retrieve active classrooms and class subjects for the admin monitoring matrix
+  async getMonitoringClassSubjects(filters: {
+    classId?: number | undefined;
+    gradeLevel?: number | undefined;
+    subjectId?: number | undefined;
+    facultyId?: number | undefined;
+  } = {}): Promise<MonitoringClassSubjectRow[]> {
+    try {
+      let query = `
+        SELECT
+          c.id AS classId,
+          c.section,
+          c.gradeLevel,
+          cs.id AS classSubjectId,
+          s.id AS subjectId,
+          s.name AS subjectName,
+          s.code AS subjectCode,
+          f.id AS facultyId,
+          f.firstname AS teacherFirstname,
+          f.lastname AS teacherLastname
+        FROM classrooms c
+        JOIN class_subjects cs ON cs.classId = c.id
+        JOIN subjects s ON s.id = cs.subjectId
+        JOIN faculties f ON f.id = cs.facultyId
+        WHERE c.status = 'active'
+      `;
+      const params: (string | number)[] = [];
+
+      if (filters.classId !== undefined) {
+        query += " AND c.id = ?";
+        params.push(filters.classId);
+      }
+      if (filters.gradeLevel !== undefined) {
+        query += " AND c.gradeLevel = ?";
+        params.push(filters.gradeLevel);
+      }
+      if (filters.subjectId !== undefined) {
+        query += " AND s.id = ?";
+        params.push(filters.subjectId);
+      }
+      if (filters.facultyId !== undefined) {
+        query += " AND f.id = ?";
+        params.push(filters.facultyId);
+      }
+
+      query += " ORDER BY c.gradeLevel ASC, c.section ASC, s.name ASC, cs.id ASC";
+
+      const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
+      return rows as MonitoringClassSubjectRow[];
+    } catch (err) {
+      throw new InternalServerError("Failed to fetch monitoring class subjects", 500, err);
+    }
+  }
+
+  // Count active enrolled students per classroom for a specific school year
+  async getMonitoringEnrollmentCounts(schoolYearId: number): Promise<Map<number, number>> {
+    try {
+      const query = `
+        SELECT
+          e.classId,
+          COUNT(DISTINCT e.id) AS enrolledCount
+        FROM enrollments e
+        JOIN students s ON s.id = e.studentId
+        WHERE e.schoolYearId = ?
+          AND e.status IN ('enrolled', 'completed')
+          AND (s.status IS NULL OR s.status <> 'inactive')
+        GROUP BY e.classId
+      `;
+      const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId]);
+      const map = new Map<number, number>();
+      for (const row of rows as (RowDataPacket & MonitoringEnrollmentCountRow)[]) {
+        map.set(Number(row.classId), Number(row.enrolledCount));
+      }
+      return map;
+    } catch (err) {
+      throw new InternalServerError("Failed to fetch monitoring enrollment counts", 500, err);
+    }
+  }
+
+  // Aggregate attendance numbers per classSubject and date within the selected date range
+  async getMonitoringAttendanceAggregates(
+    schoolYearId: number,
+    startDate: string,
+    endDate: string,
+    filters: {
+      classId?: number | undefined;
+      gradeLevel?: number | undefined;
+      subjectId?: number | undefined;
+      facultyId?: number | undefined;
+    } = {},
+  ): Promise<MonitoringAttendanceAggregateRow[]> {
+    try {
+      let query = `
+        SELECT
+          sa.classSubjectId,
+          DATE_FORMAT(sa.date, '%Y-%m-%d') AS dateStr,
+          COUNT(*) AS totalRecorded,
+          COALESCE(SUM(sa.status = 'present'), 0) AS presentCount,
+          COALESCE(SUM(sa.status = 'absent'), 0) AS absentCount,
+          MIN(sa.created_at) AS firstCreatedAt,
+          MAX(sa.created_at) AS lastCreatedAt
+        FROM student_attendance sa
+        JOIN class_subjects cs ON cs.id = sa.classSubjectId
+        JOIN classrooms c ON c.id = cs.classId
+        JOIN enrollments e ON e.id = sa.enrollmentId
+        WHERE e.schoolYearId = ?
+          AND sa.date >= ? AND sa.date <= ?
+          AND c.status = 'active'
+      `;
+      const params: (string | number)[] = [schoolYearId, startDate, endDate];
+
+      if (filters.classId !== undefined) {
+        query += " AND c.id = ?";
+        params.push(filters.classId);
+      }
+      if (filters.gradeLevel !== undefined) {
+        query += " AND c.gradeLevel = ?";
+        params.push(filters.gradeLevel);
+      }
+      if (filters.subjectId !== undefined) {
+        query += " AND cs.subjectId = ?";
+        params.push(filters.subjectId);
+      }
+      if (filters.facultyId !== undefined) {
+        query += " AND cs.facultyId = ?";
+        params.push(filters.facultyId);
+      }
+
+      query += " GROUP BY sa.classSubjectId, sa.date ORDER BY sa.date ASC";
+
+      const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
+      return rows as MonitoringAttendanceAggregateRow[];
+    } catch (err) {
+      throw new InternalServerError("Failed to fetch monitoring attendance aggregates", 500, err);
+    }
+  }
+
+  // Fetch session metadata for a clicked cell
+  async getMonitoringSessionDetail(
+    classSubjectId: number,
+    date: string,
+  ): Promise<MonitoringSessionDetailRow | null> {
+    try {
+      const query = `
+        SELECT
+          cs.id AS classSubjectId,
+          c.id AS classId,
+          c.section,
+          c.gradeLevel,
+          s.id AS subjectId,
+          s.name AS subjectName,
+          s.code AS subjectCode,
+          f.id AS facultyId,
+          f.firstname AS teacherFirstname,
+          f.lastname AS teacherLastname,
+          MIN(sa.created_at) AS submissionTimestamp,
+          MIN(sa.quarter) AS quarter
+        FROM class_subjects cs
+        JOIN classrooms c ON c.id = cs.classId
+        JOIN subjects s ON s.id = cs.subjectId
+        JOIN faculties f ON f.id = cs.facultyId
+        LEFT JOIN student_attendance sa ON sa.classSubjectId = cs.id AND sa.date = ?
+        WHERE cs.id = ?
+        GROUP BY cs.id, c.id, c.section, c.gradeLevel, s.id, s.name, s.code, f.id, f.firstname, f.lastname
+        LIMIT 1
+      `;
+      const [rows] = await this.connection.execute<RowDataPacket[]>(query, [date, classSubjectId]);
+      if (rows.length === 0 || rows[0] === undefined) return null;
+      return rows[0] as MonitoringSessionDetailRow;
+    } catch (err) {
+      throw new InternalServerError("Failed to fetch session detail", 500, err);
+    }
+  }
+
+  // Fetch all enrolled students in the class with their recorded status for that date
+  async getMonitoringSessionStudents(
+    classSubjectId: number,
+    date: string,
+    schoolYearId?: number,
+  ): Promise<MonitoringStudentAttendanceRow[]> {
+    try {
+      let query = `
+        SELECT
+          e.id AS enrollmentId,
+          s.id AS studentId,
+          s.lrn,
+          s.firstname,
+          s.middlename,
+          s.lastname,
+          s.suffix,
+          sa.status AS attendanceStatus,
+          sa.created_at AS recordedAt
+        FROM enrollments e
+        JOIN students s ON s.id = e.studentId
+        JOIN class_subjects cs ON cs.classId = e.classId
+        LEFT JOIN student_attendance sa ON sa.enrollmentId = e.id AND sa.classSubjectId = cs.id AND sa.date = ?
+        WHERE cs.id = ?
+          AND (s.status IS NULL OR s.status <> 'inactive')
+          AND e.status IN ('enrolled', 'completed')
+      `;
+      const params: (string | number)[] = [date, classSubjectId];
+
+      if (schoolYearId !== undefined) {
+        query += " AND e.schoolYearId = ?";
+        params.push(schoolYearId);
+      }
+
+      query += " ORDER BY s.lastname ASC, s.firstname ASC, s.id ASC";
+
+      const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
+      return rows as MonitoringStudentAttendanceRow[];
+    } catch (err) {
+      throw new InternalServerError("Failed to fetch session students", 500, err);
     }
   }
 }
