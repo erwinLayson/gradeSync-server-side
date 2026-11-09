@@ -30,6 +30,20 @@ export default class StudentScore {
     }
   }
 
+  async getScoresByAssessmentId(assessmentId: number): Promise<StudentScoreProps[]> {
+    try {
+      const query = `
+        SELECT id, assessmentId, enrollmentId, score
+        FROM student_scores
+        WHERE assessmentId = ?
+      `;
+      const [rows] = await this.connection.execute<RowDataPacket[]>(query, [assessmentId]);
+      return rows as StudentScoreProps[];
+    } catch (err) {
+      throw new InternalServerError("Failed to fetch assessment scores", 500, err);
+    }
+  }
+
   // Batch save a score sheet: one score row per enrollment for the given assessment.
   // Uses ON DUPLICATE KEY UPDATE so resaving an existing score sheet is idempotent
   // (the unique key is (assessmentId, enrollmentId)).

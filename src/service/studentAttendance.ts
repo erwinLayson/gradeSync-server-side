@@ -1,5 +1,7 @@
 import StudentAttendanceModel from "../model/studentAttendance.js";
 import ClassDailyAttendanceModel from "../model/classDailyAttendance.js";
+import ClassSubjectSubmissionModel from "../model/classSubjectSubmission.js";
+import StudentRecordModel from "../model/studentRecord.js";
 
 import type { PoolConnection } from "mysql2/promise";
 import { getDBPoolConnection } from "../config/database.js";
@@ -36,6 +38,8 @@ export interface AttendanceMatrixStudent {
     middlename?: string | null;
     lastname?: string | undefined;
     suffix?: string | null;
+    isSubmitted?: boolean | undefined;
+    isFrozen?: boolean | undefined;
 }
 
 // One cell of the class-wide attendance matrix: a student on a date.
@@ -50,6 +54,7 @@ export interface AttendanceMatrixCell {
 // columns, and the cells that fill the grid.
 export interface AttendanceRangeMatrix {
     classSubjectId: number;
+    isSubjectSubmitted?: boolean | undefined;
     students: AttendanceMatrixStudent[];
     dates: string[];
     records: AttendanceMatrixCell[];
@@ -226,6 +231,62 @@ export async function saveAttendanceByClassSubjectAndDateService(
       );
     }
 
+    const recordModel = new StudentRecordModel(connection);
+    const activeSchoolYearId = await recordModel.getActiveSchoolYearId();
+    if (activeSchoolYearId) {
+      const classSubjectSubmissionModel = new ClassSubjectSubmissionModel(connection);
+      const submission = await classSubjectSubmissionModel.getSubmission(
+        classSubjectId,
+        quarter,
+        activeSchoolYearId
+      );
+      if (submission?.status === "submitted") {
+        throw new ForbiddenError(
+          `Quarter ${quarter} attendance for this class subject has already been submitted. Submit an Amendment Request to modify an individual student's attendance.`
+        );
+      }
+    }
+
+    const entryEnrollmentIds = entries.map((e) => e.enrollmentId);
+    if (entryEnrollmentIds.length > 0) {
+      const records = await recordModel.getRecordsByEnrollmentIds(entryEnrollmentIds);
+      const recordIds = records.map((r) => r.id);
+      const subjectRows = await recordModel.getSubjectRowsByRecordIds(recordIds);
+      const classSubject = await recordModel.getClassSubjectById(classSubjectId);
+      if (classSubject) {
+        const submittedEnrollmentIds = new Set<number>();
+        for (const row of subjectRows) {
+          if (
+            row.subjectName.toLowerCase() === classSubject.subjectName.toLowerCase() ||
+            row.subjectCode.toLowerCase() === classSubject.subjectCode.toLowerCase()
+          ) {
+            const col = quarter === 1 ? row.q1 : quarter === 2 ? row.q2 : quarter === 3 ? row.q3 : row.q4;
+            if (col !== null && col !== undefined) {
+              const rec = records.find((r) => r.id === row.recordId);
+              if (rec) submittedEnrollmentIds.add(rec.enrollmentId);
+            }
+          }
+        }
+
+        if (submittedEnrollmentIds.size > 0) {
+          const studentAttendanceModelTemp = new StudentAttendanceModel(connection);
+          const existingAtt = await studentAttendanceModelTemp.getAttendanceByClassSubjectAndDate(classSubjectId, date);
+          const existingStatusByEnrollment = new Map(existingAtt.map((a) => [a.enrollmentId, a.status]));
+
+          for (const entry of entries) {
+            if (submittedEnrollmentIds.has(entry.enrollmentId)) {
+              const existingStatus = existingStatusByEnrollment.get(entry.enrollmentId);
+              if (existingStatus && existingStatus !== entry.status) {
+                throw new ForbiddenError(
+                  `Quarter ${quarter} attendance for this student has already been submitted. Submit an Amendment Request to modify their attendance.`
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+
     for (const entry of entries) {
       if (!isValidAttendanceStatus(entry.status)) {
         throw new BadRequestError(`Invalid attendance status: ${entry.status}`);
@@ -384,18 +445,57 @@ export async function getAttendanceRangeService(
             });
         }
 
+        let isSubjectSubmitted = false;
+        const submittedEnrollmentIds = new Set<number>();
+        const recordModel = new StudentRecordModel(connection);
+        const resolvedSchoolYearId = schoolYearId ?? await recordModel.getActiveSchoolYearId();
+
+        if (resolvedSchoolYearId && quarter !== undefined) {
+            const classSubjectSubmissionModel = new ClassSubjectSubmissionModel(connection);
+            const submission = await classSubjectSubmissionModel.getSubmission(classSubjectId, quarter, resolvedSchoolYearId);
+            isSubjectSubmitted = submission?.status === "submitted";
+
+            const enrollmentIds = students.map((s) => Number(s.enrollmentId));
+            if (enrollmentIds.length > 0) {
+                const records = await recordModel.getRecordsByEnrollmentIds(enrollmentIds);
+                const recordIds = records.map((r) => r.id);
+                const subjectRows = await recordModel.getSubjectRowsByRecordIds(recordIds);
+                const classSubject = await recordModel.getClassSubjectById(classSubjectId);
+                if (classSubject) {
+                    for (const row of subjectRows) {
+                        if (
+                            row.subjectName.toLowerCase() === classSubject.subjectName.toLowerCase() ||
+                            row.subjectCode.toLowerCase() === classSubject.subjectCode.toLowerCase()
+                        ) {
+                            const col = quarter === 1 ? row.q1 : quarter === 2 ? row.q2 : quarter === 3 ? row.q3 : row.q4;
+                            if (col !== null && col !== undefined) {
+                                const rec = records.find((r) => r.id === row.recordId);
+                                if (rec) submittedEnrollmentIds.add(rec.enrollmentId);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return {
             classSubjectId,
-            students: students.map((student) => ({
-                enrollmentId: Number(student.enrollmentId),
-                studentId: Number(student.studentId),
-                studentLrn: student.studentLrn,
-                fullname: student.fullname,
-                firstname: student.firstname,
-                middlename: student.middlename ?? null,
-                lastname: student.lastname,
-                suffix: student.suffix ?? null,
-            })),
+            isSubjectSubmitted,
+            students: students.map((student) => {
+                const isStudentSubmitted = isSubjectSubmitted || submittedEnrollmentIds.has(Number(student.enrollmentId));
+                return {
+                    enrollmentId: Number(student.enrollmentId),
+                    studentId: Number(student.studentId),
+                    studentLrn: student.studentLrn,
+                    fullname: student.fullname,
+                    firstname: student.firstname,
+                    middlename: student.middlename ?? null,
+                    lastname: student.lastname,
+                    suffix: student.suffix ?? null,
+                    isSubmitted: isStudentSubmitted,
+                    isFrozen: isStudentSubmitted,
+                };
+            }),
             dates: [...dates].sort(),
             records,
         };

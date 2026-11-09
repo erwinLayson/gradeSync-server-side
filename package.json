@@ -8,7 +8,7 @@
     "typecheck:test": "tsc -p test/tsconfig.json",
     "build": "tsc && npx puppeteer browsers install chrome-headless-shell",
     "postinstall": "npx puppeteer browsers install chrome-headless-shell",
-    "start": "node dist/server.js",
+    "start": "node dist/migrate.js && node dist/server.js",
     "dev": "node dist/migrate.js && tsx watch src/server.ts",
     "seed": "tsx src/seed.ts",
     "seed:students": "tsx src/seed.ts --students-only",

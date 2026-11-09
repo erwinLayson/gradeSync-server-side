@@ -1,5 +1,7 @@
 import StudentScoreModel from "../model/studentScore.js";
 import AssessmentModel from "../model/assessment.js";
+import ClassSubjectSubmissionModel from "../model/classSubjectSubmission.js";
+import StudentRecordModel from "../model/studentRecord.js";
 
 import type { PoolConnection } from "mysql2/promise";
 import { getDBPoolConnection } from "../config/database.js";
@@ -60,6 +62,73 @@ export async function saveAssessmentScoresService(
       );
     }
 
+    // Check if the teacher has already submitted this class subject for this quarter
+    const recordModel = new StudentRecordModel(connection);
+    const activeSchoolYearId = await recordModel.getActiveSchoolYearId();
+    if (activeSchoolYearId) {
+      const classSubjectSubmissionModel = new ClassSubjectSubmissionModel(connection);
+      const submission = await classSubjectSubmissionModel.getSubmission(
+        assessment.classSubjectId,
+        assessment.quarter,
+        activeSchoolYearId
+      );
+      if (submission?.status === "submitted") {
+        throw new ForbiddenError(
+          `Quarter ${assessment.quarter} grades for this class subject have already been submitted. Submit an Amendment Request to modify an individual student's score.`
+        );
+      }
+    }
+
+    // Check if individual students are already submitted for this quarter
+    const studentScoreModel = new StudentScoreModel(connection);
+    const existingScores = await studentScoreModel.getScoresByAssessmentId(assessmentId);
+    const existingScoreByEnrollmentId = new Map(existingScores.map((s) => [s.enrollmentId, Number(s.score)]));
+
+    const submittedEnrollmentIds = new Set<number>();
+    const entryEnrollmentIds = scoreEntries.map((e) => e.enrollmentId);
+    if (entryEnrollmentIds.length > 0) {
+      const records = await recordModel.getRecordsByEnrollmentIds(entryEnrollmentIds);
+      const recordIds = records.map((r) => r.id);
+      const subjectRows = await recordModel.getSubjectRowsByRecordIds(recordIds);
+      const classSubject = await recordModel.getClassSubjectById(assessment.classSubjectId);
+      if (classSubject) {
+        for (const row of subjectRows) {
+          if (
+            row.subjectName.toLowerCase() === classSubject.subjectName.toLowerCase() ||
+            row.subjectCode.toLowerCase() === classSubject.subjectCode.toLowerCase()
+          ) {
+            const col = assessment.quarter === 1 ? row.q1 : assessment.quarter === 2 ? row.q2 : assessment.quarter === 3 ? row.q3 : row.q4;
+            if (col !== null && col !== undefined) {
+              const rec = records.find((r) => r.id === row.recordId);
+              if (rec) submittedEnrollmentIds.add(rec.enrollmentId);
+            }
+          }
+        }
+      }
+    }
+
+    for (const scoreEntry of scoreEntries) {
+      if (submittedEnrollmentIds.has(scoreEntry.enrollmentId)) {
+        const existingScore = existingScoreByEnrollmentId.get(scoreEntry.enrollmentId);
+        if (existingScore !== undefined && existingScore !== scoreEntry.score) {
+          throw new ForbiddenError(
+            `Quarter ${assessment.quarter} grade for this student has already been submitted. Submit an Amendment Request to modify their score.`
+          );
+        }
+      }
+    }
+
+    // Ensure submitted students who were graded are not omitted from scoreEntries
+    for (const enrolledId of submittedEnrollmentIds) {
+      const existingScore = existingScoreByEnrollmentId.get(enrolledId);
+      if (existingScore !== undefined) {
+        const hasEntry = scoreEntries.some((e) => e.enrollmentId === enrolledId);
+        if (!hasEntry) {
+          scoreEntries.push({ enrollmentId: enrolledId, score: existingScore });
+        }
+      }
+    }
+
     for (const scoreEntry of scoreEntries) {
       if (scoreEntry.score < 0 || scoreEntry.score > maxScore) {
         throw new BadRequestError(
@@ -71,7 +140,6 @@ export async function saveAssessmentScoresService(
     await connection.beginTransaction();
     transactionStarted = true;
 
-    const studentScoreModel = new StudentScoreModel(connection);
     await studentScoreModel.deleteScoresByAssessment(assessmentId);
     await studentScoreModel.upsertScoresBatch(assessmentId, scoreEntries);
 

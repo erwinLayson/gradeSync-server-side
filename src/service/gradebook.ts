@@ -1,4 +1,6 @@
 import GradeBookModel from "../model/gradebook.js"
+import ClassSubjectSubmissionModel from "../model/classSubjectSubmission.js";
+import StudentRecordModel from "../model/studentRecord.js";
 import { getDBPoolConnection } from "../config/database.js";
 
 
@@ -54,6 +56,41 @@ export async function getGradeBookDetailsByClassSubjectIdService(classSubjectId:
             ? await getSubjectComponentsWithConnection(classSubjectDetails.subjectId, connection)
             : [];
 
+        // Check submission status for the class subject and individual students
+        const recordModel = new StudentRecordModel(connection);
+        const activeSchoolYearId = await recordModel.getActiveSchoolYearId();
+        let isSubjectSubmitted = false;
+        const submittedEnrollmentIds = new Set<number>();
+
+        if (activeSchoolYearId) {
+            const classSubjectSubmissionModel = new ClassSubjectSubmissionModel(connection);
+            const submission = await classSubjectSubmissionModel.getSubmission(classSubjectId, quarter, activeSchoolYearId);
+            isSubjectSubmitted = submission?.status === "submitted";
+
+            const enrollmentIds = studentRoaster.map((s) => s.enrollmentId);
+            if (enrollmentIds.length > 0) {
+                const records = await recordModel.getRecordsByEnrollmentIds(enrollmentIds);
+                const recordIds = records.map((r) => r.id);
+                const subjectRows = await recordModel.getSubjectRowsByRecordIds(recordIds);
+                const recordById = new Map(records.map((r) => [r.id, r]));
+
+                for (const row of subjectRows) {
+                    if (
+                        row.subjectName.toLowerCase() === classSubjectDetails.subjectName.toLowerCase() ||
+                        row.subjectCode.toLowerCase() === classSubjectDetails.subjectCode.toLowerCase()
+                    ) {
+                        const col = quarter === 1 ? row.q1 : quarter === 2 ? row.q2 : quarter === 3 ? row.q3 : row.q4;
+                        if (col !== null && col !== undefined) {
+                            const rec = recordById.get(row.recordId);
+                            if (rec) {
+                                submittedEnrollmentIds.add(rec.enrollmentId);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         const student = buildStudent(
             studentRoaster,
             assessment,
@@ -61,11 +98,19 @@ export async function getGradeBookDetailsByClassSubjectIdService(classSubjectId:
             rowStudentScore,
             attendanceByEnrollmentId,
             components
-        )
+        ).map((s) => {
+            const isStudentSubmitted = isSubjectSubmitted || submittedEnrollmentIds.has(s.enrollmentId);
+            return {
+                ...s,
+                isSubmitted: isStudentSubmitted,
+                isFrozen: isStudentSubmitted,
+            };
+        });
 
         return {
             ...classSubjectDetails,
             quarter,
+            isSubjectSubmitted,
             components,
             assessment: assessment.map(ass => ({
                 ...ass,
