@@ -99,16 +99,36 @@ export default class Students {
             params.push(like, like, like, like);
         }
 
-        if (query.status === "active") {
-            where.push("(s.status IS NULL OR s.status = 'active')");
-        } else if (query.status === "inactive") {
-            where.push("s.status = 'inactive'");
-        } else if (query.status === "enrolled") {
-            where.push("(s.status IS NULL OR s.status = 'active')");
-            where.push("EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.status = 'enrolled')");
-        } else if (query.status === "unenrolled") {
-            where.push("(s.status IS NULL OR s.status = 'active')");
-            where.push("NOT EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.status = 'enrolled')");
+        if (query.schoolYearId) {
+            if (query.status === "enrolled") {
+                where.push("(s.status IS NULL OR s.status = 'active')");
+                where.push("EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.schoolYearId = ? AND e.status = 'enrolled')");
+                params.push(query.schoolYearId);
+            } else if (query.status === "unenrolled") {
+                where.push("(s.status IS NULL OR s.status = 'active')");
+                where.push("NOT EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed'))");
+                params.push(query.schoolYearId);
+            } else {
+                if (query.status === "active") {
+                    where.push("(s.status IS NULL OR s.status = 'active')");
+                } else if (query.status === "inactive") {
+                    where.push("s.status = 'inactive'");
+                }
+                where.push("EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.schoolYearId = ? AND e.status IN ('enrolled', 'completed'))");
+                params.push(query.schoolYearId);
+            }
+        } else {
+            if (query.status === "active") {
+                where.push("(s.status IS NULL OR s.status = 'active')");
+            } else if (query.status === "inactive") {
+                where.push("s.status = 'inactive'");
+            } else if (query.status === "enrolled") {
+                where.push("(s.status IS NULL OR s.status = 'active')");
+                where.push("EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.status = 'enrolled')");
+            } else if (query.status === "unenrolled") {
+                where.push("(s.status IS NULL OR s.status = 'active')");
+                where.push("NOT EXISTS (SELECT 1 FROM enrollments e WHERE e.studentId = s.id AND e.status = 'enrolled')");
+            }
         }
         // status === "all" adds no predicate.
 

@@ -53,6 +53,7 @@ export type StudentListStatus = "active" | "inactive" | "all" | "enrolled" | "un
 export interface StudentListQuery {
     search?: string | undefined;
     status: StudentListStatus;
+    schoolYearId?: number | undefined;
     page: number;
     pageSize: number;
     sort: StudentListSort;

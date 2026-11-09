@@ -47,7 +47,10 @@ function parseStudentListQuery(query: Request["query"]): StudentListQuery {
     const searchRaw = first(query.search);
     const search = searchRaw && searchRaw.trim() ? searchRaw.trim() : undefined;
 
-    return { search, status, page, pageSize, sort, dir };
+    const schoolYearIdRaw = Number(first(query.schoolYearId));
+    const schoolYearId = Number.isFinite(schoolYearIdRaw) && schoolYearIdRaw > 0 ? Math.floor(schoolYearIdRaw) : undefined;
+
+    return { search, status, schoolYearId, page, pageSize, sort, dir };
 }
 
 export async function createStudentController(req: Request<{}, {}, StudentCreateProps>, res: Response, next: NextFunction) {
