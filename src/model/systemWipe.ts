@@ -41,6 +41,16 @@ interface WipeStep {
 }
 
 // FK-safe ordering: children before parents.
+const AMENDMENTS: WipeStep[] = [
+    { table: "amendment_audit_logs", sql: "DELETE FROM amendment_audit_logs" },
+    { table: "amendment_permissions", sql: "DELETE FROM amendment_permissions" },
+    { table: "amendment_requests", sql: "DELETE FROM amendment_requests" },
+];
+
+const ACTIVITY_AUDIT: WipeStep[] = [
+    { table: "activity_audit_logs", sql: "DELETE FROM activity_audit_logs" },
+];
+
 const ACADEMICS: WipeStep[] = [
     { table: "student_academic_record_components", sql: "DELETE FROM student_academic_record_components" },
     { table: "student_academic_record_quarters", sql: "DELETE FROM student_academic_record_quarters" },
@@ -48,6 +58,7 @@ const ACADEMICS: WipeStep[] = [
     { table: "student_academic_records", sql: "DELETE FROM student_academic_records" },
     { table: "student_scores", sql: "DELETE FROM student_scores" },
     { table: "assessments", sql: "DELETE FROM assessments" },
+    { table: "class_subject_submissions", sql: "DELETE FROM class_subject_submissions" },
     { table: "subject_components", sql: "DELETE FROM subject_components" },
     { table: "grading_weights", sql: "DELETE FROM grading_weights" },
     { table: "class_subjects", sql: "DELETE FROM class_subjects" },
@@ -70,6 +81,10 @@ const USERS_STEPS: WipeStep[] = [
     // still exist, so every RESTRICT reference into users/faculties/students
     // must be cleared first (the master "all" scope already removed most of
     // these; DELETEs are idempotent so the extra steps are harmless there).
+    { table: "amendment_audit_logs", sql: "DELETE FROM amendment_audit_logs" },
+    { table: "amendment_permissions", sql: "DELETE FROM amendment_permissions" },
+    { table: "amendment_requests", sql: "DELETE FROM amendment_requests" },
+    { table: "activity_audit_logs", sql: "DELETE FROM activity_audit_logs" },
     { table: "classrooms (clear advisers)", sql: "UPDATE classrooms SET adviserFacultyId = NULL" },
     { table: "faculty_subject_assignment", sql: "DELETE FROM faculty_subject_assignment" },
     // students.userId → users is ON DELETE CASCADE, so removing the users rows
@@ -91,6 +106,8 @@ const STRUCTURE: WipeStep[] = [
 ];
 
 const SETTINGS: WipeStep[] = [
+    { table: "school_signature", sql: "DELETE FROM school_signature" },
+    { table: "school_logo", sql: "DELETE FROM school_logo" },
     { table: "grading_weights (defaults)", sql: "DELETE FROM grading_weights WHERE classSubjectId IS NULL" },
     { table: "academic_settings", sql: "DELETE FROM academic_settings" },
     { table: "school_info", sql: "DELETE FROM school_info" },
@@ -115,6 +132,8 @@ const RESEED_DEFAULTS: { table: string; sql: string }[] = [
 
 // The master scope runs every domain in dependency order.
 const ALL: WipeStep[][] = [
+    AMENDMENTS,
+    ACTIVITY_AUDIT,
     ACADEMICS,
     ATTENDANCE,
     ENROLLMENTS,
@@ -139,7 +158,7 @@ export function wipeStepsFor(scope: WipeScope): WipeStep[][] {
             // RESTRICT-referenced by enrollments (→ academic records). A
             // standalone users wipe therefore has to clear those domains
             // first — documented in the UI so the operator is not surprised.
-            return [ACADEMICS, ATTENDANCE, ENROLLMENTS, USERS_STEPS];
+            return [AMENDMENTS, ACTIVITY_AUDIT, ACADEMICS, ATTENDANCE, ENROLLMENTS, USERS_STEPS];
         case "structure":
             return [STRUCTURE];
         case "settings":
@@ -257,8 +276,12 @@ export async function getWipeStatus(): Promise<{ table: string; rows: number }[]
             "assessments",
             "student_scores",
             "student_academic_records",
+            "class_subject_submissions",
             "student_attendance",
             "class_daily_attendance",
+            "amendment_requests",
+            "amendment_audit_logs",
+            "activity_audit_logs",
             "schoolyear",
             "academic_settings",
             "grading_weights",
