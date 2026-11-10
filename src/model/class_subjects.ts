@@ -1,7 +1,7 @@
 import {PoolConnection, type ResultSetHeader, type RowDataPacket} from "mysql2/promise";
 
 // Error handling
-import { InternalServerError } from "../middleware/errors.js";
+import { ConflictError, InternalServerError } from "../middleware/errors.js";
 import type {ClassSubjectProps} from "../constant/class_subjects.js";
 
 export default class ClassSubject {
@@ -16,7 +16,13 @@ export default class ClassSubject {
                 const values = [s.classId, s.subjectId, s.facultyId];
                 await this.connection.execute<ResultSetHeader>(query, values);
             }
-        }catch(err) {
+        }catch(err: any) {
+            if (err?.code === "ER_DUP_ENTRY" || err?.errno === 1062) {
+                throw new ConflictError("Duplicate subject assignment in classroom");
+            }
+            if (err instanceof ConflictError) {
+                throw err;
+            }
             throw new InternalServerError(`Internal Server error`, 500, err);
         }
     }

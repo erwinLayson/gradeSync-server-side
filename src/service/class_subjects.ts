@@ -17,11 +17,16 @@ export async function createClassSubjectService(classSubject: Omit<ClassSubjectP
     const pool = getDBPoolConnection();
     const connection = await pool.getConnection();
     try {
+        await connection.beginTransaction();
         const classSubjectModel = new ClassSubjectModel(connection);
         // Reject register-role targets before a single row is written (409),
         // regardless of what the client sent or filtered.
         await assertOnlyTeachingFaculty(connection, classSubject.map((s) => s.facultyId));
         await classSubjectModel.createClassSubject(classSubject);
+        await connection.commit();
+    } catch (error) {
+        await connection.rollback();
+        throw error;
     } finally {
         connection.release();
     }

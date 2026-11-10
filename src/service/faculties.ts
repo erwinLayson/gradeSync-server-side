@@ -243,15 +243,16 @@ export async function assertOnlyTeachingFaculty(
     connection: PoolConnection,
     facultyIds: number | number[],
 ): Promise<void> {
-    const ids = (Array.isArray(facultyIds) ? facultyIds : [facultyIds]).filter(
+    const rawIds = (Array.isArray(facultyIds) ? facultyIds : [facultyIds]).filter(
         (id) => Number.isFinite(id) && id > 0
     );
-    if (ids.length === 0) return;
+    if (rawIds.length === 0) return;
+    const uniqueIds = Array.from(new Set(rawIds));
 
-    const placeholders = ids.map(() => "?").join(", ");
+    const placeholders = uniqueIds.map(() => "?").join(", ");
     const [rows] = await connection.execute<RowDataPacket[]>(
         `SELECT id FROM faculties WHERE role <> 'teacher' AND id IN (${placeholders})`,
-        ids,
+        uniqueIds,
     );
     const blocked = rows.map((row) => Number(row.id));
 
@@ -265,11 +266,11 @@ export async function assertOnlyTeachingFaculty(
     // record that is not there.
     const [found] = await connection.execute<RowDataPacket[]>(
         `SELECT id FROM faculties WHERE id IN (${placeholders})`,
-        ids,
+        uniqueIds,
     );
-    if (found.length !== ids.length) {
+    if (found.length !== uniqueIds.length) {
         const known = new Set(found.map((row) => Number(row.id)));
-        const missing = ids.filter((id) => !known.has(id));
+        const missing = uniqueIds.filter((id) => !known.has(id));
         throw new NotFoundError(`Faculty member(s) ${missing.join(", ")} not found`, 404);
     }
 }
