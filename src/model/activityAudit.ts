@@ -185,17 +185,19 @@ export default class ActivityAuditModel {
             const total = Number(countRows[0]?.total ?? 0);
 
             // Data query
-            const page = Math.max(1, pagination.page);
-            const limit = Math.max(1, Math.min(100, pagination.limit));
+            const page = Number.isFinite(pagination.page) ? Math.max(1, Math.floor(pagination.page)) : 1;
+            const limit = Number.isFinite(pagination.limit)
+                ? Math.max(1, Math.min(100, Math.floor(pagination.limit)))
+                : 20;
             const offset = (page - 1) * limit;
 
             const dataQuery = `
                 SELECT * FROM activity_audit_logs
                 ${whereClause}
                 ORDER BY created_at DESC, id DESC
-                LIMIT ? OFFSET ?
+                LIMIT ${limit} OFFSET ${offset}
             `;
-            const [dataRows] = await conn.execute<RowDataPacket[]>(dataQuery, [...values, String(limit), String(offset)]);
+            const [dataRows] = await conn.execute<RowDataPacket[]>(dataQuery, values);
 
             const data = (dataRows as RowDataPacket[]).map(normalizeAuditRow);
             const totalPages = Math.ceil(total / limit) || 1;
