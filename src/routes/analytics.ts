@@ -1,6 +1,6 @@
 import { Router, type RequestHandler } from "express";
 
-import { getAnalyticsController } from "../controller/analytics.js";
+import { getAnalyticsController, getStudentQuarterlyRankingsController } from "../controller/analytics.js";
 
 // Role-based access control
 import allowedRoles from "../middleware/allowedRoles.js";
@@ -13,5 +13,6 @@ const adminOnly: RequestHandler[] = [ValidateToken, allowedRoles([ROLES.ADMIN])]
 
 // ==================== ADMIN ONLY ====================
 router.get("/analytics", adminOnly, getAnalyticsController);
+router.get("/analytics/student-rankings", adminOnly, getStudentQuarterlyRankingsController);
 
 export default router;

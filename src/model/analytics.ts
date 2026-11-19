@@ -10,6 +10,19 @@ export interface AttendanceTrendRow {
     rate: number;        // 0-100, rounded to 1 decimal
 }
 
+export interface RawStudentQuarterlyRankingRow {
+    recordId: number;
+    enrollmentId: number;
+    classSection: string;
+    classGradeLevel: number;
+    studentId: number;
+    studentLrn: string;
+    studentName: string;
+    totalSubjects: number;
+    gradedSubjects: number;
+    totalGrade: number;
+}
+
 export default class Analytics {
     constructor(private connection: PoolConnection) {}
 
@@ -258,6 +271,100 @@ export default class Analytics {
             }));
         } catch (err) {
             throw new InternalServerError("Failed to fetch attendance trend", 500, err);
+        }
+    }
+
+    // Grade levels that have enrolled students in the school year
+    async getGradeLevelsForSchoolYear(schoolYearId: number): Promise<number[]> {
+        try {
+            const query = `
+                SELECT DISTINCT c.gradeLevel
+                FROM classrooms c
+                JOIN enrollments e ON e.classId = c.id
+                WHERE e.schoolYearId = ? AND e.status IN ('enrolled', 'completed')
+                ORDER BY c.gradeLevel ASC
+            `;
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, [schoolYearId]);
+            const gradeLevels = rows.map((r) => Number(r.gradeLevel)).filter((g) => !Number.isNaN(g));
+            if (gradeLevels.length > 0) {
+                return gradeLevels;
+            }
+            return [7, 8, 9, 10, 11, 12];
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch grade levels for school year", 500, err);
+        }
+    }
+
+    // Officially finalized quarterly academic records for student rankings.
+    // Strictly joins `student_academic_record_quarters` with status = 'submitted'
+    // and checks that all recorded subjects have non-null quarter grades.
+    async getStudentQuarterlyRankings(
+        schoolYearId: number,
+        quarter: number,
+        gradeLevel?: number
+    ): Promise<RawStudentQuarterlyRankingRow[]> {
+        const quarterCol = quarter === 1 ? "q1" : quarter === 2 ? "q2" : quarter === 3 ? "q3" : quarter === 4 ? "q4" : null;
+        if (!quarterCol) {
+            throw new InternalServerError(`Invalid quarter: ${quarter}`, 500);
+        }
+
+        try {
+            const gradeLevelClause = gradeLevel !== undefined ? "AND sar.classGradeLevel = ?" : "";
+            const query = `
+                SELECT 
+                    sar.id AS recordId,
+                    sar.enrollmentId,
+                    sar.classSection,
+                    sar.classGradeLevel,
+                    s.id AS studentId,
+                    s.lrn AS studentLrn,
+                    TRIM(CONCAT(
+                        s.firstname, ' ',
+                        IF(s.middlename IS NOT NULL AND s.middlename != '', CONCAT(s.middlename, ' '), ''),
+                        s.lastname,
+                        IF(s.suffix IS NOT NULL AND s.suffix != '', CONCAT(' ', s.suffix), '')
+                    )) AS studentName,
+                    COUNT(sars.id) AS totalSubjects,
+                    COUNT(CASE WHEN sars.${quarterCol} IS NOT NULL THEN 1 END) AS gradedSubjects,
+                    COALESCE(SUM(sars.${quarterCol}), 0) AS totalGrade
+                FROM student_academic_records sar
+                JOIN enrollments e ON e.id = sar.enrollmentId
+                JOIN students s ON s.id = e.studentId
+                JOIN student_academic_record_quarters sarq 
+                    ON sarq.recordId = sar.id 
+                    AND sarq.quarter = ? 
+                    AND sarq.status = 'submitted'
+                JOIN student_academic_record_subjects sars 
+                    ON sars.recordId = sar.id
+                WHERE e.schoolYearId = ?
+                  ${gradeLevelClause}
+                  AND e.status IN ('enrolled', 'completed')
+                  AND (s.status IS NULL OR s.status <> 'inactive')
+                GROUP BY 
+                    sar.id, sar.enrollmentId, sar.classSection, sar.classGradeLevel, 
+                    s.id, s.lrn, s.firstname, s.middlename, s.lastname, s.suffix
+                HAVING totalSubjects > 0 AND gradedSubjects = totalSubjects
+            `;
+            const params: (number)[] = [quarter, schoolYearId];
+            if (gradeLevel !== undefined) {
+                params.push(gradeLevel);
+            }
+
+            const [rows] = await this.connection.execute<RowDataPacket[]>(query, params);
+            return rows.map((row) => ({
+                recordId: Number(row.recordId),
+                enrollmentId: Number(row.enrollmentId),
+                classSection: String(row.classSection ?? ""),
+                classGradeLevel: Number(row.classGradeLevel),
+                studentId: Number(row.studentId),
+                studentLrn: String(row.studentLrn ?? ""),
+                studentName: String(row.studentName ?? ""),
+                totalSubjects: Number(row.totalSubjects ?? 0),
+                gradedSubjects: Number(row.gradedSubjects ?? 0),
+                totalGrade: Number(row.totalGrade ?? 0)
+            }));
+        } catch (err) {
+            throw new InternalServerError("Failed to fetch student quarterly rankings", 500, err);
         }
     }
 }
