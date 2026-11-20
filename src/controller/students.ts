@@ -192,14 +192,8 @@ export async function deleteStudentController(req: Request<{id: string}>, res: R
 
 // Get all not enrolled students controller
 export async function getAllNotEnrolledStudentsController(req: Request, res: Response, next: NextFunction) {
-    const searchQuery = req.query.search as string | undefined;
+    const searchQuery = typeof req.query.search === "string" ? req.query.search : "";
     const schoolYearId = req.query.schoolYearId ? Number(req.query.schoolYearId) : undefined;
-
-    if(searchQuery === null || searchQuery === undefined) {
-        return res.status(400).json({
-            message: "Missing search query parameter"
-        });
-    }
 
     try { 
         const result = await getAllNotEnrolledStudentsService(searchQuery, schoolYearId && !isNaN(schoolYearId) ? schoolYearId : undefined);
